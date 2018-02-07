@@ -192,6 +192,11 @@ META_TGT_WHITELIST+= \
 .ORDER: buildkernel reinstallkernel.debug
 
 PATH=	/sbin:/bin:/usr/sbin:/usr/bin
+.if ${.MAKE.OS} == "Darwin"
+# When building on a Mac some of the required tools (e.g. realpath or bmake)
+# only exist in /usr/local because they need to be installed by using homebrew.
+PATH:=	${PATH}:/usr/local/sbin:/usr/local/bin
+.endif
 MAKEOBJDIRPREFIX?=	/usr/obj
 _MAKEOBJDIRPREFIX!= /usr/bin/env -i PATH=${PATH} ${MAKE} MK_AUTO_OBJ=no \
     ${.MAKEFLAGS:MMAKEOBJDIRPREFIX=*} __MAKE_CONF=${__MAKE_CONF} \
