@@ -58,9 +58,15 @@ ${var}=	${${var}.${${X_}_ld_hash}}
 
 .if ${ld} == "LD" || (${ld} == "XLD" && ${XLD} != ${LD})
 .if !defined(${X_}LINKER_TYPE) || !defined(${X_}LINKER_VERSION)
-_ld_version!=	(${${ld}} --version || echo none) | sed -n 1p
+_ld_version!=	(${${ld}} --version 2>/dev/null || echo none) | sed -n 1p
+.if ${_ld_version} == "none"
+# The MacOS /usr/bin/ld doesn't accept --version but -v works.
+# The final test -eq 141 is there in order to make this work even when the bmake
+# shell is set to bash -o pipefail
+_ld_version!=	(${${ld}} -v 2>&1 || echo none) | head -n 1 || test $$? -eq 141
 .if ${_ld_version} == "none"
 .warning Unable to determine linker type from ${ld}=${${ld}}
+.endif
 .endif
 .if ${_ld_version:[1..2]} == "GNU ld"
 ${X_}LINKER_TYPE=	bfd
@@ -72,6 +78,13 @@ _v=	${_ld_version:[2]}
 ${X_}LINKER_FREEBSD_VERSION!= \
 	${${ld}} --version | \
 	awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'
+.elif ${_ld_version:[1]} == "@(\#)PROGRAM:ld"
+# bootstrap linker on MacOS
+${X_}LINKER_TYPE=	mac
+_v=	${_ld_version:[2]:S/PROJECT:ld64-//}
+# Convert version 305 to 3.0.5 so that the echo + awk below works
+_v:=	${_v:C/([0-9])([0-9])/\1.\2./}
+# .info "MacOS linker version is ${_v}"
 .else
 .warning Unknown linker from ${ld}=${${ld}}: ${_ld_version}, defaulting to bfd
 ${X_}LINKER_TYPE=	bfd
