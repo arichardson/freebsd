@@ -113,7 +113,7 @@ SRCS=		dummy.c
 .endif
 
 .if defined(CROSS_BUILD_TESTING)
-SUBDIR=		cross-build
+SUBDIR+=		cross-build
 .endif
 
 # Needed to build config (since it uses libnv)
