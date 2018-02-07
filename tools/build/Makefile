@@ -101,6 +101,11 @@ SYSINCS+=	${SRCTOP}/sys/sys/fnv_hash.h
 # opensolaris stuff
 INCS+=	${SRCTOP}/include/elf.h
 
+# We need to build a FreeBSD compatible libdb for tools like tsort, etc.
+# I believe the db routines shipped with MacOS are compatible but on Linux they
+# definitelty aren't. To avoid any surprises let's just always build it when
+# we are crossbuilding.
+SUBDIR+=	cross-build/libdb_freebsd
 .endif
 
 .if empty(SRCS)
