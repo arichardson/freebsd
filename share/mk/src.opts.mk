@@ -521,6 +521,24 @@ MK_CLANG_FULL:= no
 MK_LLVM_COV:= no
 .endif
 
+.if ${.MAKE.OS} != "FreeBSD"
+# Building on a Linux/Mac requires an external toolchain to be specified
+# since clang/gcc will not build there using the FreeBSD makefiles
+MK_BINUTILS_BOOTSTRAP:=	no
+MK_CLANG_BOOTSTRAP:=	no
+MK_LLD_BOOTSTRAP:=	no
+MK_GCC_BOOTSTRAP:=	no
+# tablegen will not build on non-FreeBSD so also disable target clang and lld
+MK_CLANG:=	no
+MK_LLD:=	no
+# However, the elftoolchain tools build and should be used
+MK_ELFTOOLCHAIN_BOOTSTRAP:=	yes
+# The cddl bootstrap tools still need some changes in order to compile
+MK_CDDL:=	no
+# localedef currently doesn't work on Linux/Mac so disable LOCALES there
+MK_LOCALES:=	no
+.endif
+
 #
 # MK_* options whose default value depends on another option.
 #
