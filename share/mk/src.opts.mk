@@ -537,6 +537,11 @@ MK_ELFTOOLCHAIN_BOOTSTRAP:=	yes
 MK_CDDL:=	no
 # localedef currently doesn't work on Linux/Mac so disable LOCALES there
 MK_LOCALES:=	no
+
+# Currently not all of the test directories build. It fails in the libc tests:
+# dd if=/dev/zero of=h_zero bs=1k count=2 status=none
+# dd: unknown operand status
+MK_TESTS:=	no
 .endif
 
 #
