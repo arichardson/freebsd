@@ -53,9 +53,9 @@ BSARGS+= MK_CROSS_COMPILER=no MK_CLANG=no MK_GCC=no
 DISTRIB_ENV=	INSTALL="sh ${SRCTOP}/tools/install.sh" NO_FSCHG=1 MK_TESTS=no
 legacy: .MAKE ${META_DEPS}
 	mkdir -p ${LEGACY_TOOLS}
-	${DISTRIB_ENV} ${MAKE} -C ${SRCTOP}/etc distrib-dirs \
+	${DISTRIB_ENV} ${MAKE} "MTREE_CMD=mtree -N ${SRCTOP}/etc" METALOG=${BTOOLSDIR}/METALOG -C ${SRCTOP}/etc distrib-dirs \
 	    DESTDIR=${BTOOLSDIR} > $@.distrib-dirs_btoolsdir
-	${DISTRIB_ENV} ${MAKE} -C ${SRCTOP}/etc distrib-dirs \
+	${DISTRIB_ENV} ${MAKE} "MTREE_CMD=mtree -N ${SRCTOP}/etc" METALOG=${BTOOLSDIR}/METALOG -C ${SRCTOP}/etc distrib-dirs \
 	    DESTDIR=${LEGACY_TOOLS} > $@.distrib-dirs_legacy_tools
 	${BSENV} ${MAKE} -C ${SRCTOP} -f Makefile.inc1 ${BSARGS} $@
 
