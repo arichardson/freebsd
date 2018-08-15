@@ -535,6 +535,7 @@ MK_LLD:=	no
 MK_ELFTOOLCHAIN_BOOTSTRAP:=	yes
 # The cddl bootstrap tools still need some changes in order to compile
 MK_CDDL:=	no
+MK_ZFS:=	no
 # localedef currently doesn't work on Linux/Mac so disable LOCALES there
 MK_LOCALES:=	no
 
@@ -542,6 +543,8 @@ MK_LOCALES:=	no
 # dd if=/dev/zero of=h_zero bs=1k count=2 status=none
 # dd: unknown operand status
 MK_TESTS:=	no
+# libsnmp use ls -D which is not supported on MacOS (and possibly linux)
+MK_BSNMP:=	no
 .endif
 
 #
