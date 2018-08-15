@@ -543,6 +543,9 @@ MK_LOCALES:=	no
 # dd if=/dev/zero of=h_zero bs=1k count=2 status=none
 # dd: unknown operand status
 MK_TESTS:=	no
+# dd can't be bootstrapped and we can't use the host version (yet):
+MK_BOOT:=	no
+
 # libsnmp use ls -D which is not supported on MacOS (and possibly linux)
 MK_BSNMP:=	no
 .endif
