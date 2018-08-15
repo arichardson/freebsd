@@ -70,6 +70,10 @@
 #define	__hidden	__attribute__((__visibility__("hidden")))
 #endif
 
+#ifndef __unreachable
+#define	__unreachable()	__builtin_unreachable()
+#endif
+
 /*
  * These should probably be in sys/types.h but mtree expects them to exist
  * without including <sys/types.h>
