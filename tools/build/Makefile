@@ -71,10 +71,14 @@ MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/elf.h
 X86INCS+=	${SRCTOP}/sys/x86/include/elf.h
 .endif
 
-.PATH: ${.CURDIR}/../../lib/libc/stdlib
+.PATH: ${SRCTOP}/lib/libc/stdlib
 SRCS+=	strtonum.c
-.PATH: ${.CURDIR}/../../lib/libc/locale
+.PATH: ${SRCTOP}/lib/libc/locale
 SRCS+=	rpmatch.c
+
+# expand_number is not provided by either Linux or MacOS libutil
+.PATH: ${SRCTOP}/lib/libutil
+SRCS+=	expand_number.c
 
 # needed for btxld:
 MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/exec.h
