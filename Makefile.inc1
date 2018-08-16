@@ -487,7 +487,11 @@ _obj=		obj
 LOCAL_TOOL_DIRS?=
 PACKAGEDIR?=	${DESTDIR}/${DISTDIR}
 
-.if empty(SHELL:M*csh*)
+.if !empty(SHELL:M*bash*)
+# Avoid loading a .bashrc that depends on commands not present in the minimal
+# build environment $PATH
+BUILDENV_SHELL?=${SHELL} --norc --noprofile
+.elif empty(SHELL:M*csh*)
 BUILDENV_SHELL?=${SHELL}
 .else
 BUILDENV_SHELL?=/bin/sh
