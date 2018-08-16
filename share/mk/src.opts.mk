@@ -380,7 +380,38 @@ __DEFAULT_YES_OPTIONS+=NVME
 __DEFAULT_NO_OPTIONS+=NVME
 .endif
 
+
+.if ${.MAKE.OS} != "FreeBSD"
+# tablegen will not build on non-FreeBSD so also disable target clang and lld
+BROKEN_OPTIONS+=CLANG LLD
+# The cddl bootstrap tools still need some changes in order to compile
+BROKEN_OPTIONS+=CDDL ZFS
+# localedef currently doesn't work on Linux/Mac so disable LOCALES there
+BROKEN_OPTIONS+=LOCALES
+
+# Currently not all of the test directories build. It fails in the libc tests:
+# dd if=/dev/zero of=h_zero bs=1k count=2 status=none
+# dd: unknown operand status
+# Skip this until this makefile has been fixed or we can bootstrap dd
+BROKEN_OPTIONS+=TESTS
+# dd can't be bootstrapped and we can't use the host version (yet):
+BROKEN_OPTIONS+=BOOT
+# libsnmp use ls -D which is not supported on MacOS (and possibly linux)
+BROKEN_OPTIONS+=BSNMP
+.endif
+
 .include <bsd.mkopt.mk>
+
+.if ${.MAKE.OS} != "FreeBSD"
+# Building on a Linux/Mac requires an external toolchain to be specified
+# since clang/gcc will not build there using the FreeBSD makefiles
+MK_BINUTILS_BOOTSTRAP:=no
+MK_CLANG_BOOTSTRAP:=no
+MK_LLD_BOOTSTRAP:=no
+MK_GCC_BOOTSTRAP:=no
+# However, the elftoolchain tools build and should be used
+MK_ELFTOOLCHAIN_BOOTSTRAP:=	yes
+.endif
 
 #
 # MK_* options that default to "yes" if the compiler is a C++11 compiler.
@@ -519,35 +550,6 @@ MK_LLDB:=	no
 MK_CLANG_EXTRAS:= no
 MK_CLANG_FULL:= no
 MK_LLVM_COV:= no
-.endif
-
-.if ${.MAKE.OS} != "FreeBSD"
-# Building on a Linux/Mac requires an external toolchain to be specified
-# since clang/gcc will not build there using the FreeBSD makefiles
-MK_BINUTILS_BOOTSTRAP:=	no
-MK_CLANG_BOOTSTRAP:=	no
-MK_LLD_BOOTSTRAP:=	no
-MK_GCC_BOOTSTRAP:=	no
-# tablegen will not build on non-FreeBSD so also disable target clang and lld
-MK_CLANG:=	no
-MK_LLD:=	no
-# However, the elftoolchain tools build and should be used
-MK_ELFTOOLCHAIN_BOOTSTRAP:=	yes
-# The cddl bootstrap tools still need some changes in order to compile
-MK_CDDL:=	no
-MK_ZFS:=	no
-# localedef currently doesn't work on Linux/Mac so disable LOCALES there
-MK_LOCALES:=	no
-
-# Currently not all of the test directories build. It fails in the libc tests:
-# dd if=/dev/zero of=h_zero bs=1k count=2 status=none
-# dd: unknown operand status
-MK_TESTS:=	no
-# dd can't be bootstrapped and we can't use the host version (yet):
-MK_BOOT:=	no
-
-# libsnmp use ls -D which is not supported on MacOS (and possibly linux)
-MK_BSNMP:=	no
 .endif
 
 #
