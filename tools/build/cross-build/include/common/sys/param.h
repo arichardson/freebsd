@@ -15,6 +15,14 @@
 #define MAXDUMPPGS	(DFLTPHYS/PAGE_SIZE)
 #endif
 
+#ifndef MCLSHIFT
+#define MCLSHIFT	11		/* convert bytes to mbuf clusters */
+#endif
+
+#ifndef MCLBYTES
+#define MCLBYTES	(1 << MCLSHIFT)	/* size of an mbuf cluster */
+#endif
+
 #ifndef __PAST_END
 #define __PAST_END(array, offset) (((__typeof__(*(array)) *)(array))[offset])
 #endif
