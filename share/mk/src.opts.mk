@@ -398,6 +398,8 @@ BROKEN_OPTIONS+=TESTS
 BROKEN_OPTIONS+=BOOT
 # libsnmp use ls -D which is not supported on MacOS (and possibly linux)
 BROKEN_OPTIONS+=BSNMP
+# lib/libpmc won't bootstrap yet
+BROKEN_OPTIONS+=PMC
 .endif
 
 .include <bsd.mkopt.mk>
