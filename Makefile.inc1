@@ -502,10 +502,11 @@ CROSSBUILD_HOST=${.MAKE.OS}
 .if ${.MAKE.OS} != "Linux" && ${.MAKE.OS} != "Darwin"
 .warning "Unsupported crossbuild system: ${.MAKE.OS}. Build will probably fail!"
 .endif
-# We need to force NO_ROOT builds when building on other operating systems since
-# the BSD.foo.dist specs contain users and groups that do not exist by default
-# on a Linux/MacOS system
+# We need to force NO_ROOT/DB_FROM_SRC builds when building on other operating
+# systems since the BSD.foo.dist specs contain users and groups that do not
+# exist by default on a Linux/MacOS system
 NO_ROOT:=	1
+DB_FROM_SRC:=	1
 .export NO_ROOT
 .endif
 
