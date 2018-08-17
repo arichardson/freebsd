@@ -9,7 +9,7 @@ INCS+=	${SRCTOP}/include/mpool.h \
 MK_SYMVER=	no
 LIBC_SRCTOP=	${SRCTOP}/lib/libc/
 .include "${LIBC_SRCTOP}/db/Makefile.inc"
-CFLAGS+=	-I ${.CURDIR} -Ddbopen=__freebsd_dbopen
+CFLAGS+=	-I ${.CURDIR}/../libc-bootstrap -Ddbopen=__freebsd_dbopen
 
 # Should probably be in -legacy but since it depends on dbopen, let's just add
 # the file here:

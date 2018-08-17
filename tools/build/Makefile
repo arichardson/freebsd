@@ -18,17 +18,19 @@ BOOTSTRAPPING?=	0
 _WITH_PWCACHEDB!= grep -c pwcache_groupdb /usr/include/grp.h || true
 .if ${_WITH_PWCACHEDB} == 0
 .PATH: ${.CURDIR}/../../contrib/libc-pwcache
-CFLAGS.pwcache.c+=	-I${.CURDIR}/../../contrib/libc-pwcache \
-		-I${.CURDIR}/../../lib/libc/include
+CFLAGS.pwcache.c+=	-I${.CURDIR}/../../contrib/libc-pwcache
+CFLAGS.pwcache.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
 SRCS+=		pwcache.c
+.else
+.error not building pwdcache
 .endif
 
-_WITH_STRSVIS!=	grep -c strsvis /usr/include/vis.h || true
+_WITH_STRSVIS!=	grep -c strsvis /usr/include/vis.h 2>/dev/null || true
 .if ${_WITH_STRSVIS} == 0
 .PATH: ${.CURDIR}/../../contrib/libc-vis
 SRCS+=		vis.c
-CFLAGS.vis.c+=	-I${.CURDIR}/../../contrib/libc-vis \
-		-I${.CURDIR}/../../lib/libc/include
+CFLAGS.vis.c+=	-I${.CURDIR}/../../contrib/libc-vis
+CFLAGS.vis.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
 .endif
 
 _WITH_REALLOCARRAY!= grep -c reallocarray /usr/include/stdlib.h || true
@@ -36,7 +38,7 @@ _WITH_REALLOCARRAY!= grep -c reallocarray /usr/include/stdlib.h || true
 .PATH: ${.CURDIR}/../../lib/libc/stdlib
 INCS+=		stdlib.h
 SRCS+=		reallocarray.c
-CFLAGS.reallocarray.c+=	-I${.CURDIR}/../../lib/libc/include
+CFLAGS.reallocarray.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
 .endif
 
 _WITH_UTIMENS!= grep -c utimensat /usr/include/sys/stat.h || true
