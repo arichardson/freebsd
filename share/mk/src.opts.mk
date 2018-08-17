@@ -400,6 +400,14 @@ BROKEN_OPTIONS+=BOOT
 BROKEN_OPTIONS+=BSNMP
 # lib/libpmc won't bootstrap yet
 BROKEN_OPTIONS+=PMC
+.if ${.MAKE.OS} == "Linux"
+# crunchgen fails for some reason on Linux (but it works on MacOS):
+# + cd /local/scratch/alr48/cheri/freebsd-mips/rescue/rescue/../../bin/cat
+# + make -f /tmp//crunchgen_rescue9yuKRG -DRESCUE CRUNCH_CFLAGS=-DRESCUE MK_AUTO_OBJ=yes DIRPRFX=cat/ loop
+# + echo OBJS= cat.o
+# /tmp//crunchgen_rescue9yuKRG: Invalid argument
+BROKEN_OPTIONS+=RESCUE
+.endif
 .endif
 
 .include <bsd.mkopt.mk>
