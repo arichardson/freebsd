@@ -28,7 +28,16 @@
 # This file may be included multiple times, but only has effect the first time.
 #
 
-.if !target(__<bsd.compiler.mk>__)
+.if defined(_NO_INCLUDE_COMPILERMK)
+# If _NO_INCLUDE_COMPILERMK is set we are doing a make obj/cleandir/cleanobj
+# and might not have a valid compiler on $PATH yet. In this case just set the
+# variables that are expected by the other .mk files and return
+COMPILER_TYPE=none
+X_COMPILER_TYPE=none
+COMPILER_VERSION=0
+X_COMPILER_VERSION=0
+COMPILER_FEATURES=none
+.elif !target(__<bsd.compiler.mk>__)
 __<bsd.compiler.mk>__:
 
 .include <bsd.opts.mk>
