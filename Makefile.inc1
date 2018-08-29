@@ -1308,7 +1308,7 @@ distributeworld installworld stageworld: _installcheck_world .PHONY
 			exit 1; \
 		fi; \
 	    done); \
-	libs=$$(ldd -f "%o %p\n" -f "%o %p\n" $$progs 2>/dev/null | sort -u | \
+	libs=$$((ldd -f "%o %p\n" -f "%o %p\n" $$progs 2>/dev/null || true) | sort -u | \
 	    while read line; do \
 		set -- $$line; \
 		if [ "$$2 $$3" != "not found" ]; then \
@@ -2988,7 +2988,7 @@ delete-old-files: .PHONY
 		if [ ! -e "$${manpage}" ]; then \
 			rm ${RM_I} $${catpage} <&3; \
 	        fi; \
-	done
+	done || true
 	@echo ">>> Old files removed"
 
 check-old-files: .PHONY
