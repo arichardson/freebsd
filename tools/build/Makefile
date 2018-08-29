@@ -52,6 +52,7 @@ _WITH_EXPLICIT_BZERO!= grep -c explicit_bzero /usr/include/strings.h || true
 .PATH: ${SRCTOP}/sys/libkern
 INCS+=		strings.h
 SRCS+=		explicit_bzero.c
+.endif
 
 .if ${.MAKE.OS} != "FreeBSD"
 # don't copy stdlib.h when cross-building since it will cause
@@ -123,7 +124,7 @@ SUBDIR+=		cross-build
 .endif
 
 # Needed to build config (since it uses libnv)
-SYSINCS+=	${SRCTOP}/sys/sys/nv.h ${SRCTOP}/sys/sys/cnv.h
+SYSINCS+=	${SRCTOP}/sys/sys/nv.h ${SRCTOP}/sys/sys/cnv.h ${SRCTOP}/sys/sys/dnv.h
 
 # We want to run the build with only ${WORLDTMP} in $PATH to ensure we don't
 # accidentally run tools that are incompatible but happen to be in $PATH.
