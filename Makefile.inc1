@@ -1979,13 +1979,28 @@ _elftoolchain_libs= lib/libelf lib/libdwarf
 # bootstrap-tool.
 _config_deps= lib/libnv usr.bin/lex/lib
 
+.if !empty(BUILD_WITH_OPIPEFAIL) && empty(.MAKEFLAGS:M-n)
+# The bash -o pipefail option will cause the whole pipeline to fail if one
+# of the commands returned a non-zero exit code. This is useful to find
+# missing/incompatible commands in the bootstrap $PATH since the default shell
+# will just ignore the exit code.
+_pipefail_shell=tools/build/bash-with-pipefail
+# Note: we can't set __MAKE_SHELL to bash-with-pipefail since otherwise bmake
+# will complain about an unknown shell in sys.mk (.SHELL: path=${__MAKE_SHELL})
+# To work around this bash-with-pipefail will be installed as
+# ${WORLDTMP}/legacy/bin/sh. This also has the advantage that make rules using
+# sh will now use bash-with-pipefail instead and get the additional checks.
+CROSSENV+=	__MAKE_SHELL=${WORLDTMP}/legacy/bin/sh
+BMAKEENV+=	__MAKE_SHELL=${WORLDTMP}/legacy/bin/sh
+.endif
+
 legacy: .PHONY
 .if ${BOOTSTRAPPING} < ${MINIMUM_SUPPORTED_OSREL} && ${BOOTSTRAPPING} != 0
 	@echo "ERROR: Source upgrades from versions prior to ${MINIMUM_SUPPORTED_REL} are not supported."; \
 	false
 .endif
 
-.for _tool in tools/build ${_elftoolchain_libs} ${_config_deps}
+.for _tool in tools/build ${_elftoolchain_libs} ${_config_deps} ${_pipefail_shell}
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,includes,all,install)"; \
 	    cd ${.CURDIR}/${_tool}; \
 	    if [ -z "${NO_OBJWALK}" ]; then ${MAKE} DIRPRFX=${_tool}/ obj; fi; \
