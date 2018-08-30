@@ -2166,6 +2166,7 @@ _bootstrap_tools_links+=m4 lex
 .if ${BOOTSTRAPPING} < 1200067
 _elftoolchain_libs= lib/libelf lib/libdwarf
 ${_bt}-lib/libelf: ${_bt_lex_depend}
+${_bt}-lib/libdwarf: ${_bt_lex_depend}
 .endif
 
 # r245440 mtree -N support added
@@ -2249,6 +2250,7 @@ ${_bt}-usr.bin/clang/llvm-tblgen: ${_bt}-lib/clang/libllvmminimal
 _dtc= usr.bin/dtc
 .if ${MK_GPL_DTC} != "no"
 _dtc= gnu/usr.bin/dtc
+${_bt}-gnu/usr.bin/dtc: ${_bt_lex_depend}
 .endif
 
 .if ${MK_LOCALES} != "no"
