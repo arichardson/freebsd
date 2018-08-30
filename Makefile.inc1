@@ -2408,7 +2408,7 @@ bootstrap-tools: ${_bt}-links .PHONY
     ${_localedef}
 ${_bt}-${_tool}: ${_bt}-links .PHONY .MAKE
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,all,install)"; \
-		cd ${.CURDIR}/${_tool}; \
+		set -e; cd ${.CURDIR}/${_tool}; \
 		if [ -z "${NO_OBJWALK}" ]; then ${MAKE} DIRPRFX=${_tool}/ obj; fi; \
 		if [ "${_tool}" = "usr.bin/lex" ]; then \
 			${MAKE} DIRPRFX=${_tool}/ bootstrap; \
