@@ -394,7 +394,7 @@ build-tools: make_hash make_keys
 make_keys: make_keys.c names.c ncurses_def.h ${HEADERS} ${BUILD_TOOLS_META}
 	${CC:N${CCACHE_BIN}} -o $@ ${CFLAGS} ${NCURSES_DIR}/ncurses/tinfo/make_keys.c
 
-make_hash: make_hash.c hashsize.h ncurses_def.h ${HEADERS} ${BUILD_TOOLS_META}
+make_hash: make_hash.c hashsize.h ncurses_def.h ${HEADERS} ${SRCHDRS} ${BUILD_TOOLS_META}
 	${CC:N${CCACHE_BIN}} -o $@ ${CFLAGS} -DMAIN_PROGRAM \
 		${NCURSES_DIR}/ncurses/tinfo/make_hash.c
 
