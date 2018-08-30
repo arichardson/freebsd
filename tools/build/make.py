@@ -59,6 +59,8 @@ def bootstrap_bmake(install_dir: Path):
     if not bmake_build_dir.exists():
         os.makedirs(str(bmake_build_dir))
     env = os.environ.copy()
+    global new_env_vars
+    env.update(new_env_vars)
 
     # HACK around the deleted file bmake/missing/sys/cdefs.h
     if sys.platform.startswith("linux"):
@@ -110,7 +112,11 @@ if __name__ == "__main__":
     parser.add_argument("--cross-bindir", help="Directory to look for cc/c++/cpp/ld to "
                                                "build target binaries (only needed if XCC/XCPP/XLD are not set)")
     parser.add_argument("--cross-compiler-type", choices=("clang", "gcc"), default="clang",
-                        help="Compiler type to find in --crossbindir (only needed if XCC/XCPP/XLD are not set)")
+                        help="Compiler type to find in --cross-bindir (only needed if XCC/XCPP/XLD are not set)"
+                             "Note: using CC is currently highly experimental")
+    parser.add_argument("--host-compiler-type", choices=("clang", "gcc"), default="clang",
+                        help="Compiler type to find in --host-bindir (only needed if CC/CPP/LD are not set). "
+                             "Note: using CC is currently highly experimental")
     parser.add_argument("--debug", action="store_true",
                         help="Print information on inferred env vars")
     parser.add_argument("--clean", action="store_true",
@@ -131,22 +137,26 @@ if __name__ == "__main__":
     bmake_install_dir = Path(MAKEOBJDIRPREFIX, "bmake-install")
     bmake_binary = bmake_install_dir / "bin/bmake"
     new_env_vars = {}
-    if not bmake_binary.exists():
-        bootstrap_bmake(bmake_install_dir)
     if not sys.platform.startswith("freebsd"):
         if not is_make_var_set("TARGET") or not is_make_var_set("TARGET_ARCH"):
             sys.exit("You must set explicit TARGET= and TARGET_ARCH= when building on non-FreeBSD")
         # infer values for CC/CXX/CPP
-        if sys.platform.startswith("linux"):
-            # FIXME: bsd.compiler.mk doesn't handle the output of GCC if it is /usr/bin/cc on Linux
-            default_cc = "gcc"
-            default_cxx = "g++"
-        else:
-            default_cc = "cc"
-            default_cxx = "c++"
+        if False:
+            if sys.platform.startswith("linux"):
+                # FIXME: bsd.compiler.mk doesn't handle the output of GCC if it is /usr/bin/cc on Linux
+                default_cc = "gcc"
+                default_cxx = "g++"
+            else:
+                default_cc = "cc"
+                default_cxx = "c++"
+        default_cc = "clang" if parsed_args.host_compiler_type == "clang" else "cc"
+        default_cxx = "clang++" if parsed_args.host_compiler_type == "clang" else "c++"
+        default_cpp = "clang-cpp" if parsed_args.host_compiler_type == "clang" else "cpp"
+        default_ld = "ld.lld" if parsed_args.host_compiler_type == "clang" else "ld"
+        print(parsed_args.host_bindir, parsed_args.cross_bindir)
         check_required_make_env_var("CC", default_cc, parsed_args.host_bindir)
         check_required_make_env_var("CXX", default_cxx, parsed_args.host_bindir)
-        check_required_make_env_var("CPP", "cpp", parsed_args.host_bindir)
+        check_required_make_env_var("CPP", default_cpp, parsed_args.host_bindir)
         check_required_make_env_var("LD", "ld", parsed_args.host_bindir)
 
         use_cross_gcc = parsed_args.cross_compiler_type == "gcc"
@@ -161,6 +171,9 @@ if __name__ == "__main__":
                                     parsed_args.cross_bindir)
         if not os.getenv("X_COMPILER_TYPE"):
             new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
+
+    if not bmake_binary.exists():
+        bootstrap_bmake(bmake_install_dir)
 
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")
@@ -177,6 +190,8 @@ if __name__ == "__main__":
     make_cmd_str = " ".join(shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
     debug("Running `env ", env_cmd_str, " ", make_cmd_str, "`", sep="")
     os.environ.update(new_env_vars)
+    # Catch errors early
+    bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
     if parsed_args.debug:
         input("Press enter to continue...")
     os.chdir(str(source_root))
