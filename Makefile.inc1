@@ -2050,13 +2050,6 @@ update: .PHONY
 # build-tools or cross-tools.
 #
 
-# ELF Tool Chain libraries are needed for ELF tools and dtrace tools.
-# r296685 fix cross-endian objcopy
-# r310724 fixed PR 215350, a crash in libdwarf with objects built by GCC 6.2.
-# r334881 added libdwarf constants used by ctfconvert.
-.if ${BOOTSTRAPPING} < 1200067
-_elftoolchain_libs= lib/libelf lib/libdwarf
-.endif
 .if defined(CROSSBUILD_HOST)
 _host_bootstrap_libs=	lib/libmd lib/libsbuf
 .endif
@@ -2086,7 +2079,7 @@ legacy: .PHONY
 	false
 .endif
 
-.for _tool in tools/build ${_elftoolchain_libs} ${_config_deps} ${_host_bootstrap_libs} ${_pipefail_shell}
+.for _tool in tools/build ${_config_deps} ${_host_bootstrap_libs} ${_pipefail_shell}
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,includes,all,install)"; \
 	    cd ${.CURDIR}/${_tool}; \
 	    if [ -z "${NO_OBJWALK}" ]; then ${MAKE} DIRPRFX=${_tool}/ obj; fi; \
@@ -2164,6 +2157,15 @@ ${_bt}-usr.bin/m4: ${_bt}-lib/libopenbsd ${_bt}-usr.bin/yacc ${_bt}-usr.bin/lex 
 _bt_lex_depend=${_bt}-usr.bin/lex ${_bt}-usr.bin/m4
 .else
 _bootstrap_tools_links+=m4 lex
+.endif
+
+# ELF Tool Chain libraries are needed for ELF tools and dtrace tools.
+# r296685 fix cross-endian objcopy
+# r310724 fixed PR 215350, a crash in libdwarf with objects built by GCC 6.2.
+# r334881 added libdwarf constants used by ctfconvert.
+.if ${BOOTSTRAPPING} < 1200067
+_elftoolchain_libs= lib/libelf lib/libdwarf
+${_bt}-lib/libelf: ${_bt_lex_depend}
 .endif
 
 # r245440 mtree -N support added
@@ -2387,6 +2389,7 @@ bootstrap-tools: ${_bt}-links .PHONY
     ${_dtc} \
     ${_cat} \
     ${_kbdcontrol} \
+    ${_elftoolchain_libs} \
     usr.bin/lorder \
     lib/libopenbsd \
     usr.bin/mandoc \
@@ -2547,12 +2550,12 @@ _ar=usr.bin/ar
 cross-tools: .MAKE .PHONY
 .for _tool in \
     ${LOCAL_XTOOL_DIRS} \
-    ${_ar} \
     ${_clang_libs} \
     ${_clang} \
     ${_lld} \
     ${_binutils} \
     ${_elftctools} \
+    ${_ar} \
     ${_dtrace_tools} \
     ${_gcc} \
     ${_btxld} \
