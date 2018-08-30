@@ -14,6 +14,16 @@ RANLIB:=	/usr/bin/ranlib
 NM:=	/usr/bin/nm
 LORDER:=	/usr/bin/lorder
 TSORT:=	/usr/bin/tsort
+# lorder and tsort are used inside a subshell so a missing binary will not give
+# an error but instead produce an empty .a file
+# TODO: when using lld they are not necessary. Should we just force the use of
+# lld for buildong on non-FreeBSD and skip lorder|tsort?
+.if !exists(${LORDER})
+.error "${LORDER} is missing. Please install the approapriate package."
+.endif
+.if !exists(${TSORT})
+.error "${TSORT} is missing. Please install the approapriate package."
+.endif
 
 # Add various -Werror flags to catch missing function declarations
 CFLAGS+=	-Werror=implicit-function-declaration -Werror=implicit-int \
