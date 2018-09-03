@@ -169,8 +169,8 @@ if __name__ == "__main__":
                                     parsed_args.cross_bindir)
         check_required_make_env_var("XLD", "ld" if use_cross_gcc else "ld.lld",
                                     parsed_args.cross_bindir)
-        if not os.getenv("X_COMPILER_TYPE"):
-            new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
+        # if not os.getenv("X_COMPILER_TYPE"):
+        #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
 
     if not bmake_binary.exists():
         bootstrap_bmake(bmake_install_dir)

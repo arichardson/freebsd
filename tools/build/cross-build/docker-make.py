@@ -30,15 +30,15 @@ if docker_image == "freebsd-crossbuild-ubuntu":
         # are incompatible with the FreeBSD ones
         # TODO: fix them
         # We also need to pass -fuse-ld=lld to avoid linker errors
-        "--env", "XCFLAGS=-integrated-as -nobuiltininc -idirafter /usr/lib/llvm-7/lib/clang/7.0.0/include/ -fuse-ld=lld -Qunused-arguments",
-        "--env", "XCXXFLAGS=-integrated-as -nobuiltininc -idirafter /usr/lib/llvm-7/lib/clang/7.0.0/include/ -fuse-ld=lld -Qunused-arguments",
+        "--env", "XCFLAGS=-integrated-as -fuse-ld=lld -Qunused-arguments",
+        "--env", "XCXXFLAGS=-integrated-as -fuse-ld=lld -Qunused-arguments",
     ]
     make_args += [
         "--host-bindir=/usr/lib/llvm-7/bin",
         "--cross-bindir=/usr/lib/llvm-7/bin",
     ]
 
-docker_args = ["docker", "run", "-t", "--rm",
+docker_args = ["docker", "run", "-it", "--rm",
                # mount the FreeBSD sources read-only
                "-v", str(srcroot) + ":" + srcroot + ":ro",
                "-v", makeobjdirprefix + ":/build",

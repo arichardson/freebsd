@@ -727,15 +727,6 @@ CPP!=	which cpp
 CXX!=	which c++
 .endif
 BMAKEENV+=	CC=${CC} CXX=${CXX} CPP=${CPP} LD=${LD}
-
-# For some reason the bsd.compiler.mk hash doesn't work, lets just set it here to avoid extra work
-BMAKEENV+=	COMPILER_TYPE=${COMPILER_TYPE} \
-		COMPILER_VERSION=${COMPILER_VERSION} \
-		COMPILER_FREEBSD_VERSION=${COMPILER_FREEBSD_VERSION} \
-		XCC=${XCC} XCXX=${XCCX} \
-		X_COMPILER_TYPE=${X_COMPILER_TYPE} \
-		X_COMPILER_VERSION=${X_COMPILER_VERSION} \
-		X_COMPILER_FREEBSD_VERSION=${X_COMPILER_FREEBSD_VERSION}
 .endif
 # need to keep this in sync with targets/pseudo/bootstrap-tools/Makefile
 BSARGS= 	DESTDIR= \
@@ -813,14 +804,6 @@ CROSSENV+=	CC="${XCC} ${XCFLAGS}" CXX="${XCXX} ${XCXXFLAGS} ${XCFLAGS}" \
 		NM=${XNM} OBJCOPY="${XOBJCOPY}" \
 		RANLIB=${XRANLIB} STRINGS=${XSTRINGS} \
 		SIZE="${XSIZE}"
-
-# Avoid computing all the information in bsd.compiler.mk again for the
-# unused X_COMPILER* variables. This saves two invocations of clang as well
-# as two echoes and one call of awk and sed each.
-# Not spawning those extra processes noticeably speeds up stages like "includes".
-CROSSENV+=	X_COMPILER_TYPE="${X_COMPILER_TYPE}" \
-		X_COMPILER_VERSION="${X_COMPILER_VERSION}" \
-		X_COMPILER_FREEBSD_VERSION="${X_COMPILER_FREEBSD_VERSION}"
 
 .if defined(CROSS_BINUTILS_PREFIX) && exists(${CROSS_BINUTILS_PREFIX})
 # In the case of xdev-build tools, CROSS_BINUTILS_PREFIX won't be a
