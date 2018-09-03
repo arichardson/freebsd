@@ -32,12 +32,15 @@ LIBZ:=
 LIBM:=
 LIBUTIL:=
 LIBCPLUSPLUS:=
+LIBARCHIVE:=
 LIBMD:=${WORLDTMP}/legacy/usr/lib/libmd.a
 LIBNV:=${WORLDTMP}/legacy/usr/lib/libmd.a
 LIBSBUF:=${WORLDTMP}/legacy/usr/lib/libsbuf.a
 LIBY:=${WORLDTMP}/legacy/usr/lib/liby.a
-LIBLF:=${WORLDTMP}/legacy/usr/lib/libl.a
+LIBL:=${WORLDTMP}/legacy/usr/lib/libl.a
 LIBROKEN:=${WORLDTMP}/legacy/usr/lib/libroken.a
+LIBDWARF:=${WORLDTMP}/legacy/usr/lib/libdwarf.a
+LIBELF:=${WORLDTMP}/legacy/usr/lib/libelf.a
 
 # Add various -Werror flags to catch missing function declarations
 CFLAGS+=	-Werror=implicit-function-declaration -Werror=implicit-int \
