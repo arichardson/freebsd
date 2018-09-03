@@ -148,12 +148,14 @@ _can_export=	yes
 .for var in ${_exported_vars}
 .if defined(${var})
 _can_export=	no
+.info "_can_export==no for ${var} (is defined to '${${var}}')"
 .endif
 .endfor
 .if ${_can_export} == yes
 .for var in ${_exported_vars}
 .if defined(${var}.${${X_}_cc_hash})
 ${var}=	${${var}.${${X_}_cc_hash}}
+# .info "importing ${var}=	${var}.${${X_}_cc_hash} (${${var}.${${X_}_cc_hash}})"
 .endif
 .endfor
 .endif
@@ -166,6 +168,7 @@ ${X_}COMPILER_TYPE= none
 ${X_}COMPILER_VERSION= 0
 ${X_}COMPILER_FREEBSD_VERSION= 0
 .elif !defined(${X_}COMPILER_TYPE) || !defined(${X_}COMPILER_VERSION)
+.warning "Running ${${cc}:N${CCACHE_BIN}} --version to compute ${X_}COMPILER_VERSION"
 _v!=	${${cc}:N${CCACHE_BIN}} --version || echo 0.0.0
 
 .if !defined(${X_}COMPILER_TYPE)
@@ -190,6 +193,7 @@ ${X_}COMPILER_VERSION!=echo "${_v:M[1-9].[0-9]*}" | awk -F. '{print $$1 * 10000 
 .endif
 .if !defined(${X_}COMPILER_FREEBSD_VERSION)
 ${X_}COMPILER_FREEBSD_VERSION!=	{ echo "__FreeBSD_cc_version" | ${${cc}:N${CCACHE_BIN}} -E - 2>/dev/null || echo __FreeBSD_cc_version; } | sed -n '$$p'
+.warning Running { echo "__FreeBSD_cc_version" | ${${cc}:N${CCACHE_BIN}} -E - 2>/dev/null || echo __FreeBSD_cc_version; } | sed -n '$$p'
 # If we get a literal "__FreeBSD_cc_version" back then the compiler
 # is a non-FreeBSD build that doesn't support it or some other error
 # occurred.
@@ -199,6 +203,7 @@ ${X_}COMPILER_FREEBSD_VERSION=	unknown
 .endif
 
 .if !defined(${X_}COMPILER_RESOURCE_DIR)
+.warning "!defined(${X_}COMPILER_RESOURCE_DIR) -> Runinng ${${cc}:N${CCACHE_BIN}} -print-resource-dir"
 ${X_}COMPILER_RESOURCE_DIR!=	${${cc}:N${CCACHE_BIN}} -print-resource-dir 2>/dev/null || echo unknown
 .endif
 
@@ -224,6 +229,7 @@ X_COMPILER_RESOURCE_DIR=	${COMPILER_RESOURCE_DIR}
 # hash key computed above.
 .for var in ${_exported_vars}
 ${var}.${${X_}_cc_hash}:=	${${var}}
+# .info "exporting ${var}.${${X_}_cc_hash}=${${var}.${${X_}_cc_hash}}
 .export-env ${var}.${${X_}_cc_hash}
 .undef ${var}.${${X_}_cc_hash}
 .endfor
