@@ -186,12 +186,12 @@ if __name__ == "__main__":
         if not input("You did not set -DNO_CLEAN/--clean/--no-clean. Did you really mean to do a"
                      " clean build? y/[N] ").lower().startswith("y"):
             bmake_args.append("-DNO_CLEAN")
+    # Catch errors early
+    bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
     env_cmd_str = " ".join(shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
     make_cmd_str = " ".join(shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
     debug("Running `env ", env_cmd_str, " ", make_cmd_str, "`", sep="")
     os.environ.update(new_env_vars)
-    # Catch errors early
-    bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
     if parsed_args.debug:
         input("Press enter to continue...")
     os.chdir(str(source_root))
