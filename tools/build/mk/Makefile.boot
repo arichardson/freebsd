@@ -25,6 +25,20 @@ TSORT:=	/usr/bin/tsort
 .error "${TSORT} is missing. Please install the approapriate package."
 .endif
 
+
+# Avoid stale dependecy warnings:
+LIBC:=
+LIBZ:=
+LIBM:=
+LIBUTIL:=
+LIBCPLUSPLUS:=
+LIBMD:=${WORLDTMP}/legacy/usr/lib/libmd.a
+LIBNV:=${WORLDTMP}/legacy/usr/lib/libmd.a
+LIBSBUF:=${WORLDTMP}/legacy/usr/lib/libsbuf.a
+LIBY:=${WORLDTMP}/legacy/usr/lib/liby.a
+LIBLF:=${WORLDTMP}/legacy/usr/lib/libl.a
+LIBROKEN:=${WORLDTMP}/legacy/usr/lib/libroken.a
+
 # Add various -Werror flags to catch missing function declarations
 CFLAGS+=	-Werror=implicit-function-declaration -Werror=implicit-int \
 		-Werror=return-type -Wundef
