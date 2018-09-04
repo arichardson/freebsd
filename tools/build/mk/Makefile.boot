@@ -51,7 +51,7 @@ CFLAGS+=	-isystem ${SRCTOP}/tools/build/cross-build/include/common
 
 # b64_pton and b64_ntop is in libresolv on MacOS and Linux:
 # TODO: only needed for uuencode and uudecode
-LDFLAGS+=-lresolv
+LDADD+=-lresolv
 
 # ensure that we use the FreeBSD versions of libdb:
 FREEBSD_LIBDB:=	-ldb-freebsd
@@ -65,9 +65,9 @@ CFLAGS+=	-isystem /usr/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
 # /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed in the search paths
 CFLAGS+=	-isystem /usr/include
 CFLAGS+=	-std=c99
-LDFLAGS+=	-lbsd
+LDADD+=	-lbsd
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
-LDFLAGS+=	-pthread
+LDADD+=	-pthread
 
 # Linux tsort doesn't understand the -q flag
 TSORTFLAGS:=
@@ -87,6 +87,15 @@ LDFLAGS+=	-L/usr/local/opt/libarchive/lib
 .else
 .error "Unsupported build OS: ${.MAKE.OS}"
 .endif
+
+.include <bsd.linker.mk>
+# When building with BFD we have to add libegacy.a at the end of linker
+# command line again to ensure all symbols are resolved. LLD is smart enough
+# to not need this.
+.if ${LINKER_TYPE} == "bfd"
+LDADD+=	-legacy
+.endif
+
 .endif # ${.MAKE.OS} != "FreeBSD"
 
 # we do not want to capture dependencies referring to the above
