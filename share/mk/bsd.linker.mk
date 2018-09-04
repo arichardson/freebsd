@@ -46,6 +46,7 @@ _can_export=	yes
 .for var in ${_exported_vars}
 .if defined(${var})
 _can_export=	no
+.info "Cannot import since ${var} is set"
 .endif
 .endfor
 .if ${_can_export} == yes
@@ -58,11 +59,13 @@ ${var}=	${${var}.${${X_}_ld_hash}}
 
 .if ${ld} == "LD" || (${ld} == "XLD" && ${XLD} != ${LD})
 .if !defined(${X_}LINKER_TYPE) || !defined(${X_}LINKER_VERSION)
+.info "!defined(${X_}LINKER_TYPE) || !defined(${X_}LINKER_VERSION) -> Running (${${ld}} --version 2>/dev/null || echo none) | sed -n 1p"
 _ld_version!=	(${${ld}} --version 2>/dev/null || echo none) | sed -n 1p
 .if ${_ld_version} == "none"
 # The MacOS /usr/bin/ld doesn't accept --version but -v works.
 # The final test -eq 141 is there in order to make this work even when the bmake
 # shell is set to bash -o pipefail
+.info "Running (${${ld}} -v 2>&1 || echo none) | head -n 1 || test $$? -eq 141"
 _ld_version!=	(${${ld}} -v 2>&1 || echo none) | head -n 1 || test $$? -eq 141
 .if ${_ld_version} == "none"
 .warning Unable to determine linker type from ${ld}=${${ld}}
@@ -75,6 +78,7 @@ _v=	${_ld_version:M[1-9].[0-9]*:[1]}
 .elif ${_ld_version:[1]} == "LLD"
 ${X_}LINKER_TYPE=	lld
 _v=	${_ld_version:[2]}
+.info "Running ${${ld}} --version | awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'"
 ${X_}LINKER_FREEBSD_VERSION!= \
 	${${ld}} --version | \
 	awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'
@@ -90,6 +94,7 @@ _v:=	${_v:C/([0-9])([0-9])/\1.\2./}
 ${X_}LINKER_TYPE=	bfd
 _v=	2.17.50
 .endif
+.info "Running echo "${_v:M[1-9].[0-9]*}" | awk -F. '{print $$1 * 10000 + $$2 * 100 + $$3;}'"
 ${X_}LINKER_VERSION!=	echo "${_v:M[1-9].[0-9]*}" | \
 			  awk -F. '{print $$1 * 10000 + $$2 * 100 + $$3;}'
 .undef _ld_version
