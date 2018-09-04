@@ -46,7 +46,6 @@ _can_export=	yes
 .for var in ${_exported_vars}
 .if defined(${var})
 _can_export=	no
-.info "Cannot import since ${var} is set"
 .endif
 .endfor
 .if ${_can_export} == yes
