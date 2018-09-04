@@ -114,9 +114,8 @@ if __name__ == "__main__":
     parser.add_argument("--cross-compiler-type", choices=("clang", "gcc"), default="clang",
                         help="Compiler type to find in --cross-bindir (only needed if XCC/XCPP/XLD are not set)"
                              "Note: using CC is currently highly experimental")
-    parser.add_argument("--host-compiler-type", choices=("clang", "gcc"), default="clang",
-                        help="Compiler type to find in --host-bindir (only needed if CC/CPP/LD are not set). "
-                             "Note: using CC is currently highly experimental")
+    parser.add_argument("--host-compiler-type", choices=("cc", "clang", "gcc"), default="cc",
+                        help="Compiler type to find in --host-bindir (only needed if CC/CPP/CXX are not set). ")
     parser.add_argument("--debug", action="store_true",
                         help="Print information on inferred env vars")
     parser.add_argument("--clean", action="store_true",
@@ -141,23 +140,22 @@ if __name__ == "__main__":
         if not is_make_var_set("TARGET") or not is_make_var_set("TARGET_ARCH"):
             sys.exit("You must set explicit TARGET= and TARGET_ARCH= when building on non-FreeBSD")
         # infer values for CC/CXX/CPP
-        if False:
-            if sys.platform.startswith("linux"):
-                # FIXME: bsd.compiler.mk doesn't handle the output of GCC if it is /usr/bin/cc on Linux
-                default_cc = "gcc"
-                default_cxx = "g++"
-            else:
-                default_cc = "cc"
-                default_cxx = "c++"
-        default_cc = "clang" if parsed_args.host_compiler_type == "clang" else "cc"
-        default_cxx = "clang++" if parsed_args.host_compiler_type == "clang" else "c++"
-        default_cpp = "clang-cpp" if parsed_args.host_compiler_type == "clang" else "cpp"
-        default_ld = "ld.lld" if parsed_args.host_compiler_type == "clang" else "ld"
-        print(parsed_args.host_bindir, parsed_args.cross_bindir)
+
+        if sys.platform.startswith("linux") and parsed_args.host_compiler_type == "cc":
+            # FIXME: bsd.compiler.mk doesn't handle the output of GCC if it is /usr/bin/cc on Linux
+            parsed_args.host_compiler_type = "gcc"
+
+        if parsed_args.host_compiler_type == "gcc":
+            default_cc, default_cxx, default_cpp = ("gcc", "g++", "cpp")
+        elif parsed_args.host_compiler_type == "clang":
+            default_cc, default_cxx, default_cpp = ("clang", "clang++", "clang-cpp")
+        else:
+            default_cc, default_cxx, default_cpp = ("cc", "c++", "cpp")
+
         check_required_make_env_var("CC", default_cc, parsed_args.host_bindir)
         check_required_make_env_var("CXX", default_cxx, parsed_args.host_bindir)
         check_required_make_env_var("CPP", default_cpp, parsed_args.host_bindir)
-        check_required_make_env_var("LD", "ld", parsed_args.host_bindir)
+        # Using the default value for LD is fine (but not for XLD!)
 
         use_cross_gcc = parsed_args.cross_compiler_type == "gcc"
         # On non-FreeBSD we need to explicitly pass XCC/XLD/X_COMPILER_TYPE
