@@ -37,8 +37,14 @@
 #endif
 
 #ifndef __weak_reference
+#ifdef __ELF__
+#define	__weak_reference(sym,alias)	\
+	__asm__(".weak " #alias);	\
+	__asm__(".equ "  #alias ", " #sym)
+#else
 #define __weak_reference(sym,alias)	\
     static int alias() __attribute__ ((weakref (#sym)));
+#endif
 #endif
 
 #ifndef __malloc_like
