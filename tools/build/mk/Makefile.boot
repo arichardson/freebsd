@@ -47,7 +47,7 @@ CFLAGS+=	-Werror=implicit-function-declaration -Werror=implicit-int \
 		-Werror=return-type -Wundef
 CFLAGS+=	-DHAVE_NBTOOL_CONFIG_H=1
 CFLAGS+=	-D__BSD_VISIBLE=1
-CFLAGS+=	-isystem ${SRCTOP}/tools/build/cross-build/include/common
+CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/common
 
 # b64_pton and b64_ntop is in libresolv on MacOS and Linux:
 # TODO: only needed for uuencode and uudecode
@@ -57,23 +57,19 @@ LDADD+=-lresolv
 FREEBSD_LIBDB:=	-ldb-freebsd
 
 .if ${.MAKE.OS} == "Linux"
-CFLAGS+=	-isystem ${SRCTOP}/tools/build/cross-build/include/linux
-CFLAGS+=	-isystem /usr/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
-# On Debian/Ubuntu GCC will pick up the wrong limits.h from
-# /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed which sets MB_LEN_MAX to 1
-# and then causes a #error in stdlib.h unless we move /usr/include before
-# /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed in the search paths
-CFLAGS+=	-isystem /usr/include
+CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/linux
+CFLAGS+=	-I/usr/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
 CFLAGS+=	-std=c99
 LDADD+=	-lbsd
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
 LDADD+=	-pthread
 
+
 # Linux tsort doesn't understand the -q flag
 TSORTFLAGS:=
 .elif ${.MAKE.OS} == "Darwin"
 CFLAGS+=	-D_DARWIN_C_SOURCE=1
-CFLAGS+=	-I ${SRCTOP}/tools/build/cross-build/include/mac
+CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/mac
 # The macOS ar and ranlib don't understand all the flags supported by the
 # FreeBSD and Linux ar/ranlib
 ARFLAGS:=	-cr
