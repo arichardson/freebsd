@@ -59,6 +59,11 @@ FREEBSD_LIBDB:=	-ldb-freebsd
 .if ${.MAKE.OS} == "Linux"
 CFLAGS+=	-isystem ${SRCTOP}/tools/build/cross-build/include/linux
 CFLAGS+=	-isystem /usr/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
+# On Debian/Ubuntu GCC will pick up the wrong limits.h from
+# /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed which sets MB_LEN_MAX to 1
+# and then causes a #error in stdlib.h unless we move /usr/include before
+# /usr/lib/gcc/x86_64-linux-gnu/5/include-fixed in the search paths
+CFLAGS+=	-isystem /usr/include
 CFLAGS+=	-std=c99
 LDFLAGS+=	-lbsd
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
