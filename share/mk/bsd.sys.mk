@@ -247,6 +247,18 @@ CXXFLAGS+=	${CXXFLAGS.${.IMPSRC:T}}
 
 LDFLAGS+=	${LDFLAGS.${LINKER_TYPE}}
 
+# TODO: should check there is no -fuse-ld in $LDFLAGS before setting it here
+.if ${LD} != "ld" && (${CC:H} != ${LD:H} || ${LD:T} != "ld")
+# Add -fuse-ld=${LD} if LD is in a different directory or not called "ld".
+.if ${COMPILER_TYPE} == "clang"
+LDFLAGS+=	-fuse-ld=${LD}
+.else
+# GCC does not support an absolute path for -fuse-ld so we just print this
+# warning instead and let the user add the required symlinks
+.warning LD (${LD}) is not the default linker for ${CC} but -fuse-ld= is not supported
+.endif
+.endif
+
 .if defined(SRCTOP)
 # Prevent rebuilding during install to support read-only objdirs.
 .if ${.TARGETS:M*install*} == ${.TARGETS} && empty(.MAKE.MODE:Mmeta)
