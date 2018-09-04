@@ -28,6 +28,7 @@ SRCS+=		pwcache.c
 _WITH_STRSVIS!=	grep -c strsvis /usr/include/vis.h 2>/dev/null || true
 .if ${_WITH_STRSVIS} == 0
 .PATH: ${.CURDIR}/../../contrib/libc-vis
+INCS+=		vis.h
 SRCS+=		vis.c
 CFLAGS.vis.c+=	-I${.CURDIR}/../../contrib/libc-vis
 CFLAGS.vis.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
