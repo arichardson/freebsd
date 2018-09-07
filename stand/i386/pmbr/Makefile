@@ -3,11 +3,11 @@
 PROG=	pmbr
 STRIP=
 BINMODE=${NOBINMODE}
-SRCS=	${PROG}.s
+SRCS=	${PROG}.S
 
 ORG=	0x600
 
-AFLAGS+=--defsym FLAGS=${BOOT_MBR_FLAGS}
+ACFLAGS+=-Wa,-defsym,FLAGS=${BOOT_MBR_FLAGS:U0}
 LDFLAGS+=${LDFLAGS_BIN}
 
 .include <bsd.prog.mk>
