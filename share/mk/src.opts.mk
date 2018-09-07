@@ -394,7 +394,7 @@ BROKEN_OPTIONS+=LOCALES
 # dd: unknown operand status
 # Skip this until this makefile has been fixed or we can bootstrap dd
 BROKEN_OPTIONS+=TESTS
-# dd can't be bootstrapped and we can't use the host version (yet):
+# Boot cannot be built with clang yet. Will need to bootstrap GNU as..
 BROKEN_OPTIONS+=BOOT
 # libsnmp use ls -D which is not supported on MacOS (and possibly linux)
 BROKEN_OPTIONS+=BSNMP
