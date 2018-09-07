@@ -155,6 +155,12 @@ _host_tools_to_symlink=	basename bzip2 bunzip2 chmod chown cmp comm cp date \
 	dirname echo env false find fmt gzip gunzip head hostname id ln ls mkdir \
 	mv nice patch rm realpath sh sleep tee touch tr true uname uniq wc which
 
+.include <src.opts.mk>
+
+.if ${MK_BOOT} != "no"
+# xz/unxz is used by EFI
+_host_tools_to_symlink+=dd xz unxz
+.endif
 # We also need a symlink to the absolute path to the make binary used for
 # the toplevel makefile. This is not necessarily the same as `which make`
 # since e.g. on Linux and MacOS that will be GNU make.
