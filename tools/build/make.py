@@ -40,6 +40,7 @@ import argparse
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -104,13 +105,25 @@ def check_required_make_env_var(varname, binary_name, bindir):
     debug("Inferred", varname, "as", guess)
 
 
+def default_cross_toolchain():
+    # default to homebrew-installed clang on MacOS if available
+    if sys.platform.startswith("darwin"):
+        if shutil.which("brew"):
+            llvm_dir = subprocess.getoutput("brew --prefix llvm")
+            if llvm_dir and Path(llvm_dir, "bin").exists():
+                return str(Path(llvm_dir, "bin"))
+    return None
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--host-bindir",
                         help="Directory to look for cc/c++/cpp/ld to build host (" + sys.platform + ") binaries",
                         default="/usr/bin")
-    parser.add_argument("--cross-bindir", help="Directory to look for cc/c++/cpp/ld to "
-                                               "build target binaries (only needed if XCC/XCPP/XLD are not set)")
+    parser.add_argument("--cross-bindir", default=default_cross_toolchain(),
+                        help="Directory to look for cc/c++/cpp/ld to build "
+                             "target binaries (only needed if XCC/XCPP/XLD are "
+                             "not set)")
     parser.add_argument("--cross-compiler-type", choices=("clang", "gcc"), default="clang",
                         help="Compiler type to find in --cross-bindir (only needed if XCC/XCPP/XLD are not set)"
                              "Note: using CC is currently highly experimental")
