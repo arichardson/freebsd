@@ -167,7 +167,9 @@ ${X_}COMPILER_TYPE= none
 ${X_}COMPILER_VERSION= 0
 ${X_}COMPILER_FREEBSD_VERSION= 0
 .elif !defined(${X_}COMPILER_TYPE) || !defined(${X_}COMPILER_VERSION)
+.if empty(_WANT_TOOLCHAIN_CROSS_VARS)
 .warning "Running ${${cc}:N${CCACHE_BIN}} --version to compute ${X_}COMPILER_VERSION"
+.endif
 _v!=	${${cc}:N${CCACHE_BIN}} --version || echo 0.0.0
 
 .if !defined(${X_}COMPILER_TYPE)
@@ -191,7 +193,9 @@ ${X_}COMPILER_VERSION!=echo "${_v:M[1-9].[0-9]*}" | awk -F. '{print $$1 * 10000 
 .undef _v
 .endif
 .if !defined(${X_}COMPILER_FREEBSD_VERSION)
+.if empty(_WANT_TOOLCHAIN_CROSS_VARS)
 .warning Running { echo "__FreeBSD_cc_version" | ${${cc}:N${CCACHE_BIN}} -E - 2>/dev/null || echo __FreeBSD_cc_version; } | sed -n '$$p'
+.endif
 ${X_}COMPILER_FREEBSD_VERSION!=	{ echo "__FreeBSD_cc_version" | ${${cc}:N${CCACHE_BIN}} -E - 2>/dev/null || echo __FreeBSD_cc_version; } | sed -n '$$p'
 # If we get a literal "__FreeBSD_cc_version" back then the compiler
 # is a non-FreeBSD build that doesn't support it or some other error
@@ -202,7 +206,9 @@ ${X_}COMPILER_FREEBSD_VERSION=	unknown
 .endif
 
 .if !defined(${X_}COMPILER_RESOURCE_DIR)
+.if empty(_WANT_TOOLCHAIN_CROSS_VARS)
 .warning "!defined(${X_}COMPILER_RESOURCE_DIR) -> Runinng ${${cc}:N${CCACHE_BIN}} -print-resource-dir"
+.endif
 ${X_}COMPILER_RESOURCE_DIR!=	${${cc}:N${CCACHE_BIN}} -print-resource-dir 2>/dev/null || echo unknown
 .endif
 

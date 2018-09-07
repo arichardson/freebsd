@@ -58,13 +58,17 @@ ${var}=	${${var}.${${X_}_ld_hash}}
 
 .if ${ld} == "LD" || (${ld} == "XLD" && ${XLD} != ${LD})
 .if !defined(${X_}LINKER_TYPE) || !defined(${X_}LINKER_VERSION)
-.info "!defined(${X_}LINKER_TYPE) || !defined(${X_}LINKER_VERSION) -> Running (${${ld}} --version 2>/dev/null || echo none) | sed -n 1p"
+.if empty(_WANT_TOOLCHAIN_CROSS_VARS)
+.warning "!defined(${X_}LINKER_TYPE) || !defined(${X_}LINKER_VERSION) -> Running (${${ld}} --version 2>/dev/null || echo none) | sed -n 1p"
+.endif
 _ld_version!=	(${${ld}} --version 2>/dev/null || echo none) | sed -n 1p
 .if ${_ld_version} == "none"
 # The MacOS /usr/bin/ld doesn't accept --version but -v works.
 # The final test -eq 141 is there in order to make this work even when the bmake
 # shell is set to bash -o pipefail
-.info "Running (${${ld}} -v 2>&1 || echo none) | head -n 1 || test $$? -eq 141"
+.if empty(_WANT_TOOLCHAIN_CROSS_VARS)
+.warning "Running (${${ld}} -v 2>&1 || echo none) | head -n 1 || test $$? -eq 141"
+.endif
 _ld_version!=	(${${ld}} -v 2>&1 || echo none) | head -n 1 || test $$? -eq 141
 .if ${_ld_version} == "none"
 .warning Unable to determine linker type from ${ld}=${${ld}}
@@ -77,7 +81,9 @@ _v=	${_ld_version:M[1-9].[0-9]*:[1]}
 .elif ${_ld_version:[1]} == "LLD"
 ${X_}LINKER_TYPE=	lld
 _v=	${_ld_version:[2]}
-.info "Running ${${ld}} --version | awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'"
+.if empty(_WANT_TOOLCHAIN_CROSS_VARS)
+.warning "Running ${${ld}} --version | awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'"
+.endif
 ${X_}LINKER_FREEBSD_VERSION!= \
 	${${ld}} --version | \
 	awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'
