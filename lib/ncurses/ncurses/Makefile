@@ -474,7 +474,7 @@ unctrl.h: unctrl.h.in
 
 # MAN page gunk
 terminfo.5: MKterminfo.sh terminfo.head Caps
-	sh ${NCURSES_DIR}/man/MKterminfo.sh ${NCURSES_DIR}/man/terminfo.head \
+	sh -e ${NCURSES_DIR}/man/MKterminfo.sh ${NCURSES_DIR}/man/terminfo.head \
 	    ${NCURSES_DIR}/include/Caps ${NCURSES_DIR}/man/terminfo.tail >$@
 
 CLEANFILES+=	terminfo.5
