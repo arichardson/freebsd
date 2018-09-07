@@ -99,7 +99,6 @@ _v:=	${_v:C/([0-9])([0-9])/\1.\2./}
 ${X_}LINKER_TYPE=	bfd
 _v=	2.17.50
 .endif
-.info "Running echo "${_v:M[1-9].[0-9]*}" | awk -F. '{print $$1 * 10000 + $$2 * 100 + $$3;}'"
 ${X_}LINKER_VERSION!=	echo "${_v:M[1-9].[0-9]*}" | \
 			  awk -F. '{print $$1 * 10000 + $$2 * 100 + $$3;}'
 .undef _ld_version
