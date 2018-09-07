@@ -55,6 +55,20 @@ INCS+=		strings.h
 SRCS+=		explicit_bzero.c
 .endif
 
+_WITH_CAPH_ENTER!= grep -c caph_enter /usr/include/capsicum_helpers.h || true
+.if ${_WITH_CAPH_ENTER} == 0
+.PATH: ${SRCTOP}/lib/libcapsicum
+INCS+=		capsicum_helpers.h
+.endif
+
+_WITH_CAP_RIGHTS_IS_VALID!= grep -c cap_rights_is_valid /usr/include/sys/capsicum.h || true
+.if ${_WITH_CAP_RIGHTS_IS_VALID} == 0
+SYSINCS+=	${SRCTOP}/sys/sys/capsicum.h
+SYSINCS+=	${SRCTOP}/sys/sys/caprights.h
+.PATH: ${SRCTOP}/sys/kern
+SRCS+=		subr_capability.c
+.endif
+
 .if ${.MAKE.OS} != "FreeBSD"
 # don't copy stdlib.h when cross-building since it will cause
 # conflicts with the host system's headers
