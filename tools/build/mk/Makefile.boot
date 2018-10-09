@@ -12,7 +12,7 @@ LDFLAGS+=	-L${WORLDTMP}/legacy/usr/lib
 AR:=	/usr/bin/ar
 RANLIB:=	/usr/bin/ranlib
 NM:=	/usr/bin/nm
-LORDER:=	/usr/bin/lorder
+LORDER?=	/usr/bin/lorder
 TSORT:=	/usr/bin/tsort
 # lorder and tsort are used inside a subshell so a missing binary will not give
 # an error but instead produce an empty .a file
