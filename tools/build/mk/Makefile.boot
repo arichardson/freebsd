@@ -57,10 +57,14 @@ LDADD+=-lresolv
 FREEBSD_LIBDB:=	-ldb-freebsd
 
 .if ${.MAKE.OS} == "Linux"
+LIBBSD_DIR?=/usr
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/linux
-CFLAGS+=	-I/usr/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
+CFLAGS+=	-I${LIBBSD_DIR}/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
 CFLAGS+=	-std=c99
 LDADD+=	-lbsd
+.if ${LIBBSD_DIR} != "/usr"
+LDADD+=-L${LIBBSD_DIR}
+.endif
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
 LDADD+=	-pthread
 

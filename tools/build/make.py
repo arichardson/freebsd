@@ -46,6 +46,10 @@ import sys
 
 MAKEOBJDIRPREFIX = os.getenv("MAKEOBJDIRPREFIX")
 source_root = Path(__file__).absolute().parent.parent.parent
+# TODO: check if the host system bmake is new enough and use that instead
+if MAKEOBJDIRPREFIX:
+    bmake_install_dir = Path(MAKEOBJDIRPREFIX, "bmake-install")
+    libbsd_install_dir = Path(MAKEOBJDIRPREFIX, "libbsd-install")
 
 
 def run(cmd, **kwargs):
@@ -54,7 +58,27 @@ def run(cmd, **kwargs):
     subprocess.check_call(cmd, **kwargs)
 
 
-def bootstrap_bmake(install_dir: Path):
+def bootstrap_libbsd():
+    libbsd_source_dir = Path(MAKEOBJDIRPREFIX, "libbsd-source")
+    libbsd_build_dir = Path(MAKEOBJDIRPREFIX, "libbsd-build")
+    if not libbsd_source_dir.exists():
+        run(["git", "clone", "https://anongit.freedesktop.org/git/libbsd.git",
+             str(libbsd_source_dir)])
+    else:
+        run(["git", "pull"], cwd=str(libbsd_source_dir))
+
+    if not libbsd_build_dir.is_dir():
+        os.makedirs(str(libbsd_build_dir))
+    run(["sh", str(libbsd_source_dir / "autogen")],
+        cwd=str(libbsd_source_dir))
+    run([str(libbsd_source_dir / "configure"),
+         "--prefix=" + str(libbsd_install_dir), "--disable-shared",
+         "--enable-static"], cwd=str(libbsd_build_dir))
+    run(["make"], cwd=str(libbsd_build_dir))
+    run(["make", "install"], cwd=str(libbsd_build_dir))
+
+
+def bootstrap_bmake():
     bmake_source_dir = source_root / "contrib/bmake"
     bmake_build_dir = Path(MAKEOBJDIRPREFIX, "bmake-build")
     if not bmake_build_dir.exists():
@@ -65,13 +89,13 @@ def bootstrap_bmake(install_dir: Path):
 
     # HACK around the deleted file bmake/missing/sys/cdefs.h
     if sys.platform.startswith("linux"):
-        env["CFLAGS"] = "-I /usr/include/bsd -DLIBBSD_OVERLAY"
-        env["LDFLAGS"] = "-lbsd"
+        env["CFLAGS"] = "-I{}/include/bsd -DLIBBSD_OVERLAY".format(libbsd_install_dir)
+        env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
-        "--with-default-sys-path=" + str(install_dir / "share/mk"),
+        "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
         "--with-machine=amd64",  # TODO? "--with-machine-arch=amd64",
         "--without-filemon",
-        "--prefix=" + str(install_dir)
+        "--prefix=" + str(bmake_install_dir)
     ]
     run(["sh", bmake_source_dir / "boot-strap"] + configure_args,
         cwd=str(bmake_build_dir), env=env)
@@ -145,8 +169,6 @@ if __name__ == "__main__":
         sys.exit("MAKEOBJDIRPREFIX is not set, cannot continue!")
     if not Path(MAKEOBJDIRPREFIX).is_dir():
         sys.exit("Chosen MAKEOBJDIRPREFIX=" + MAKEOBJDIRPREFIX + " doesn't exit!")
-    # TODO: check if the host system bmake is new enough and use that instead
-    bmake_install_dir = Path(MAKEOBJDIRPREFIX, "bmake-install")
     bmake_binary = bmake_install_dir / "bin/bmake"
     new_env_vars = {}
     if not sys.platform.startswith("freebsd"):
@@ -183,8 +205,12 @@ if __name__ == "__main__":
         # if not os.getenv("X_COMPILER_TYPE"):
         #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
 
+    if sys.platform.startswith("linux"):
+        bmake_args.append("LIBBSD_DIR=" + str(libbsd_install_dir))
+        if not (libbsd_install_dir / "lib/libbsd.a").exists():
+            bootstrap_libbsd()
     if not bmake_binary.exists():
-        bootstrap_bmake(bmake_install_dir)
+        bootstrap_bmake()
 
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")
