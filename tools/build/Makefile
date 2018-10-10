@@ -84,6 +84,10 @@ _host_arch=${MACHINE}
 # bmake on Linux/mac often prints that instead of amd64
 _host_arch=amd64
 .endif
+.if ${_host_arch} == "unknown"
+# HACK: If MACHINE is unknown, assume we are building on x86
+_host_arch=amd64
+.endif
 MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/elf.h
 .if ${_host_arch} == "amd64" || ${_host_arch} == "i386"
 X86INCS+=	${SRCTOP}/sys/x86/include/elf.h
