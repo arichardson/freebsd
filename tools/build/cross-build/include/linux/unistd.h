@@ -1,9 +1,17 @@
 #pragma once
 
+#ifndef __USE_POSIX2
+// Ensure that unistd.h pulls in getopt
+#define __USE_POSIX2
+#endif
 #include_next <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+
+#ifndef required_argument
+#error"something went wrong including getopt"
+#endif
 
 __BEGIN_DECLS
 
