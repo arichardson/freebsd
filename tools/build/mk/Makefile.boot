@@ -12,19 +12,13 @@ LDFLAGS+=	-L${WORLDTMP}/legacy/usr/lib
 AR:=	/usr/bin/ar
 RANLIB:=	/usr/bin/ranlib
 NM:=	/usr/bin/nm
-LORDER:=${HOST_LORDER:U/usr/bin/lorder}
-TSORT:=/usr/bin/tsort
-# lorder and tsort are used inside a subshell so a missing binary will not give
-# an error but instead produce an empty .a file
-# TODO: when using lld they are not necessary. Should we just force the use of
-# lld for building on non-FreeBSD and skip lorder|tsort?
-.if !exists(${LORDER})
-.error "LORDER (${LORDER}) is missing. Please install the approapriate package or set HOST_LORDER."
-.endif
-.if !exists(${TSORT})
-.error "${TSORT} is missing. Please install the approapriate package."
-.endif
 
+# Don't use lorder and tsort since lorder is not installed by default on most
+# Linux systems and the FreeBSD lorder does not work on Linux. For the bootstrap
+# tools the order of the .o files should not matter since we only care about
+# a few individual files (and might soon require linking with lld anyway)
+LORDER:=echo
+TSORT:=cat
 
 # Avoid stale dependecy warnings:
 LIBC:=
