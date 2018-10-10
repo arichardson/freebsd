@@ -1,8 +1,6 @@
 #pragma once
 
-#warning "LINUX getopt"
 #include_next <getopt.h>
-#warning "after include_next getopt"
 
 __BEGIN_DECLS
 

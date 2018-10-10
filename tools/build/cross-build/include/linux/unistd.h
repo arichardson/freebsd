@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#warning "LINUX UNISTD"
 
 __BEGIN_DECLS
 
