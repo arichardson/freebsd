@@ -1,14 +1,22 @@
 #pragma once
-#include </usr/include/limits.h>
 #include_next <limits.h>
 #include <sys/types.h>
 
+#ifndef MAXBSIZE
 #define MAXBSIZE        65536   /* must be power of 2 */
+#endif
+
 #ifndef __OFF_T_MATCHES_OFF64_T
 #error "Expected 64-bit off_t"
 #endif
+
+#ifndef OFF_MAX
 #define OFF_MAX UINT64_MAX
+#endif
+
+#ifndef QUAD_MAX
 #define QUAD_MAX INT64_MAX
+#endif
 
 #ifndef GID_MAX
 #define GID_MAX ((gid_t)-1)
