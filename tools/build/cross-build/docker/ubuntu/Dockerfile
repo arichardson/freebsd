@@ -4,9 +4,8 @@ LABEL maintainer="arichardson@FreeBSD.org"
 RUN apt-get update && apt-get install -y \
   make ninja-build git \
   python3-minimal \
-  libbsd-dev \
   lsb-release wget \
-  bzip2 gperf bsdmainutils libz-dev libbz2-dev libarchive-dev
+  bzip2 gperf libz-dev libbz2-dev libarchive-dev
 
 # INSTALL clang 6.0
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
