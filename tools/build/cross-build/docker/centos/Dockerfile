@@ -19,7 +19,7 @@ RUN yum -y install make which
 
 RUN yum -y install lsb-release which bzip2 gperf zlib-devel libbz2-devel libarchive-devel
 
-RUN yum -y install patch
+RUN yum -y install patch bzip2-devel
 
 VOLUME ["/source", "/build", "/output"]
 CMD /bin/bash
