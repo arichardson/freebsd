@@ -2,12 +2,9 @@
 
 
 // <bits/fcntl.h> includes <bits/stat.h> which contains a member __unused
-#ifdef __unused
-#undef __unused
-#define __unused_undefd
-#endif
-
+#include "__unused_workaround_start.h"
 #include_next <fcntl.h>
+#include "__unused_workaround_end.h"
 
 #ifdef __unused_undefd
 #undef __unused_undefd

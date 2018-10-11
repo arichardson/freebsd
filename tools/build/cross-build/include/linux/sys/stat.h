@@ -6,18 +6,10 @@
 #define __need_timespec
 #include <time.h>
 
-// <stat.h> contains a member __unused
-#ifdef __unused
-#undef __unused
-#define __unused_undefd
-#endif
-
+// <bits/stat.h> contains a member __unused
+#include "../__unused_workaround_start.h"
 #include_next <sys/stat.h>
-
-#ifdef __unused_undefd
-#undef __unused_undefd
-#define __unused __attribute__((unused))
-#endif
+#include "../__unused_workaround_end.h"
 
 #define st_atimensec st_atim.tv_nsec
 #define st_mtimensec st_mtim.tv_nsec
