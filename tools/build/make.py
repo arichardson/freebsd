@@ -56,6 +56,8 @@ def bootstrap_libbsd(source_root, objdir_prefix):
     libbsd_build_dir = objdir_prefix / "libbsd-build"
     libbsd_install_dir = objdir_prefix / "libbsd-install"
 
+    if not sys.platform.startswith("linux"):
+	    return None
     if (libbsd_install_dir / "lib/libbsd.a").exists():
         return libbsd_install_dir
     if not libbsd_source_dir.exists():
@@ -80,9 +82,10 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
     bmake_source_dir = source_root / "contrib/bmake"
     bmake_build_dir = objdir_prefix / "bmake-build"
     bmake_install_dir = objdir_prefix / "bmake-install"
+    bmake_binary = bmake_install_dir / "bin/bmake"
 
     if (bmake_install_dir / "bin/bmake").exists():
-        return bmake_install_dir
+        return bmake_binary
     # TODO: check if the host system bmake is new enough and use that instead
     if not bmake_build_dir.exists():
         os.makedirs(str(bmake_build_dir))
@@ -92,11 +95,14 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
 
     # HACK around the deleted file bmake/missing/sys/cdefs.h
     if sys.platform.startswith("linux"):
-        env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
-                        "-I{src}/tools/build/cross-build/include/linux " \
-                        "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY".format(
-                        src=source_root, libbsd=libbsd_install_dir)
-        env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
+        if libbsd_install_dir is None:
+            debug("Compiling bmake on linux without bootstrapping libbsd")
+        else:
+            env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
+                            "-I{src}/tools/build/cross-build/include/linux " \
+                            "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY".format(
+                            src=source_root, libbsd=libbsd_install_dir)
+            env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
         "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
         "--with-machine=amd64",  # TODO? "--with-machine-arch=amd64",
@@ -108,7 +114,7 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
 
     run(["sh", bmake_source_dir / "boot-strap", "op=install"] + configure_args,
         cwd=str(bmake_build_dir))
-    return bmake_install_dir
+    return bmake_binary
 
 
 def debug(*args, **kwargs):
@@ -216,11 +222,11 @@ if __name__ == "__main__":
         # if not os.getenv("X_COMPILER_TYPE"):
         #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
 
-    libbsd_install_dir = None
-    if sys.platform.startswith("linux"):
-        libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
+    libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
+    bmake_binary = bootstrap_bmake(source_root, objdir_prefix,
+                                   libbsd_install_dir)
+    if libbsd_install_dir is not None:
         bmake_args.append("LIBBSD_DIR=" + str(libbsd_install_dir))
-    bmake_install_dir = bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir)
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")
     bmake_args.append("-DWITH_AUTO_OBJ")
@@ -235,7 +241,6 @@ if __name__ == "__main__":
     # Catch errors early
     bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
     env_cmd_str = " ".join(shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
-    bmake_binary = bmake_install_dir / "bin/bmake"
     make_cmd_str = " ".join(shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
     debug("Running `env ", env_cmd_str, " ", make_cmd_str, "`", sep="")
     os.environ.update(new_env_vars)
