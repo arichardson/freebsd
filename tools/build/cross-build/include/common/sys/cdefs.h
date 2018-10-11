@@ -98,3 +98,10 @@ typedef	unsigned long	u_long;
 #undef __CONCAT
 #define	__CONCAT1(x,y)	x ## y
 #define	__CONCAT(x,y)	__CONCAT1(x,y)
+
+#ifndef __STRING
+#define	__STRING(x)	#x		/* stringify without expanding x */
+#endif
+#ifndef __XSTRING
+#define	__XSTRING(x)	__STRING(x)	/* expand x, then stringify */
+#endif
