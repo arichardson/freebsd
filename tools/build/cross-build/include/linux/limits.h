@@ -4,8 +4,23 @@
 #define _GNU_SOURCE
 #endif
 
-#include_next <limits.h>
 #include <sys/types.h>
+
+#if __has_include(<features.h>)
+#include <features.h>
+#ifndef __USE_XOPEN
+#error __USE_XOPEN not defined!
+#endif
+#else
+#error no features
+#endif
+
+#include_next <limits.h>
+
+#if __has_include(</usr/include/limits.h>)
+/* For some reason GCC picks the wrong limits.h */
+#include </usr/include/limits.h>
+#endif
 
 #if __has_include(<linux/limits.h>)
 #include <linux/limits.h>
@@ -34,6 +49,9 @@
 
 
 #ifdef __GLIBC__
+#ifndef _LIBC_LIMITS_H_
+#error "DIDN't include correct limits?"
+#endif
 
 /* Sanity checks for glibc */
 #ifndef _GNU_SOURCE
@@ -57,4 +75,8 @@
 #ifndef _POSIX_PATH_MAX
 #define _POSIX_PATH_MAX PATH_MAX
 // #error _POSIX_PATH_MAX should be defined
+#endif
+
+#ifndef IOV_MAX
+#error IOV_MAX should be defined
 #endif
