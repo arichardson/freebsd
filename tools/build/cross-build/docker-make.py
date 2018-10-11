@@ -70,6 +70,17 @@ elif docker_image == "freebsd-crossbuild-alpine":
         "--cross-bindir=/usr/bin",
         "--host-compiler-type=clang",
     ]
+elif docker_image == "freebsd-crossbuild-centos":
+    env_flags += [
+        "--env", "XCC=/usr/bin/clang-5.0.1",
+        "--env", "XCXX=/usr/bin/clang++-5.0.1",
+        "--env", "XCPP=/usr/bin/clang-cpp-5.0.1",
+        "--env", "XLD=/usr/bin/ld",
+    ]
+    make_args += [
+        "--host-bindir=/usr/bin",
+        "--cross-bindir=/usr/bin",
+    ]
 
 docker_args = ["docker", "run", "-it", "--rm",
                # mount the FreeBSD sources read-only
