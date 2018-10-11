@@ -72,14 +72,11 @@ elif docker_image == "freebsd-crossbuild-alpine":
     ]
 elif docker_image == "freebsd-crossbuild-centos":
     env_flags += [
-        "--env", "XCC=/usr/bin/clang-5.0.1",
-        "--env", "XCXX=/usr/bin/clang++-5.0.1",
-        "--env", "XCPP=/usr/bin/clang-cpp-5.0.1",
         "--env", "XLD=/usr/bin/ld",
     ]
     make_args += [
         "--host-bindir=/usr/bin",
-        "--cross-bindir=/usr/bin",
+        "--cross-bindir=/opt/llvm-5.0.1/bin",
         # somehow usr.bin/dtc fails with the libstdc++ version shipped with centos
         "-DWITH_GPL_DTC",
     ]
