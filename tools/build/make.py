@@ -44,13 +44,6 @@ import shutil
 import subprocess
 import sys
 
-MAKEOBJDIRPREFIX = os.getenv("MAKEOBJDIRPREFIX")
-source_root = Path(__file__).absolute().parent.parent.parent
-# TODO: check if the host system bmake is new enough and use that instead
-if MAKEOBJDIRPREFIX:
-    bmake_install_dir = Path(MAKEOBJDIRPREFIX, "bmake-install")
-    libbsd_install_dir = Path(MAKEOBJDIRPREFIX, "libbsd-install")
-
 
 def run(cmd, **kwargs):
     cmd = list(map(str, cmd))  # convert all Path objects to str
@@ -58,9 +51,13 @@ def run(cmd, **kwargs):
     subprocess.check_call(cmd, **kwargs)
 
 
-def bootstrap_libbsd():
-    libbsd_source_dir = Path(MAKEOBJDIRPREFIX, "libbsd-source")
-    libbsd_build_dir = Path(MAKEOBJDIRPREFIX, "libbsd-build")
+def bootstrap_libbsd(source_root, objdir_prefix):
+    libbsd_source_dir = objdir_prefix / "libbsd-source"
+    libbsd_build_dir = objdir_prefix / "libbsd-build"
+    libbsd_install_dir = objdir_prefix / "libbsd-install"
+
+    if (libbsd_install_dir / "lib/libbsd.a").exists():
+        return libbsd_install_dir
     if not libbsd_source_dir.exists():
         run(["git", "clone", "https://anongit.freedesktop.org/git/libbsd.git",
              str(libbsd_source_dir)])
@@ -76,11 +73,17 @@ def bootstrap_libbsd():
          "--enable-static"], cwd=str(libbsd_build_dir))
     run(["make"], cwd=str(libbsd_build_dir))
     run(["make", "install"], cwd=str(libbsd_build_dir))
+    return libbsd_install_dir
 
 
-def bootstrap_bmake():
+def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
     bmake_source_dir = source_root / "contrib/bmake"
-    bmake_build_dir = Path(MAKEOBJDIRPREFIX, "bmake-build")
+    bmake_build_dir = objdir_prefix / "bmake-build"
+    bmake_install_dir = objdir_prefix / "bmake-install"
+
+    if (bmake_install_dir / "bin/bmake").exists():
+        return bmake_install_dir
+    # TODO: check if the host system bmake is new enough and use that instead
     if not bmake_build_dir.exists():
         os.makedirs(str(bmake_build_dir))
     env = os.environ.copy()
@@ -102,6 +105,7 @@ def bootstrap_bmake():
 
     run(["sh", bmake_source_dir / "boot-strap", "op=install"] + configure_args,
         cwd=str(bmake_build_dir))
+    return bmake_install_dir
 
 
 def debug(*args, **kwargs):
@@ -165,11 +169,15 @@ if __name__ == "__main__":
     except ImportError:
         pass
     parsed_args, bmake_args = parser.parse_known_args()
+
+    MAKEOBJDIRPREFIX = os.getenv("MAKEOBJDIRPREFIX")
     if not MAKEOBJDIRPREFIX:
         sys.exit("MAKEOBJDIRPREFIX is not set, cannot continue!")
     if not Path(MAKEOBJDIRPREFIX).is_dir():
         sys.exit("Chosen MAKEOBJDIRPREFIX=" + MAKEOBJDIRPREFIX + " doesn't exit!")
-    bmake_binary = bmake_install_dir / "bin/bmake"
+    objdir_prefix = Path(MAKEOBJDIRPREFIX).absolute()
+    source_root = Path(__file__).absolute().parent.parent.parent
+
     new_env_vars = {}
     if not sys.platform.startswith("freebsd"):
         if not is_make_var_set("TARGET") or not is_make_var_set("TARGET_ARCH"):
@@ -205,13 +213,12 @@ if __name__ == "__main__":
         # if not os.getenv("X_COMPILER_TYPE"):
         #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
 
+    libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
+    bmake_install_dir = bootstrap_bmake(source_root, objdir_prefix,
+                                   libbsd_install_dir)
+
     if sys.platform.startswith("linux"):
         bmake_args.append("LIBBSD_DIR=" + str(libbsd_install_dir))
-        if not (libbsd_install_dir / "lib/libbsd.a").exists():
-            bootstrap_libbsd()
-    if not bmake_binary.exists():
-        bootstrap_bmake()
-
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")
     bmake_args.append("-DWITH_AUTO_OBJ")
@@ -226,6 +233,7 @@ if __name__ == "__main__":
     # Catch errors early
     bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
     env_cmd_str = " ".join(shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
+    bmake_binary = bmake_install_dir / "bin/bmake"
     make_cmd_str = " ".join(shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
     debug("Running `env ", env_cmd_str, " ", make_cmd_str, "`", sep="")
     os.environ.update(new_env_vars)
