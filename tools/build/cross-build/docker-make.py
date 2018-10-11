@@ -28,7 +28,7 @@ else:
     dockerfile_dir = docker_images_dir / parsed_args.local_docker_image
     dockerfile = dockerfile_dir / "Dockerfile"
     if not dockerfile.exists():
-        sys.exit("Invalid choice for --local-docker-iamge: " + str(dockerfile) +
+        sys.exit("Invalid choice for --local-docker-image: " + str(dockerfile) +
                  " is missing.")
     build_cmd = ["docker", "build", "-q", "-t", docker_image, str(dockerfile_dir)]
     print("Running", build_cmd)
@@ -61,6 +61,27 @@ elif docker_image == "freebsd-crossbuild-ubuntu":
     make_args += [
         "--host-bindir=/usr/lib/llvm-7/bin",
         "--cross-bindir=/usr/lib/llvm-7/bin",
+    ]
+elif docker_image == "freebsd-crossbuild-alpine":
+    env_flags += [
+    ]
+    make_args += [
+        "--host-bindir=/usr/bin",
+        "--cross-bindir=/usr/bin",
+        "--host-compiler-type=clang",
+    ]
+elif docker_image == "freebsd-crossbuild-centos":
+    env_flags += [
+        "--env", "XCC=/usr/bin/clang-5.0.1",
+        "--env", "XCXX=/usr/bin/clang++-5.0.1",
+        "--env", "XCPP=/usr/bin/clang-cpp-5.0.1",
+        "--env", "XLD=/usr/bin/ld",
+    ]
+    make_args += [
+        "--host-bindir=/usr/bin",
+        "--cross-bindir=/usr/bin",
+        # somehow usr.bin/dtc fails with the libstdc++ version shipped with centos
+        "-DWITH_GPL_DTC",
     ]
 
 docker_args = ["docker", "run", "-it", "--rm",

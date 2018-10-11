@@ -5,7 +5,11 @@
  * */
 #define __need_timespec
 #include <time.h>
+
+// <bits/stat.h> contains a member __unused
+#include "../__unused_workaround_start.h"
 #include_next <sys/stat.h>
+#include "../__unused_workaround_end.h"
 
 #define st_atimensec st_atim.tv_nsec
 #define st_mtimensec st_mtim.tv_nsec

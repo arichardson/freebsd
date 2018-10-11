@@ -98,7 +98,10 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
         if libbsd_install_dir is None:
             debug("Compiling bmake on linux without bootstrapping libbsd")
         else:
-            env["CFLAGS"] = "-I{}/include/bsd -DLIBBSD_OVERLAY".format(libbsd_install_dir)
+            env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
+                            "-I{src}/tools/build/cross-build/include/linux " \
+                            "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY".format(
+                            src=source_root, libbsd=libbsd_install_dir)
             env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
         "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
@@ -222,8 +225,7 @@ if __name__ == "__main__":
     libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
     bmake_binary = bootstrap_bmake(source_root, objdir_prefix,
                                    libbsd_install_dir)
-
-    if sys.platform.startswith("linux"):
+    if libbsd_install_dir is not None:
         bmake_args.append("LIBBSD_DIR=" + str(libbsd_install_dir))
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")

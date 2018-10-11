@@ -15,9 +15,11 @@
 
 __BEGIN_DECLS
 
+#ifdef __GLIBC__
 static inline int issetugid(void) {
 	return 0;
 }
+#endif
 
 static inline char *
 fflagstostr(u_long flags)
