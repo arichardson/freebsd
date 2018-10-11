@@ -92,7 +92,10 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
 
     # HACK around the deleted file bmake/missing/sys/cdefs.h
     if sys.platform.startswith("linux"):
-        env["CFLAGS"] = "-I{}/include/bsd -DLIBBSD_OVERLAY".format(libbsd_install_dir)
+        env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
+                        "-I{src}/tools/build/cross-build/include/linux " \
+                        "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY".format(
+                        src=source_root, libbsd=libbsd_install_dir)
         env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
         "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
@@ -213,12 +216,11 @@ if __name__ == "__main__":
         # if not os.getenv("X_COMPILER_TYPE"):
         #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
 
-    libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
-    bmake_install_dir = bootstrap_bmake(source_root, objdir_prefix,
-                                   libbsd_install_dir)
-
+    libbsd_install_dir = None
     if sys.platform.startswith("linux"):
+        libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
         bmake_args.append("LIBBSD_DIR=" + str(libbsd_install_dir))
+    bmake_install_dir = bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir)
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")
     bmake_args.append("-DWITH_AUTO_OBJ")
