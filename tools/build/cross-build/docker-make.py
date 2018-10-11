@@ -80,6 +80,8 @@ elif docker_image == "freebsd-crossbuild-centos":
     make_args += [
         "--host-bindir=/usr/bin",
         "--cross-bindir=/usr/bin",
+        # somehow usr.bin/dtc fails with the libstdc++ version shipped with centos
+        "-DWITH_GPL_DTC",
     ]
 
 docker_args = ["docker", "run", "-it", "--rm",
