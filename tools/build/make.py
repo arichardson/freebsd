@@ -56,6 +56,8 @@ def bootstrap_libbsd(source_root, objdir_prefix):
     libbsd_build_dir = objdir_prefix / "libbsd-build"
     libbsd_install_dir = objdir_prefix / "libbsd-install"
 
+    if not sys.platform.startswith("linux"):
+	    return None
     if (libbsd_install_dir / "lib/libbsd.a").exists():
         return libbsd_install_dir
     if not libbsd_source_dir.exists():
@@ -93,8 +95,11 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
 
     # HACK around the deleted file bmake/missing/sys/cdefs.h
     if sys.platform.startswith("linux"):
-        env["CFLAGS"] = "-I{}/include/bsd -DLIBBSD_OVERLAY".format(libbsd_install_dir)
-        env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
+        if libbsd_install_dir is None:
+            debug("Compiling bmake on linux without bootstrapping libbsd")
+        else:
+            env["CFLAGS"] = "-I{}/include/bsd -DLIBBSD_OVERLAY".format(libbsd_install_dir)
+            env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
         "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
         "--with-machine=amd64",  # TODO? "--with-machine-arch=amd64",
