@@ -80,9 +80,10 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
     bmake_source_dir = source_root / "contrib/bmake"
     bmake_build_dir = objdir_prefix / "bmake-build"
     bmake_install_dir = objdir_prefix / "bmake-install"
+    bmake_binary = bmake_install_dir / "bin/bmake"
 
     if (bmake_install_dir / "bin/bmake").exists():
-        return bmake_install_dir
+        return bmake_binary
     # TODO: check if the host system bmake is new enough and use that instead
     if not bmake_build_dir.exists():
         os.makedirs(str(bmake_build_dir))
@@ -105,7 +106,7 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
 
     run(["sh", bmake_source_dir / "boot-strap", "op=install"] + configure_args,
         cwd=str(bmake_build_dir))
-    return bmake_install_dir
+    return bmake_binary
 
 
 def debug(*args, **kwargs):
@@ -214,7 +215,7 @@ if __name__ == "__main__":
         #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
 
     libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
-    bmake_install_dir = bootstrap_bmake(source_root, objdir_prefix,
+    bmake_binary = bootstrap_bmake(source_root, objdir_prefix,
                                    libbsd_install_dir)
 
     if sys.platform.startswith("linux"):
@@ -233,7 +234,6 @@ if __name__ == "__main__":
     # Catch errors early
     bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
     env_cmd_str = " ".join(shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
-    bmake_binary = bmake_install_dir / "bin/bmake"
     make_cmd_str = " ".join(shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
     debug("Running `env ", env_cmd_str, " ", make_cmd_str, "`", sep="")
     os.environ.update(new_env_vars)
