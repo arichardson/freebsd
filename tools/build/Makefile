@@ -34,8 +34,6 @@ _WITH_PWCACHEDB!= grep -c pwcache_groupdb ${HOST_INCLUDE_ROOT}/grp.h || true
 CFLAGS.pwcache.c+=	-I${.CURDIR}/../../contrib/libc-pwcache
 CFLAGS.pwcache.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
 SRCS+=		pwcache.c
-.else
-.error not building pwdcache
 .endif
 
 _WITH_STRSVIS!=	grep -c strsvis ${HOST_INCLUDE_ROOT}/vis.h 2>/dev/null || true
