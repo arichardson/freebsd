@@ -23,6 +23,15 @@
 # This file may be included multiple times, but only has effect the first time.
 #
 
+# TODO: use echo "int main(void) { return 0; }" | ${CC} ${CFLAGS} ${LDFLAGS} -xc - -o /dev/null -Wl,-v -fuse-ld=lld
+# Determin linker using:
+# ${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker
+# TODO: For GCC that returns collect2 path, so we need to run collect2 -v then
+# /usr/local/libexec/gcc6/gcc/x86_64-portbld-freebsd11.1/6.4.0/collect2 -v
+#collect2 version 6.4.0
+#/usr/local/bin/ld -v
+#GNU ld (GNU Binutils) 2.30
+
 .if !target(__<bsd.linker.mk>__)
 __<bsd.linker.mk>__:
 
@@ -139,6 +148,5 @@ ${var}.${${X_}_ld_hash}:=	${${var}}
 
 .endif	# ${ld} == "LD" || !empty(XLD)
 .endfor	# .for ld in LD XLD
-
 
 .endif	# !target(__<bsd.linker.mk>__)
