@@ -101,6 +101,10 @@ __FBSDID("$FreeBSD$");
 #include <x86/iommu/busdma_dmar.h>
 #endif
 
+#ifdef PCI_IOV
+#include <dev/pci/pci_iov.h>
+#endif
+
 #include <sys/bitstring.h>
 /*
  * enable accounting of every mbuf as it comes in to and goes out of
@@ -157,9 +161,9 @@ typedef struct iflib_filter_info {
 
 struct iflib_ctx {
 	KOBJ_FIELDS;
-   /*
-   * Pointer to hardware driver's softc
-   */
+	/*
+	 * Pointer to hardware driver's softc
+	 */
 	void *ifc_softc;
 	device_t ifc_dev;
 	if_t ifc_ifp;
@@ -178,7 +182,6 @@ struct iflib_ctx {
 	uint32_t ifc_if_flags;
 	uint32_t ifc_flags;
 	uint32_t ifc_max_fl_buf_size;
-	int ifc_in_detach;
 
 	int ifc_link_state;
 	int ifc_link_irq;
@@ -251,12 +254,6 @@ uint32_t
 iflib_get_flags(if_ctx_t ctx)
 {
 	return (ctx->ifc_flags);
-}
-
-void
-iflib_set_detach(if_ctx_t ctx)
-{
-	ctx->ifc_in_detach = 1;
 }
 
 void
@@ -571,6 +568,13 @@ rxd_info_zero(if_rxd_info_t ri)
 #define CALLOUT_LOCK(txq)	mtx_lock(&txq->ift_mtx)
 #define CALLOUT_UNLOCK(txq) 	mtx_unlock(&txq->ift_mtx)
 
+void
+iflib_set_detach(if_ctx_t ctx)
+{
+	STATE_LOCK(ctx);
+	ctx->ifc_flags |= IFC_IN_DETACH;
+	STATE_UNLOCK(ctx);
+}
 
 /* Our boot-time initialization hook */
 static int	iflib_module_event_handler(module_t, int, void *);
@@ -641,7 +645,6 @@ SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills_large, CTLFLAG_RD,
 static int iflib_txq_drain_flushing;
 static int iflib_txq_drain_oactive;
 static int iflib_txq_drain_notready;
-static int iflib_txq_drain_encapfail;
 
 SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_flushing, CTLFLAG_RD,
 		   &iflib_txq_drain_flushing, 0, "# drain flushes");
@@ -649,8 +652,6 @@ SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_oactive, CTLFLAG_RD,
 		   &iflib_txq_drain_oactive, 0, "# drain oactives");
 SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_notready, CTLFLAG_RD,
 		   &iflib_txq_drain_notready, 0, "# drain notready");
-SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_encapfail, CTLFLAG_RD,
-		   &iflib_txq_drain_encapfail, 0, "# drain encap fails");
 
 
 static int iflib_encap_load_mbuf_fail;
@@ -670,21 +671,14 @@ SYSCTL_INT(_net_iflib, OID_AUTO, encap_txd_encap_fail, CTLFLAG_RD,
 static int iflib_task_fn_rxs;
 static int iflib_rx_intr_enables;
 static int iflib_fast_intrs;
-static int iflib_intr_link;
-static int iflib_intr_msix; 
 static int iflib_rx_unavail;
 static int iflib_rx_ctx_inactive;
-static int iflib_rx_zero_len;
 static int iflib_rx_if_input;
 static int iflib_rx_mbuf_null;
 static int iflib_rxd_flush;
 
 static int iflib_verbose_debug;
 
-SYSCTL_INT(_net_iflib, OID_AUTO, intr_link, CTLFLAG_RD,
-		   &iflib_intr_link, 0, "# intr link calls");
-SYSCTL_INT(_net_iflib, OID_AUTO, intr_msix, CTLFLAG_RD,
-		   &iflib_intr_msix, 0, "# intr msix calls");
 SYSCTL_INT(_net_iflib, OID_AUTO, task_fn_rx, CTLFLAG_RD,
 		   &iflib_task_fn_rxs, 0, "# task_fn_rx calls");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_intr_enables, CTLFLAG_RD,
@@ -695,8 +689,6 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rx_unavail, CTLFLAG_RD,
 		   &iflib_rx_unavail, 0, "# times rxeof called with no available data");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_ctx_inactive, CTLFLAG_RD,
 		   &iflib_rx_ctx_inactive, 0, "# times rxeof called with inactive context");
-SYSCTL_INT(_net_iflib, OID_AUTO, rx_zero_len, CTLFLAG_RD,
-		   &iflib_rx_zero_len, 0, "# times rxeof saw zero len mbuf");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_if_input, CTLFLAG_RD,
 		   &iflib_rx_if_input, 0, "# times rxeof called if_input");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_mbuf_null, CTLFLAG_RD,
@@ -713,12 +705,12 @@ iflib_debug_reset(void)
 	iflib_tx_seen = iflib_tx_sent = iflib_tx_encap = iflib_rx_allocs =
 		iflib_fl_refills = iflib_fl_refills_large = iflib_tx_frees =
 		iflib_txq_drain_flushing = iflib_txq_drain_oactive =
-		iflib_txq_drain_notready = iflib_txq_drain_encapfail =
+		iflib_txq_drain_notready =
 		iflib_encap_load_mbuf_fail = iflib_encap_pad_mbuf_fail =
 		iflib_encap_txq_avail_fail = iflib_encap_txd_encap_fail =
 		iflib_task_fn_rxs = iflib_rx_intr_enables = iflib_fast_intrs =
-		iflib_intr_link = iflib_intr_msix = iflib_rx_unavail =
-		iflib_rx_ctx_inactive = iflib_rx_zero_len = iflib_rx_if_input =
+		iflib_rx_unavail =
+		iflib_rx_ctx_inactive = iflib_rx_if_input =
 		iflib_rx_mbuf_null = iflib_rxd_flush = 0;
 }
 
@@ -750,6 +742,7 @@ static void iflib_add_device_sysctl_post(if_ctx_t ctx);
 static void iflib_ifmp_purge(iflib_txq_t txq);
 static void _iflib_pre_assert(if_softc_ctx_t scctx);
 static void iflib_if_init_locked(if_ctx_t ctx);
+static void iflib_free_intr_mem(if_ctx_t ctx);
 #ifndef __NO_STRICT_ALIGNMENT
 static struct mbuf * iflib_fixup_rx(struct mbuf *m);
 #endif
@@ -839,6 +832,9 @@ netmap_fl_refill(iflib_rxq_t rxq, struct netmap_kring *kring, uint32_t nm_i, boo
 	if_ctx_t ctx = rxq->ifr_ctx;
 	iflib_fl_t fl = &rxq->ifr_fl[0];
 	uint32_t refill_pidx, nic_i;
+#if IFLIB_DEBUG_COUNTERS
+	int rf_count = 0;
+#endif
 
 	if (nm_i == head && __predict_true(!init))
 		return 0;
@@ -851,7 +847,12 @@ netmap_fl_refill(iflib_rxq_t rxq, struct netmap_kring *kring, uint32_t nm_i, boo
 	 */
 	head = nm_prev(head, lim);
 	nic_i = UINT_MAX;
+	DBG_COUNTER_INC(fl_refills);
 	while (nm_i != head) {
+#if IFLIB_DEBUG_COUNTERS
+		if (++rf_count == 9)
+			DBG_COUNTER_INC(fl_refills_large);
+#endif
 		for (int tmp_pidx = 0; tmp_pidx < IFLIB_MAX_RX_REFRESH && nm_i != head; tmp_pidx++) {
 			struct netmap_slot *slot = &ring->slot[nm_i];
 			void *addr = PNMB(na, slot, &fl->ifl_bus_addrs[tmp_pidx]);
@@ -898,8 +899,10 @@ netmap_fl_refill(iflib_rxq_t rxq, struct netmap_kring *kring, uint32_t nm_i, boo
 	if (map)
 		bus_dmamap_sync(fl->ifl_ifdi->idi_tag, fl->ifl_ifdi->idi_map,
 				BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
-	if (__predict_true(nic_i != UINT_MAX))
+	if (__predict_true(nic_i != UINT_MAX)) {
 		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, fl->ifl_id, nic_i);
+		DBG_COUNTER_INC(rxd_flush);
+	}
 	return (0);
 }
 
@@ -998,6 +1001,7 @@ iflib_netmap_txsync(struct netmap_kring *kring, int flags)
 
 			/* Fill the slot in the NIC ring. */
 			ctx->isc_txd_encap(ctx->ifc_softc, &pi);
+			DBG_COUNTER_INC(tx_encap);
 
 			/* prefetch for next round */
 			__builtin_prefetch(&ring->slot[nm_i + 1]);
@@ -1524,8 +1528,10 @@ iflib_fast_intr_rxtx(void *arg)
 		cidx = rxq->ifr_fl[0].ifl_cidx;
 	if (iflib_rxd_avail(ctx, rxq, cidx, 1))
 		GROUPTASK_ENQUEUE(gtask);
-	else
+	else {
 		IFDI_RX_QUEUE_INTR_ENABLE(ctx, rxq->ifr_id);
+		DBG_COUNTER_INC(rx_intr_enables);
+	}
 	return (FILTER_HANDLED);
 }
 
@@ -2071,6 +2077,16 @@ __iflib_fl_refill_lt(if_ctx_t ctx, iflib_fl_t fl, int max)
 		_iflib_fl_refill(ctx, fl, min(max, reclaimable));
 }
 
+uint8_t
+iflib_in_detach(if_ctx_t ctx)
+{
+	bool in_detach;
+	STATE_LOCK(ctx);
+	in_detach = !!(ctx->ifc_flags & IFC_IN_DETACH);
+	STATE_UNLOCK(ctx);
+	return (in_detach);
+}
+
 static void
 iflib_fl_bufs_free(iflib_fl_t fl)
 {
@@ -2086,7 +2102,8 @@ iflib_fl_bufs_free(iflib_fl_t fl)
 			if (fl->ifl_sds.ifsd_map != NULL) {
 				bus_dmamap_t sd_map = fl->ifl_sds.ifsd_map[i];
 				bus_dmamap_unload(fl->ifl_desc_tag, sd_map);
-				if (fl->ifl_rxq->ifr_ctx->ifc_in_detach)
+				// XXX: Should this get moved out?
+				if (iflib_in_detach(fl->ifl_rxq->ifr_ctx))
 					bus_dmamap_destroy(fl->ifl_desc_tag, sd_map);
 			}
 			if (*sd_m != NULL) {
@@ -2887,6 +2904,7 @@ iflib_parse_header(iflib_txq_t txq, if_pkt_info_t pi, struct mbuf **mp)
 			return (ENOMEM);
 		} else {
 			m_freem(*mp);
+			DBG_COUNTER_INC(tx_frees);
 			*mp = m;
 		}
 	}
@@ -2994,6 +3012,7 @@ iflib_parse_header(iflib_txq_t txq, if_pkt_info_t pi, struct mbuf **mp)
 		pi->ipi_ip_hlen = sizeof(struct ip6_hdr);
 
 		if (__predict_false(m->m_len < pi->ipi_ehdrlen + sizeof(struct ip6_hdr))) {
+			txq->ift_pullups++;
 			if (__predict_false((m = m_pullup(m, pi->ipi_ehdrlen + sizeof(struct ip6_hdr))) == NULL))
 				return (ENOMEM);
 		}
@@ -3039,34 +3058,6 @@ iflib_parse_header(iflib_txq_t txq, if_pkt_info_t pi, struct mbuf **mp)
 	*mp = m;
 
 	return (0);
-}
-
-static  __noinline  struct mbuf *
-collapse_pkthdr(struct mbuf *m0)
-{
-	struct mbuf *m, *m_next, *tmp;
-
-	m = m0;
-	m_next = m->m_next;
-	while (m_next != NULL && m_next->m_len == 0) {
-		m = m_next;
-		m->m_next = NULL;
-		m_free(m);
-		m_next = m_next->m_next;
-	}
-	m = m0;
-	m->m_next = m_next;
-	if (m_next == NULL)
-		return (m);
-	if ((m_next->m_flags & M_EXT) == 0) {
-		m = m_defrag(m, M_NOWAIT);
-	} else {
-		tmp = m_next->m_next;
-		memcpy(m_next, m, MPKTHSIZE);
-		m = m_next;
-		m->m_next = tmp;
-	}
-	return (m);
 }
 
 /*
@@ -3117,8 +3108,7 @@ iflib_busdma_load_mbuf_sg(iflib_txq_t txq, bus_dma_tag_t tag, bus_dmamap_t map,
 	/*
 	 * Please don't ever do this
 	 */
-	if (__predict_false(m->m_len == 0))
-		*m0 = collapse_pkthdr(m);
+	MPASS(__predict_true(m->m_len > 0));
 
 	ctx = txq->ift_ctx;
 	sctx = ctx->ifc_sctx;
@@ -3259,6 +3249,7 @@ iflib_ether_pad(device_t dev, struct mbuf **m_head, uint16_t min_frame_size)
 			m_freem(*m_head);
 			device_printf(dev, "cannot pad short frame, m_dup() failed");
 			DBG_COUNTER_INC(encap_pad_mbuf_fail);
+			DBG_COUNTER_INC(tx_frees);
 			return ENOMEM;
 		}
 		m_freem(*m_head);
@@ -3274,6 +3265,7 @@ iflib_ether_pad(device_t dev, struct mbuf **m_head, uint16_t min_frame_size)
 		m_freem(*m_head);
 		device_printf(dev, "cannot pad short frame\n");
 		DBG_COUNTER_INC(encap_pad_mbuf_fail);
+		DBG_COUNTER_INC(tx_frees);
 		return (ENOBUFS);
 	}
 
@@ -3337,8 +3329,10 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	if ((sctx->isc_flags & IFLIB_NEED_ETHER_PAD) &&
 	    __predict_false(m_head->m_pkthdr.len < scctx->isc_min_frame_size)) {
 		err = iflib_ether_pad(ctx->ifc_dev, m_headp, scctx->isc_min_frame_size);
-		if (err)
+		if (err) {
+			DBG_COUNTER_INC(encap_txd_encap_fail);
 			return err;
+		}
 	}
 	m_head = *m_headp;
 
@@ -3352,8 +3346,10 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 
 	/* deliberate bitwise OR to make one condition */
 	if (__predict_true((pi.ipi_csum_flags | pi.ipi_vtag))) {
-		if (__predict_false((err = iflib_parse_header(txq, &pi, m_headp)) != 0))
+		if (__predict_false((err = iflib_parse_header(txq, &pi, m_headp)) != 0)) {
+			DBG_COUNTER_INC(encap_txd_encap_fail);
 			return (err);
+		}
 		m_head = *m_headp;
 	}
 
@@ -3370,12 +3366,13 @@ defrag:
 				if (m_head == NULL)
 					remap++;
 			}
-			if (remap == 1)
+			if (remap == 1) {
+				txq->ift_mbuf_defrag++;
 				m_head = m_defrag(*m_headp, M_NOWAIT);
+			}
 			remap++;
 			if (__predict_false(m_head == NULL))
 				goto defrag_failed;
-			txq->ift_mbuf_defrag++;
 			*m_headp = m_head;
 			goto retry;
 			break;
@@ -3391,6 +3388,7 @@ defrag:
 		}
 		txq->ift_map_failed++;
 		DBG_COUNTER_INC(encap_load_mbuf_fail);
+		DBG_COUNTER_INC(encap_txd_encap_fail);
 		return (err);
 	}
 
@@ -3404,6 +3402,7 @@ defrag:
 		if (map != NULL)
 			bus_dmamap_unload(desc_tag, map);
 		DBG_COUNTER_INC(encap_txq_avail_fail);
+		DBG_COUNTER_INC(encap_txd_encap_fail);
 		if ((txq->ift_task.gt_task.ta_flags & TASK_ENQUEUED) == 0)
 			GROUPTASK_ENQUEUE(&txq->ift_task);
 		return (ENOBUFS);
@@ -3466,9 +3465,12 @@ defrag:
 				goto defrag;
 			}
 		}
-		DBG_COUNTER_INC(encap_txd_encap_fail);
 		goto defrag_failed;
 	}
+	/*
+	 * err can't possibly be non-zero here, so we don't neet to test it
+	 * to see if we need to DBG_COUNTER_INC(encap_txd_encap_fail).
+	 */
 	return (err);
 
 defrag_failed:
@@ -3477,6 +3479,7 @@ defrag_failed:
 	m_freem(*m_headp);
 	DBG_COUNTER_INC(tx_frees);
 	*m_headp = NULL;
+	DBG_COUNTER_INC(encap_txd_encap_fail);
 	return (ENOMEM);
 }
 
@@ -3676,12 +3679,10 @@ iflib_txq_drain(struct ifmp_ring *r, uint32_t cidx, uint32_t pidx)
 		in_use_prev = txq->ift_in_use;
 		err = iflib_encap(txq, mp);
 		if (__predict_false(err)) {
-			DBG_COUNTER_INC(txq_drain_encapfail);
 			/* no room - bail out */
 			if (err == ENOBUFS)
 				break;
 			consumed++;
-			DBG_COUNTER_INC(txq_drain_encapfail);
 			/* we can't send this packet - skip it */
 			continue;
 		}
@@ -3741,6 +3742,7 @@ iflib_txq_drain_free(struct ifmp_ring *r, uint32_t cidx, uint32_t pidx)
 		if (__predict_false(*mp == (struct mbuf *)txq))
 			continue;
 		m_freem(*mp);
+		DBG_COUNTER_INC(tx_frees);
 	}
 	MPASS(ifmp_ring_is_stalled(r) == 0);
 	return (avail);
@@ -3856,7 +3858,7 @@ _task_fn_admin(void *context)
 	if_softc_ctx_t sctx = &ctx->ifc_softc_ctx;
 	iflib_txq_t txq;
 	int i;
-	bool oactive, running, do_reset, do_watchdog;
+	bool oactive, running, do_reset, do_watchdog, in_detach;
 	uint32_t reset_on = hz / 2;
 
 	STATE_LOCK(ctx);
@@ -3864,11 +3866,13 @@ _task_fn_admin(void *context)
 	oactive = (if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_OACTIVE);
 	do_reset = (ctx->ifc_flags & IFC_DO_RESET);
 	do_watchdog = (ctx->ifc_flags & IFC_DO_WATCHDOG);
+	in_detach = (ctx->ifc_flags & IFC_IN_DETACH);
 	ctx->ifc_flags &= ~(IFC_DO_RESET|IFC_DO_WATCHDOG);
 	STATE_UNLOCK(ctx);
 
-	if ((!running & !oactive) &&
-	    !(ctx->ifc_sctx->isc_flags & IFLIB_ADMIN_ALWAYS_RUN))
+	if ((!running && !oactive) && !(ctx->ifc_sctx->isc_flags & IFLIB_ADMIN_ALWAYS_RUN))
+		return;
+	if (in_detach)
 		return;
 
 	CTX_LOCK(ctx);
@@ -3907,7 +3911,8 @@ _task_fn_iov(void *context)
 {
 	if_ctx_t ctx = context;
 
-	if (!(if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_RUNNING))
+	if (!(if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_RUNNING) &&
+	    !(ctx->ifc_sctx->isc_flags & IFLIB_ADMIN_ALWAYS_RUN))
 		return;
 
 	CTX_LOCK(ctx);
@@ -3987,6 +3992,7 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 			next = m->m_nextpkt;
 			m->m_nextpkt = NULL;
 			m_freem(m);
+			DBG_COUNTER_INC(tx_frees);
 			m = next;
 		}
 		return (ENOBUFS);
@@ -4029,6 +4035,7 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 #endif
 		ifmp_ring_check_drainage(txq->ift_br, TX_BATCH_SIZE);
 		m_freem(m);
+		DBG_COUNTER_INC(tx_frees);
 	}
 
 	return (err);
@@ -4112,9 +4119,10 @@ iflib_if_qflush(if_t ifp)
 }
 
 
-#define IFCAP_FLAGS (IFCAP_TXCSUM_IPV6 | IFCAP_RXCSUM_IPV6 | IFCAP_HWCSUM | IFCAP_LRO | \
-		     IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_VLAN_HWTAGGING | IFCAP_HWSTATS | \
-		     IFCAP_VLAN_MTU | IFCAP_VLAN_HWFILTER | IFCAP_VLAN_HWTSO)
+#define IFCAP_FLAGS (IFCAP_HWCSUM_IPV6 | IFCAP_HWCSUM | IFCAP_LRO | \
+		     IFCAP_TSO | IFCAP_VLAN_HWTAGGING | IFCAP_HWSTATS | \
+		     IFCAP_VLAN_MTU | IFCAP_VLAN_HWFILTER | \
+		     IFCAP_VLAN_HWTSO | IFCAP_VLAN_HWCSUM)
 
 static int
 iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
@@ -4235,39 +4243,51 @@ iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
 	}
 	case SIOCSIFCAP:
 	{
-		int mask, setmask;
+		int mask, setmask, oldmask;
 
-		mask = ifr->ifr_reqcap ^ if_getcapenable(ifp);
+		oldmask = if_getcapenable(ifp);
+		mask = ifr->ifr_reqcap ^ oldmask;
+		mask &= ctx->ifc_softc_ctx.isc_capabilities;
 		setmask = 0;
 #ifdef TCP_OFFLOAD
 		setmask |= mask & (IFCAP_TOE4|IFCAP_TOE6);
 #endif
 		setmask |= (mask & IFCAP_FLAGS);
+		setmask |= (mask & IFCAP_WOL);
 
-		if (setmask & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6))
-			setmask |= (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6);
-		if ((mask & IFCAP_WOL) &&
-		    (if_getcapabilities(ifp) & IFCAP_WOL) != 0)
-			setmask |= (mask & (IFCAP_WOL_MCAST|IFCAP_WOL_MAGIC));
-		if_vlancap(ifp);
+		/*
+		 * If we're disabling any RX csum, disable all the ones
+		 * the driver supports.  This assumes all supported are
+		 * enabled.
+		 * 
+		 * Otherwise, if they've changed, enable all of them.
+		 */
+		if ((setmask & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6)) <
+		    (oldmask & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6)))
+			setmask &= ~(IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6);
+		else if ((setmask & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6)) !=
+		    (oldmask & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6)))
+			setmask |= (mask & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6));
+
 		/*
 		 * want to ensure that traffic has stopped before we change any of the flags
 		 */
 		if (setmask) {
 			CTX_LOCK(ctx);
 			bits = if_getdrvflags(ifp);
-			if (bits & IFF_DRV_RUNNING)
+			if (bits & IFF_DRV_RUNNING && setmask & ~IFCAP_WOL)
 				iflib_stop(ctx);
 			STATE_LOCK(ctx);
 			if_togglecapenable(ifp, setmask);
 			STATE_UNLOCK(ctx);
-			if (bits & IFF_DRV_RUNNING)
+			if (bits & IFF_DRV_RUNNING && setmask & ~IFCAP_WOL)
 				iflib_init_locked(ctx);
 			STATE_LOCK(ctx);
 			if_setdrvflags(ifp, bits);
 			STATE_UNLOCK(ctx);
 			CTX_UNLOCK(ctx);
 		}
+		if_vlancap(ifp);
 		break;
 	}
 	case SIOCGPRIVATE_0:
@@ -4679,17 +4699,18 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 	ctx->ifc_flags |= IFC_INIT_DONE;
 	CTX_UNLOCK(ctx);
 	return (0);
+
 fail_detach:
 	ether_ifdetach(ctx->ifc_ifp);
 fail_intr_free:
-	if (scctx->isc_intr == IFLIB_INTR_MSIX || scctx->isc_intr == IFLIB_INTR_MSI)
-		pci_release_msi(ctx->ifc_dev);
 fail_queues:
 	iflib_tx_structures_free(ctx);
 	iflib_rx_structures_free(ctx);
 fail:
+	iflib_free_intr_mem(ctx);
 	IFDI_DETACH(ctx);
 	CTX_UNLOCK(ctx);
+
 	return (err);
 }
 
@@ -4974,12 +4995,21 @@ iflib_device_deregister(if_ctx_t ctx)
 
 	/* Make sure VLANS are not using driver */
 	if (if_vlantrunkinuse(ifp)) {
-		device_printf(dev,"Vlan in use, detach first\n");
+		device_printf(dev, "Vlan in use, detach first\n");
 		return (EBUSY);
 	}
+#ifdef PCI_IOV
+	if (!CTX_IS_VF(ctx) && pci_iov_detach(dev) != 0) {
+		device_printf(dev, "SR-IOV in use; detach first.\n");
+		return (EBUSY);
+	}
+#endif
+
+	STATE_LOCK(ctx);
+	ctx->ifc_flags |= IFC_IN_DETACH;
+	STATE_UNLOCK(ctx);
 
 	CTX_LOCK(ctx);
-	ctx->ifc_in_detach = 1;
 	iflib_stop(ctx);
 	CTX_UNLOCK(ctx);
 
@@ -5020,8 +5050,26 @@ iflib_device_deregister(if_ctx_t ctx)
 	/* ether_ifdetach calls if_qflush - lock must be destroy afterwards*/
 	CTX_LOCK_DESTROY(ctx);
 	device_set_softc(ctx->ifc_dev, NULL);
+	iflib_free_intr_mem(ctx);
+
+	bus_generic_detach(dev);
+	if_free(ifp);
+
+	iflib_tx_structures_free(ctx);
+	iflib_rx_structures_free(ctx);
+	if (ctx->ifc_flags & IFC_SC_ALLOCATED)
+		free(ctx->ifc_softc, M_IFLIB);
+	STATE_LOCK_DESTROY(ctx);
+	free(ctx, M_IFLIB);
+	return (0);
+}
+
+static void
+iflib_free_intr_mem(if_ctx_t ctx)
+{
+
 	if (ctx->ifc_softc_ctx.isc_intr != IFLIB_INTR_LEGACY) {
-		pci_release_msi(dev);
+		pci_release_msi(ctx->ifc_dev);
 	}
 	if (ctx->ifc_softc_ctx.isc_intr != IFLIB_INTR_MSIX) {
 		iflib_irq_free(ctx, &ctx->ifc_legacy_irq);
@@ -5031,18 +5079,7 @@ iflib_device_deregister(if_ctx_t ctx)
 			ctx->ifc_softc_ctx.isc_msix_bar, ctx->ifc_msix_mem);
 		ctx->ifc_msix_mem = NULL;
 	}
-
-	bus_generic_detach(dev);
-	if_free(ifp);
-
-	iflib_tx_structures_free(ctx);
-	iflib_rx_structures_free(ctx);
-	if (ctx->ifc_flags & IFC_SC_ALLOCATED)
-		free(ctx->ifc_softc, M_IFLIB);
-	free(ctx, M_IFLIB);
-	return (0);
 }
-
 
 int
 iflib_device_detach(device_t dev)
@@ -5214,7 +5251,7 @@ iflib_register(if_ctx_t ctx)
 
 	CTX_LOCK_INIT(ctx);
 	STATE_LOCK_INIT(ctx, device_get_nameunit(ctx->ifc_dev));
-	ifp = ctx->ifc_ifp = if_gethandle(IFT_ETHER);
+	ifp = ctx->ifc_ifp = if_alloc(IFT_ETHER);
 	if (ifp == NULL) {
 		device_printf(dev, "can not allocate ifnet structure\n");
 		return (ENOMEM);
@@ -5398,7 +5435,7 @@ iflib_queues_alloc(if_ctx_t ctx)
 			fl[j].ifl_ifdi = &rxq->ifr_ifdi[j + rxq->ifr_fl_offset];
 			fl[j].ifl_rxd_size = scctx->isc_rxd_size[j];
 		}
-        /* Allocate receive buffers for the ring*/
+		/* Allocate receive buffers for the ring */
 		if (iflib_rxsd_alloc(rxq)) {
 			device_printf(dev,
 			    "Critical Failure setting up receive buffers\n");
@@ -5553,6 +5590,8 @@ iflib_rx_structures_free(if_ctx_t ctx)
 	for (int i = 0; i < ctx->ifc_softc_ctx.isc_nrxqsets; i++, rxq++) {
 		iflib_rx_sds_free(rxq);
 	}
+	free(ctx->ifc_rxqs, M_IFLIB);
+	ctx->ifc_rxqs = NULL;
 }
 
 static int
@@ -5813,7 +5852,7 @@ iflib_irq_alloc_generic(if_ctx_t ctx, if_irq_t irq, int rid,
 }
 
 void
-iflib_softirq_alloc_generic(if_ctx_t ctx, if_irq_t irq, iflib_intr_type_t type,  void *arg, int qid, const char *name)
+iflib_softirq_alloc_generic(if_ctx_t ctx, if_irq_t irq, iflib_intr_type_t type, void *arg, int qid, const char *name)
 {
 	struct grouptask *gtask;
 	struct taskqgroup *tqg;
@@ -6131,8 +6170,9 @@ iflib_msix_init(if_ctx_t ctx)
 	if (ctx->ifc_sysctl_qs_eq_override == 0) {
 #ifdef INVARIANTS
 		if (tx_queues != rx_queues)
-			device_printf(dev, "queue equality override not set, capping rx_queues at %d and tx_queues at %d\n",
-				      min(rx_queues, tx_queues), min(rx_queues, tx_queues));
+			device_printf(dev,
+			    "queue equality override not set, capping rx_queues at %d and tx_queues at %d\n",
+			    min(rx_queues, tx_queues), min(rx_queues, tx_queues));
 #endif
 		tx_queues = min(rx_queues, tx_queues);
 		rx_queues = min(rx_queues, tx_queues);
@@ -6142,8 +6182,7 @@ iflib_msix_init(if_ctx_t ctx)
 
 	vectors = rx_queues + admincnt;
 	if ((err = pci_alloc_msix(dev, &vectors)) == 0) {
-		device_printf(dev,
-					  "Using MSIX interrupts with %d vectors\n", vectors);
+		device_printf(dev, "Using MSIX interrupts with %d vectors\n", vectors);
 		scctx->isc_vectors = vectors;
 		scctx->isc_nrxqsets = rx_queues;
 		scctx->isc_ntxqsets = tx_queues;
@@ -6151,7 +6190,8 @@ iflib_msix_init(if_ctx_t ctx)
 
 		return (vectors);
 	} else {
-		device_printf(dev, "failed to allocate %d msix vectors, err: %d - using MSI\n", vectors, err);
+		device_printf(dev,
+		    "failed to allocate %d msix vectors, err: %d - using MSI\n", vectors, err);
 		bus_release_resource(dev, SYS_RES_MEMORY, bar,
 		    ctx->ifc_msix_mem);
 		ctx->ifc_msix_mem = NULL;
@@ -6460,6 +6500,15 @@ iflib_add_device_sysctl_post(if_ctx_t ctx)
 		}
 	}
 
+}
+
+void
+iflib_request_reset(if_ctx_t ctx)
+{
+
+	STATE_LOCK(ctx);
+	ctx->ifc_flags |= IFC_DO_RESET;
+	STATE_UNLOCK(ctx);
 }
 
 #ifndef __NO_STRICT_ALIGNMENT

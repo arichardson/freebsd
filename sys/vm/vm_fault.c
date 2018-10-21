@@ -548,6 +548,7 @@ vm_fault_hold(vm_map_t map, vm_offset_t vaddr, vm_prot_t fault_type,
 {
 	struct faultstate fs;
 	struct vnode *vp;
+	struct domainset *dset;
 	vm_object_t next_object, retry_object;
 	vm_offset_t e_end, e_start;
 	vm_pindex_t retry_pindex;
@@ -791,7 +792,11 @@ RetryFault:;
 			 * there, and allocation can fail, causing
 			 * restart and new reading of the p_flag.
 			 */
-			if (!vm_page_count_severe() || P_KILLED(curproc)) {
+			dset = fs.object->domain.dr_policy;
+			if (dset == NULL)
+				dset = curthread->td_domain.dr_policy;
+			if (!vm_page_count_severe_set(&dset->ds_mask) ||
+			    P_KILLED(curproc)) {
 #if VM_NRESERVLEVEL > 0
 				vm_object_color(fs.object, atop(vaddr) -
 				    fs.pindex);
@@ -806,7 +811,7 @@ RetryFault:;
 			}
 			if (fs.m == NULL) {
 				unlock_and_deallocate(&fs);
-				vm_waitpfault();
+				vm_waitpfault(dset);
 				goto RetryFault;
 			}
 		}
@@ -1628,16 +1633,16 @@ vm_fault_copy_entry(vm_map_t dst_map, vm_map_t src_map,
 		dst_object->flags |= OBJ_COLORED;
 		dst_object->pg_color = atop(dst_entry->start);
 #endif
+		dst_object->domain = src_object->domain;
+		dst_object->charge = dst_entry->end - dst_entry->start;
 	}
 
 	VM_OBJECT_WLOCK(dst_object);
 	KASSERT(upgrade || dst_entry->object.vm_object == NULL,
 	    ("vm_fault_copy_entry: vm_object not NULL"));
 	if (src_object != dst_object) {
-		dst_object->domain = src_object->domain;
 		dst_entry->object.vm_object = dst_object;
 		dst_entry->offset = 0;
-		dst_object->charge = dst_entry->end - dst_entry->start;
 	}
 	if (fork_charge != NULL) {
 		KASSERT(dst_entry->cred == NULL,
@@ -1645,7 +1650,9 @@ vm_fault_copy_entry(vm_map_t dst_map, vm_map_t src_map,
 		dst_object->cred = curthread->td_ucred;
 		crhold(dst_object->cred);
 		*fork_charge += dst_object->charge;
-	} else if (dst_object->cred == NULL) {
+	} else if ((dst_object->type == OBJT_DEFAULT ||
+	    dst_object->type == OBJT_SWAP) &&
+	    dst_object->cred == NULL) {
 		KASSERT(dst_entry->cred != NULL, ("no cred for entry %p",
 		    dst_entry));
 		dst_object->cred = dst_entry->cred;
@@ -1732,6 +1739,13 @@ again:
 			dst_m = src_m;
 			if (vm_page_sleep_if_busy(dst_m, "fltupg"))
 				goto again;
+			if (dst_m->pindex >= dst_object->size)
+				/*
+				 * We are upgrading.  Index can occur
+				 * out of bounds if the object type is
+				 * vnode and the file was truncated.
+				 */
+				break;
 			vm_page_xbusy(dst_m);
 			KASSERT(dst_m->valid == VM_PAGE_BITS_ALL,
 			    ("invalid dst page %p", dst_m));

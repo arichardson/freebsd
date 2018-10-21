@@ -90,6 +90,15 @@ EXTRA_PACKAGES+= src.txz
 .endif
 .if !defined(NODOC)
 EXTRA_PACKAGES+= reldoc
+. if !defined(SVN) || empty(SVN)
+.  for S in svn svnlite
+.   for D in /usr/local/bin /usr/bin
+.    if(exists(${D}/${S}))
+SVN?=	${D}/${S}
+.    endif
+.   endfor
+.  endfor
+. endif
 .endif
 
 RELEASE_TARGETS= ftp
@@ -164,6 +173,7 @@ ports.txz:
 reldoc:
 	cd ${DOCDIR}/en_US.ISO8859-1/htdocs/releases/${REVISION}R && \
 	    env MAN4DIR=${WORLDDIR}/share/man/man4 \
+	    SVN=${SVN} \
 	    ${MAKE} all install clean "FORMATS=html txt" \
 	    INSTALL_COMPRESSED='' URLS_ABSOLUTE=YES DOCDIR=${.OBJDIR}/rdoc \
 	    WEBDIR=${DOCDIR} DESTDIR=${.OBJDIR}/rdoc
@@ -200,8 +210,8 @@ disc1: packagesystem
 	ln -fs /tmp/bsdinstall_etc/resolv.conf ${.TARGET}/etc/resolv.conf
 	echo sendmail_enable=\"NONE\" > ${.TARGET}/etc/rc.conf
 	echo hostid_enable=\"NO\" >> ${.TARGET}/etc/rc.conf
-	echo debug.witness.trace=0 >> ${.TARGET}/etc/sysctl.conf
 	echo vfs.mountroot.timeout=\"10\" >> ${.TARGET}/boot/loader.conf
+	echo kernels_autodetect=\"NO\" >> ${.TARGET}/boot/loader.conf
 	cp ${.CURDIR}/rc.local ${.TARGET}/etc
 	touch ${.TARGET}
 
@@ -227,8 +237,8 @@ bootonly: packagesystem
 	ln -fs /tmp/bsdinstall_etc/resolv.conf ${.TARGET}/etc/resolv.conf
 	echo sendmail_enable=\"NONE\" > ${.TARGET}/etc/rc.conf
 	echo hostid_enable=\"NO\" >> ${.TARGET}/etc/rc.conf
-	echo debug.witness.trace=0 >> ${.TARGET}/etc/sysctl.conf
 	echo vfs.mountroot.timeout=\"10\" >> ${.TARGET}/boot/loader.conf
+	echo kernels_autodetect=\"NO\" >> ${.TARGET}/boot/loader.conf
 	cp ${.CURDIR}/rc.local ${.TARGET}/etc
 
 dvd: packagesystem
@@ -251,8 +261,8 @@ dvd: packagesystem
 	ln -fs /tmp/bsdinstall_etc/resolv.conf ${.TARGET}/etc/resolv.conf
 	echo sendmail_enable=\"NONE\" > ${.TARGET}/etc/rc.conf
 	echo hostid_enable=\"NO\" >> ${.TARGET}/etc/rc.conf
-	echo debug.witness.trace=0 >> ${.TARGET}/etc/sysctl.conf
 	echo vfs.mountroot.timeout=\"10\" >> ${.TARGET}/boot/loader.conf
+	echo kernels_autodetect=\"NO\" >> ${.TARGET}/boot/loader.conf
 	cp ${.CURDIR}/rc.local ${.TARGET}/etc
 	touch ${.TARGET}
 

@@ -2935,7 +2935,7 @@ vm_wait_count(void)
 	return (vm_severe_waiters + vm_min_waiters + vm_pageproc_waiters);
 }
 
-static void
+void
 vm_wait_doms(const domainset_t *wdoms)
 {
 
@@ -2959,12 +2959,12 @@ vm_wait_doms(const domainset_t *wdoms)
 		 * consume all freed pages while old allocators wait.
 		 */
 		mtx_lock(&vm_domainset_lock);
-		if (DOMAINSET_SUBSET(&vm_min_domains, wdoms)) {
+		if (vm_page_count_min_set(wdoms)) {
 			vm_min_waiters++;
-			msleep(&vm_min_domains, &vm_domainset_lock, PVM,
-			    "vmwait", 0);
-		}
-		mtx_unlock(&vm_domainset_lock);
+			msleep(&vm_min_domains, &vm_domainset_lock,
+			    PVM | PDROP, "vmwait", 0);
+		} else
+			mtx_unlock(&vm_domainset_lock);
 	}
 }
 
@@ -3069,15 +3069,21 @@ vm_domain_alloc_fail(struct vm_domain *vmd, vm_object_t object, int req)
  *	  this balance without careful testing first.
  */
 void
-vm_waitpfault(void)
+vm_waitpfault(struct domainset *dset)
 {
 
+	/*
+	 * XXX Ideally we would wait only until the allocation could
+	 * be satisfied.  This condition can cause new allocators to
+	 * consume all freed pages while old allocators wait.
+	 */
 	mtx_lock(&vm_domainset_lock);
-	if (vm_page_count_min()) {
+	if (vm_page_count_min_set(&dset->ds_mask)) {
 		vm_min_waiters++;
-		msleep(&vm_min_domains, &vm_domainset_lock, PUSER, "pfault", 0);
-	}
-	mtx_unlock(&vm_domainset_lock);
+		msleep(&vm_min_domains, &vm_domainset_lock, PUSER | PDROP,
+		    "pfault", 0);
+	} else
+		mtx_unlock(&vm_domainset_lock);
 }
 
 struct vm_pagequeue *
@@ -3101,28 +3107,35 @@ static inline void
 vm_pqbatch_process_page(struct vm_pagequeue *pq, vm_page_t m)
 {
 	struct vm_domain *vmd;
-	uint8_t aflags;
+	uint8_t qflags;
 
 	CRITICAL_ASSERT(curthread);
 	vm_pagequeue_assert_locked(pq);
-	KASSERT(pq == vm_page_pagequeue(m),
-	    ("page %p doesn't belong to %p", m, pq));
 
-	aflags = m->aflags;
-	if ((aflags & PGA_DEQUEUE) != 0) {
-		if (__predict_true((aflags & PGA_ENQUEUED) != 0)) {
+	/*
+	 * The page daemon is allowed to set m->queue = PQ_NONE without
+	 * the page queue lock held.  In this case it is about to free the page,
+	 * which must not have any queue state.
+	 */
+	qflags = atomic_load_8(&m->aflags) & PGA_QUEUE_STATE_MASK;
+	KASSERT(pq == vm_page_pagequeue(m) || qflags == 0,
+	    ("page %p doesn't belong to queue %p but has queue state %#x",
+	    m, pq, qflags));
+
+	if ((qflags & PGA_DEQUEUE) != 0) {
+		if (__predict_true((qflags & PGA_ENQUEUED) != 0)) {
 			TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
 			vm_pagequeue_cnt_dec(pq);
 		}
 		vm_page_dequeue_complete(m);
-	} else if ((aflags & (PGA_REQUEUE | PGA_REQUEUE_HEAD)) != 0) {
-		if ((aflags & PGA_ENQUEUED) != 0)
+	} else if ((qflags & (PGA_REQUEUE | PGA_REQUEUE_HEAD)) != 0) {
+		if ((qflags & PGA_ENQUEUED) != 0)
 			TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
 		else {
 			vm_pagequeue_cnt_inc(pq);
 			vm_page_aflag_set(m, PGA_ENQUEUED);
 		}
-		if ((aflags & PGA_REQUEUE_HEAD) != 0) {
+		if ((qflags & PGA_REQUEUE_HEAD) != 0) {
 			KASSERT(m->queue == PQ_INACTIVE,
 			    ("head enqueue not supported for page %p", m));
 			vmd = vm_pagequeue_domain(m);
@@ -3393,13 +3406,13 @@ vm_page_requeue(vm_page_t m)
 void
 vm_page_activate(vm_page_t m)
 {
-	int queue;
 
 	vm_page_assert_locked(m);
 
-	if ((queue = vm_page_queue(m)) == PQ_ACTIVE || m->wire_count > 0 ||
-	    (m->oflags & VPO_UNMANAGED) != 0) {
-		if (queue == PQ_ACTIVE && m->act_count < ACT_INIT)
+	if (m->wire_count > 0 || (m->oflags & VPO_UNMANAGED) != 0)
+		return;
+	if (vm_page_queue(m) == PQ_ACTIVE) {
+		if (m->act_count < ACT_INIT)
 			m->act_count = ACT_INIT;
 		return;
 	}

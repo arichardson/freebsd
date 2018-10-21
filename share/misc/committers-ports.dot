@@ -100,6 +100,7 @@ dumbbell [label="Jean-Sebastien Pedron\ndumbbell@FreeBSD.org\n2017/01/10"]
 dvl [label="Dan Langille\ndvl@FreeBSD.org\n2014/08/10"]
 eadler [label="Eitan Adler\neadler@FreeBSD.org\n2011/08/17"]
 edwin [label="Edwin Groothuis\nedwin@FreeBSD.org\n2002/10/22"]
+egypcio [label="Vin&iacute;cius Zavam\negypcio@FreeBSD.org\n2018/10/04"]
 ehaupt [label="Emanuel Haupt\nehaupt@FreeBSD.org\n2005/10/03"]
 eik [label="Oliver Eikemeier\neik@FreeBSD.org\n2003/11/12"]
 ericbsd [label="Eric Turgeon\nericbsd@FreeBSD.org\n2018/03/17"]
@@ -175,6 +176,7 @@ madpilot [label="Guido Falsi\nmadpilot@FreeBSD.org\n2012/04/12"]
 maho [label="Maho Nakata\nmaho@FreeBSD.org\n2002/10/17"]
 makc [label="Max Brazhnikov\nmakc@FreeBSD.org\n2008/08/25"]
 mandree [label="Matthias Andree\nmandree@FreeBSD.org\n2009/11/18"]
+manu [label="Emmanuel Vadot\nmanu@FreeBSD.org\n2018/09/06"]
 marcus [label="Joe Marcus Clarke\nmarcus@FreeBSD.org\n2002/04/05"]
 marino [label="John Marino\nmarino@FreeBSD.org\n2013/07/04"]
 marius [label="Marius Strobl\nmarius@FreeBSD.org\n2012/12/29"]
@@ -218,6 +220,7 @@ rakuco [label="Raphael Kubo da Costa\nrakuco@FreeBSD.org\n2011/08/22"]
 rene [label="Rene Ladan\nrene@FreeBSD.org\n2010/04/11"]
 rezny [label="Matthew Rezny\nrezny@FreeBSD.org\n2017/01/09"]
 riggs [label="Thomas Zander\nriggs@FreeBSD.org\n2014/01/09"]
+rigoletto [label="Alexandre C. Guimaraes\nrigoletto@FreeBSD.org\n2018/10/01"]
 rm [label="Ruslan Makhmatkhanov\nrm@FreeBSD.org\n2011/11/06"]
 rnoland [label="Robert Noland\nrnoland@FreeBSD.org\n2008/07/21"]
 robak [label="Bartek Rutkowski\nrobak@FreeBSD.org\n2014/06/10"]
@@ -296,6 +299,7 @@ amdmi3 -> arrowd
 
 antoine -> dumbbell
 
+araujo -> egypcio
 araujo -> jhixson
 araujo -> lippe
 araujo -> pclin
@@ -323,6 +327,7 @@ bapt -> ericbsd
 bapt -> grembo
 bapt -> jbeich
 bapt -> jlaffaye
+bapt -> manu
 bapt -> marius
 bapt -> marino
 bapt -> rodrigo
@@ -330,6 +335,7 @@ bapt -> rpaulo
 bapt -> sbruno
 
 beat -> decke
+beat -> egypcio
 beat -> marius
 beat -> sperber
 beat -> uqs
@@ -544,6 +550,7 @@ mat -> tcberner
 mat -> thierry
 mat -> tobik
 mat -> woodsb02
+mat -> rigoletto
 
 matthew -> leres
 matthew -> lifanov
@@ -631,6 +638,7 @@ rakuco -> tcberner
 rene -> bar
 rene -> cmt
 rene -> crees
+rene -> egypcio
 rene -> jgh
 rene -> jmd
 rene -> joneum
@@ -702,6 +710,7 @@ tcberner -> joneum
 tcberner -> yuri
 tcberner -> fernape
 tcberner -> arrowd
+tcberner -> rigoletto
 
 thierry -> jadawin
 thierry -> riggs

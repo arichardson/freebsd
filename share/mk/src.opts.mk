@@ -85,6 +85,7 @@ __DEFAULT_YES_OPTIONS = \
     CTM \
     CUSE \
     CXX \
+    CXGBETOOL \
     DIALOG \
     DICT \
     DMAGENT \
@@ -141,12 +142,14 @@ __DEFAULT_YES_OPTIONS = \
     MAIL \
     MAILWRAPPER \
     MAKE \
+    MLX5TOOL \
     NDIS \
     NETCAT \
     NETGRAPH \
     NLS_CATALOGS \
     NS_CACHING \
     NTP \
+    NVME \
     OFED \
     OPENSSL \
     PAM \
@@ -159,6 +162,7 @@ __DEFAULT_YES_OPTIONS = \
     QUOTAS \
     RADIUS_SUPPORT \
     RBOOTD \
+    REPRODUCIBLE_BUILD \
     RESCUE \
     ROUTED \
     SENDMAIL \
@@ -201,7 +205,6 @@ __DEFAULT_NO_OPTIONS = \
     NAND \
     OFED_EXTRA \
     OPENLDAP \
-    REPRODUCIBLE_BUILD \
     RPCBIND_WARMSTART_SUPPORT \
     SHARED_TOOLCHAIN \
     SORT_THREADS \
@@ -354,9 +357,11 @@ BROKEN_OPTIONS+=LOADER_OFW
 .if ${__T:Marm*} == "" && ${__T:Mmips*} == "" && ${__T:Mpowerpc*} == ""
 BROKEN_OPTIONS+=LOADER_UBOOT
 .endif
-# GELI and Lua in loader currently cause boot failures on sparc64.
-# Further debugging is required.
-.if ${__T} == "sparc64"
+# GELI and Lua in loader currently cause boot failures on sparc64 and powerpc.
+# Further debugging is required -- probably they are just broken on big
+# endian systems generically (they jump to null pointers or try to read
+# crazy high addresses, which is typical of endianness problems).
+.if ${__T} == "sparc64" || ${__T:Mpowerpc*}
 BROKEN_OPTIONS+=LOADER_GELI LOADER_LUA
 .endif
 
@@ -364,20 +369,20 @@ BROKEN_OPTIONS+=LOADER_GELI LOADER_LUA
 # profiling won't work on MIPS64 because there is only assembly for o32
 BROKEN_OPTIONS+=PROFILE
 .endif
-.if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "i386" || \
-    ${__T} == "powerpc64" || ${__T} == "sparc64"
-__DEFAULT_YES_OPTIONS+=CXGBETOOL
-__DEFAULT_YES_OPTIONS+=MLX5TOOL
-.else
-__DEFAULT_NO_OPTIONS+=CXGBETOOL
-__DEFAULT_NO_OPTIONS+=MLX5TOOL
+.if ${__T} != "aarch64" && ${__T} != "amd64" && ${__T} != "i386" && \
+    ${__T} != "powerpc64" && ${__T} != "sparc64"
+BROKEN_OPTIONS+=CXGBETOOL
+BROKEN_OPTIONS+=MLX5TOOL
+.endif
+
+# HyperV is currently x86-only
+.if ${__T} != "amd64" && ${__T} != "i386"
+BROKEN_OPTIONS+=HYPERV
 .endif
 
 # NVME is only x86 and powerpc64
-.if ${__T} == "amd64" || ${__T} == "i386" || ${__T} == "powerpc64"
-__DEFAULT_YES_OPTIONS+=NVME
-.else
-__DEFAULT_NO_OPTIONS+=NVME
+.if ${__T} != "amd64" && ${__T} != "i386" && ${__T} != "powerpc64"
+BROKEN_OPTIONS+=NVME
 .endif
 
 

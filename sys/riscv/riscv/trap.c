@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2015-2017 Ruslan Bukin <br@bsdpad.com>
+ * Copyright (c) 2015-2018 Ruslan Bukin <br@bsdpad.com>
  * All rights reserved.
  *
  * Portions of this software were developed by SRI International and the
@@ -57,6 +57,9 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_param.h>
 #include <vm/vm_extern.h>
 
+#ifdef FPE
+#include <machine/fpe.h>
+#endif
 #include <machine/frame.h>
 #include <machine/pcb.h>
 #include <machine/pcpu.h>
@@ -209,6 +212,9 @@ data_abort(struct trapframe *frame, int lower)
 		ftype = (VM_PROT_READ);
 	}
 
+	if (pmap_fault_fixup(map->pmap, va, ftype))
+		goto done;
+
 	if (map != kernel_map) {
 		/*
 		 * Keep swapout from messing with us during this
@@ -253,6 +259,7 @@ data_abort(struct trapframe *frame, int lower)
 		}
 	}
 
+done:
 	if (lower)
 		userret(td, frame);
 }
@@ -363,7 +370,9 @@ do_trap_user(struct trapframe *frame)
 			 * May be a FPE trap. Enable FPE usage
 			 * for this thread and try again.
 			 */
-			frame->tf_sstatus |= SSTATUS_FS_INITIAL;
+			fpe_state_clear();
+			frame->tf_sstatus &= ~SSTATUS_FS_MASK;
+			frame->tf_sstatus |= SSTATUS_FS_CLEAN;
 			pcb->pcb_fpflags |= PCB_FP_STARTED;
 			break;
 		}

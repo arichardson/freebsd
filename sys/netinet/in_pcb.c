@@ -235,16 +235,26 @@ in_pcblbgroup_alloc(struct inpcblbgrouphead *hdr, u_char vflag,
 	grp->il_lport = port;
 	grp->il_dependladdr = *addr;
 	grp->il_inpsiz = size;
-	LIST_INSERT_HEAD(hdr, grp, il_list);
+	CK_LIST_INSERT_HEAD(hdr, grp, il_list);
 	return (grp);
+}
+
+static void
+in_pcblbgroup_free_deferred(epoch_context_t ctx)
+{
+	struct inpcblbgroup *grp;
+
+	grp = __containerof(ctx, struct inpcblbgroup, il_epoch_ctx);
+	free(grp, M_PCB);
 }
 
 static void
 in_pcblbgroup_free(struct inpcblbgroup *grp)
 {
 
-	LIST_REMOVE(grp, il_list);
-	free(grp, M_PCB);
+	CK_LIST_REMOVE(grp, il_list);
+	epoch_call(net_epoch_preempt, &grp->il_epoch_ctx,
+	    in_pcblbgroup_free_deferred);
 }
 
 static struct inpcblbgroup *
@@ -301,13 +311,14 @@ in_pcblbgroup_reorder(struct inpcblbgrouphead *hdr, struct inpcblbgroup **grpp,
 static int
 in_pcbinslbgrouphash(struct inpcb *inp)
 {
+	const static struct timeval interval = { 60, 0 };
+	static struct timeval lastprint;
 	struct inpcbinfo *pcbinfo;
 	struct inpcblbgrouphead *hdr;
 	struct inpcblbgroup *grp;
 	uint16_t hashmask, lport;
 	uint32_t group_index;
 	struct ucred *cred;
-	static int limit_logged = 0;
 
 	pcbinfo = inp->inp_pcbinfo;
 
@@ -346,7 +357,7 @@ in_pcbinslbgrouphash(struct inpcb *inp)
 	hdr = &pcbinfo->ipi_lbgrouphashbase[
 	    INP_PCBLBGROUP_PORTHASH(inp->inp_lport,
 	        pcbinfo->ipi_lbgrouphashmask)];
-	LIST_FOREACH(grp, hdr, il_list) {
+	CK_LIST_FOREACH(grp, hdr, il_list) {
 		if (grp->il_vflag == inp->inp_vflag &&
 		    grp->il_lport == inp->inp_lport &&
 		    memcmp(&grp->il_dependladdr,
@@ -364,11 +375,9 @@ in_pcbinslbgrouphash(struct inpcb *inp)
 			return (ENOBUFS);
 	} else if (grp->il_inpcnt == grp->il_inpsiz) {
 		if (grp->il_inpsiz >= INPCBLBGROUP_SIZMAX) {
-			if (!limit_logged) {
-				limit_logged = 1;
+			if (ratecheck(&lastprint, &interval))
 				printf("lb group port %d, limit reached\n",
 				    ntohs(grp->il_lport));
-			}
 			return (0);
 		}
 
@@ -410,7 +419,7 @@ in_pcbremlbgrouphash(struct inpcb *inp)
 	    INP_PCBLBGROUP_PORTHASH(inp->inp_lport,
 	        pcbinfo->ipi_lbgrouphashmask)];
 
-	LIST_FOREACH(grp, hdr, il_list) {
+	CK_LIST_FOREACH(grp, hdr, il_list) {
 		for (i = 0; i < grp->il_inpcnt; ++i) {
 			if (grp->il_inp[i] != inp)
 				continue;
@@ -1973,7 +1982,7 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 	 * - Load balanced group does not contain IPv4 mapped INET6 wild sockets
 	 */
 	local_wild = NULL;
-	LIST_FOREACH(grp, hdr, il_list) {
+	CK_LIST_FOREACH(grp, hdr, il_list) {
 #ifdef INET6
 		if (!(grp->il_vflag & INP_IPV4))
 			continue;

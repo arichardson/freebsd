@@ -129,9 +129,9 @@ TARGET_ABI=	gnueabi
 .endif
 .endif
 MACHINE_ABI?=	unknown
-MACHINE_TRIPLE?=${MACHINE_ARCH:S/amd64/x86_64/:C/hf$//:S/mipsn32/mips64/}-${MACHINE_ABI}-freebsd12.0
+MACHINE_TRIPLE?=${MACHINE_ARCH:S/amd64/x86_64/:C/hf$//:S/mipsn32/mips64/}-${MACHINE_ABI}-freebsd13.0
 TARGET_ABI?=	unknown
-TARGET_TRIPLE?=	${TARGET_ARCH:S/amd64/x86_64/:C/hf$//:S/mipsn32/mips64/}-${TARGET_ABI}-freebsd12.0
+TARGET_TRIPLE?=	${TARGET_ARCH:S/amd64/x86_64/:C/hf$//:S/mipsn32/mips64/}-${TARGET_ABI}-freebsd13.0
 KNOWN_ARCHES?=	aarch64/arm64 \
 		amd64 \
 		arm \
@@ -741,7 +741,7 @@ BSARGS= 	DESTDIR= \
 		${HOST_TOOLS_COMMON_MAKEFLAGS} \
 		-DNO_CPU_CFLAGS MK_WARNS=no MK_CTF=no \
 		MK_CLANG_EXTRAS=no MK_CLANG_FULL=no \
-		MK_LLDB=no MK_TESTS=no \
+		MK_LLDB=no MK_RETPOLINE=no MK_TESTS=no \
 		MK_INCLUDES=yes
 
 BMAKE=		\
@@ -762,7 +762,7 @@ TMAKE=		\
 		-DNO_LINT \
 		-DNO_CPU_CFLAGS MK_WARNS=no MK_CTF=no \
 		MK_CLANG_EXTRAS=no MK_CLANG_FULL=no \
-		MK_LLDB=no MK_TESTS=no MK_DEBUG_FILES=no
+		MK_LLDB=no MK_RETPOLINE=no MK_TESTS=no MK_DEBUG_FILES=no
 
 # cross-tools stage
 # TOOLS_PREFIX set in BMAKE
@@ -785,7 +785,7 @@ KTMAKE=		\
 		SSP_CFLAGS= \
 		MK_HTML=no -DNO_LINT MK_MAN=no \
 		${HOST_TOOLS_COMMON_MAKEFLAGS} \
-		-DNO_CPU_CFLAGS MK_WARNS=no MK_CTF=no
+		-DNO_CPU_CFLAGS MK_RETPOLINE=no MK_WARNS=no MK_CTF=no
 
 # world stage
 WMAKEENV=	${CROSSENV} \
@@ -1030,6 +1030,22 @@ _cleanobj_fast_depend_hack: .PHONY
 		    ${LIBCOMPAT:D${LIBCOMPAT_OBJTOP}/lib/libc/.depend.${f}.*}; \
 	fi
 .endfor
+# 20181013  r339348  bcopy reimplemented as .c
+.for f in bcopy memcpy memmove
+	@if [ -e "${OBJTOP}/lib/libc/.depend.${f}.o" ] && \
+	    egrep -qw 'bcopy\.[sS]' ${OBJTOP}/lib/libc/.depend.${f}.o; then \
+		echo "Removing stale dependencies for bcopy"; \
+		rm -f ${OBJTOP}/lib/libc/.depend.${f}.* \
+		   ${LIBCOMPAT:D${LIBCOMPAT_OBJTOP}/lib/libc/.depend.${f}.*}; \
+	fi
+.endfor
+# 20181009 track migration from ntp's embedded libevent to updated one
+	@if [ -e "${OBJTOP}/usr.sbin/ntp/libntpevent/.depend.bufferevent_openssl.o" ] && \
+	    egrep -q 'contrib/ntp/sntp/libevent/bufferevent_openssl.c' \
+	    ${OBJTOP}/usr.sbin/ntp/libntpevent/.depend.bufferevent_openssl.o ; then \
+		echo "Removing stale libevent dependencies"; \
+		rm -f ${OBJTOP}/usr.sbin/ntp/libntpevent/.depend.*; \
+	fi
 
 _worldtmp: .PHONY
 	@echo
@@ -2149,7 +2165,8 @@ _bootstrap_tools_links+=m4 lex
 # r296685 fix cross-endian objcopy
 # r310724 fixed PR 215350, a crash in libdwarf with objects built by GCC 6.2.
 # r334881 added libdwarf constants used by ctfconvert.
-.if ${BOOTSTRAPPING} < 1200067
+# r338478 fixed a crash in objcopy for mips64el objects
+.if ${BOOTSTRAPPING} < 1200084
 _elftoolchain_libs= lib/libelf lib/libdwarf
 ${_bt}-lib/libelf: ${_bt_lex_depend}
 ${_bt}-lib/libdwarf: ${_bt_lex_depend}
@@ -2668,6 +2685,7 @@ NXBMAKEARGS+= \
 	MK_OFED=no \
 	MK_OPENSSH=no \
 	MK_PROFILE=no \
+	MK_RETPOLINE=no \
 	MK_SENDMAIL=no \
 	MK_SVNLITE=no \
 	MK_TESTS=no \
@@ -2828,8 +2846,8 @@ _prebuild_libs=	${_kerberos5_lib_libasn1} \
 		${_cddl_lib_libctf} \
 		lib/libufs \
 		lib/libutil lib/libpjdlog ${_lib_libypclnt} lib/libz lib/msun \
-		${_secure_lib_libcrypto} ${_lib_libldns} \
-		${_secure_lib_libssh} ${_secure_lib_libssl}
+		${_secure_lib_libcrypto} ${_secure_lib_libssl} \
+		${_lib_libldns} ${_secure_lib_libssh}
 
 .if ${MK_GNUCXX} != "no"
 _prebuild_libs+= gnu/lib/libstdc++ gnu/lib/libsupc++
@@ -2925,9 +2943,10 @@ lib/librtld_db__L: lib/libprocstat__L
 _secure_lib_libcrypto= secure/lib/libcrypto
 _secure_lib_libssl= secure/lib/libssl
 lib/libradius__L secure/lib/libssl__L: secure/lib/libcrypto__L
+secure/lib/libcrypto__L: lib/libthr__L
 .if ${MK_LDNS} != "no"
 _lib_libldns= lib/libldns
-lib/libldns__L: secure/lib/libcrypto__L
+lib/libldns__L: secure/lib/libssl__L
 .endif
 .if ${MK_OPENSSH} != "no"
 _secure_lib_libssh= secure/lib/libssh

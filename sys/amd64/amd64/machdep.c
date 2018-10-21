@@ -131,6 +131,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/trap.h>
 #include <machine/tss.h>
 #include <x86/ucode.h>
+#include <x86/ifunc.h>
 #ifdef SMP
 #include <machine/smp.h>
 #endif
@@ -1574,11 +1575,23 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 
 	identify_cpu1();
 	identify_hypervisor();
-	/*
-	 * hw.cpu_stdext_disable is ignored by the call, it will be
-	 * re-evaluted by the below call to finishidentcpu().
-	 */
 	identify_cpu2();
+	initializecpucache();
+
+	/*
+	 * Check for pti, pcid, and invpcid before ifuncs are
+	 * resolved, to correctly select the implementation for
+	 * pmap_activate_sw_mode().
+	 */
+	pti = pti_get_default();
+	TUNABLE_INT_FETCH("vm.pmap.pti", &pti);
+	TUNABLE_INT_FETCH("vm.pmap.pcid_enabled", &pmap_pcid_enabled);
+	if ((cpu_feature2 & CPUID2_PCID) != 0 && pmap_pcid_enabled) {
+		invpcid_works = (cpu_stdext_feature &
+		    CPUID_STDEXT_INVPCID) != 0;
+	} else {
+		pmap_pcid_enabled = 0;
+	}
 
 	link_elf_ireloc(kmdp);
 
@@ -1644,9 +1657,6 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	mtx_init(&dt_lock, "descriptor tables", NULL, MTX_DEF);
 
 	/* exceptions */
-	pti = pti_get_default();
-	TUNABLE_INT_FETCH("vm.pmap.pti", &pti);
-
 	for (x = 0; x < NIDT; x++)
 		setidt(x, pti ? &IDTVEC(rsvd_pti) : &IDTVEC(rsvd), SDT_SYSIGT,
 		    SEL_KPL, 0);
@@ -1712,9 +1722,13 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	    != NULL)
 		vty_set_preferred(VTY_VT);
 
+	TUNABLE_INT_FETCH("hw.ibrs_disable", &hw_ibrs_disable);
+	TUNABLE_INT_FETCH("hw.spec_store_bypass_disable", &hw_ssb_disable);
+	TUNABLE_INT_FETCH("machdep.syscall_ret_l1d_flush",
+	    &syscall_ret_l1d_flush_mode);
+
 	finishidentcpu();	/* Final stage of CPU initialization */
 	initializecpu();	/* Initialize CPU registers */
-	initializecpucache();
 
 	/* doublefault stack space, runs on ist1 */
 	common_tss[0].tss_ist1 = (long)&dblfault_stack[sizeof(dblfault_stack)];
@@ -1855,9 +1869,6 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	x86_init_fdt();
 #endif
 	thread0.td_critnest = 0;
-
-	TUNABLE_INT_FETCH("hw.ibrs_disable", &hw_ibrs_disable);
-	TUNABLE_INT_FETCH("hw.spec_store_bypass_disable", &hw_ssb_disable);
 
 	TSEXIT();
 
@@ -2661,3 +2672,43 @@ outb_(u_short port, u_char data)
 }
 
 #endif /* KDB */
+
+#undef memset
+#undef memmove
+#undef memcpy
+
+void	*memset_std(void *buf, int c, size_t len);
+void	*memset_erms(void *buf, int c, size_t len);
+DEFINE_IFUNC(, void *, memset, (void *, int, size_t), static)
+{
+
+	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
+		memset_erms : memset_std);
+}
+
+void    *memmove_std(void * _Nonnull dst, const void * _Nonnull src, size_t len);
+void    *memmove_erms(void * _Nonnull dst, const void * _Nonnull src, size_t len);
+DEFINE_IFUNC(, void *, memmove, (void * _Nonnull, const void * _Nonnull, size_t), static)
+{
+
+	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
+		memmove_erms : memmove_std);
+}
+
+void    *memcpy_std(void * _Nonnull dst, const void * _Nonnull src, size_t len);
+void    *memcpy_erms(void * _Nonnull dst, const void * _Nonnull src, size_t len);
+DEFINE_IFUNC(, void *, memcpy, (void * _Nonnull, const void * _Nonnull, size_t), static)
+{
+
+	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
+		memcpy_erms : memcpy_std);
+}
+
+void	pagezero_std(void *addr);
+void	pagezero_erms(void *addr);
+DEFINE_IFUNC(, void , pagezero, (void *), static)
+{
+
+	return ((cpu_stdext_feature & CPUID_STDEXT_ERMS) != 0 ?
+		pagezero_erms : pagezero_std);
+}
