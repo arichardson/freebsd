@@ -19,6 +19,8 @@ NM:=	/usr/bin/nm
 # a few individual files (and might soon require linking with lld anyway)
 LORDER:=echo
 TSORT:=cat
+# When using cat as tsort we can't pass -q:
+TSORTFLAGS:=
 
 # Avoid stale dependecy warnings:
 LIBC:=
@@ -58,9 +60,6 @@ CFLAGS+=	-std=gnu99
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
 LDADD+=	-pthread
 
-
-# Linux tsort doesn't understand the -q flag
-TSORTFLAGS:=
 .elif ${.MAKE.OS} == "Darwin"
 CFLAGS+=	-D_DARWIN_C_SOURCE=1
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/mac

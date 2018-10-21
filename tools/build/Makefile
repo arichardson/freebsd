@@ -15,7 +15,20 @@ X86INCSDIR=	${INCLUDEDIR}/x86
 
 BOOTSTRAPPING?=	0
 
-_WITH_PWCACHEDB!= grep -c pwcache_groupdb /usr/include/grp.h || true
+
+.if ${.MAKE.OS} == "Darwin"
+_XCODE_ROOT!=xcode-select -p
+# since macOS 10.14 C headers are no longer installed in /usr but only
+# provided via the SDK
+HOST_INCLUDE_ROOT=${_XCODE_ROOT}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
+.if !exists(${HOST_INCLUDE_ROOT}/stdio.h)
+.error "You must install the macOS SDK (try xcode-select --install)"
+.endif
+.else
+HOST_INCLUDE_ROOT=/usr/include
+.endif
+
+_WITH_PWCACHEDB!= grep -c pwcache_groupdb ${HOST_INCLUDE_ROOT}/grp.h || true
 .if ${_WITH_PWCACHEDB} == 0
 .PATH: ${.CURDIR}/../../contrib/libc-pwcache
 CFLAGS.pwcache.c+=	-I${.CURDIR}/../../contrib/libc-pwcache
@@ -25,7 +38,7 @@ SRCS+=		pwcache.c
 .error not building pwdcache
 .endif
 
-_WITH_STRSVIS!=	grep -c strsvis /usr/include/vis.h 2>/dev/null || true
+_WITH_STRSVIS!=	grep -c strsvis ${HOST_INCLUDE_ROOT}/vis.h 2>/dev/null || true
 .if ${_WITH_STRSVIS} == 0
 .PATH: ${.CURDIR}/../../contrib/libc-vis
 INCS+=		vis.h
@@ -34,7 +47,7 @@ CFLAGS.vis.c+=	-I${.CURDIR}/../../contrib/libc-vis
 CFLAGS.vis.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
 .endif
 
-_WITH_REALLOCARRAY!= grep -c reallocarray /usr/include/stdlib.h || true
+_WITH_REALLOCARRAY!= grep -c reallocarray ${HOST_INCLUDE_ROOT}/stdlib.h || true
 .if ${_WITH_REALLOCARRAY} == 0
 .PATH: ${.CURDIR}/../../lib/libc/stdlib
 INCS+=		stdlib.h
@@ -42,26 +55,26 @@ SRCS+=		reallocarray.c
 CFLAGS.reallocarray.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
 .endif
 
-_WITH_UTIMENS!= grep -c utimensat /usr/include/sys/stat.h || true
+_WITH_UTIMENS!= grep -c utimensat ${HOST_INCLUDE_ROOT}/sys/stat.h || true
 .if ${_WITH_UTIMENS} == 0
 SYSINCS+=	stat.h
 SRCS+=		futimens.c utimensat.c
 .endif
 
-_WITH_EXPLICIT_BZERO!= grep -c explicit_bzero /usr/include/strings.h || true
+_WITH_EXPLICIT_BZERO!= grep -c explicit_bzero ${HOST_INCLUDE_ROOT}/strings.h || true
 .if ${_WITH_EXPLICIT_BZERO} == 0
 .PATH: ${SRCTOP}/sys/libkern
 INCS+=		strings.h
 SRCS+=		explicit_bzero.c
 .endif
 
-_WITH_CAPH_ENTER!= grep -c caph_enter /usr/include/capsicum_helpers.h || true
+_WITH_CAPH_ENTER!= grep -c caph_enter ${HOST_INCLUDE_ROOT}/capsicum_helpers.h || true
 .if ${_WITH_CAPH_ENTER} == 0
 .PATH: ${SRCTOP}/lib/libcapsicum
 INCS+=		capsicum_helpers.h
 .endif
 
-_WITH_CAP_RIGHTS_IS_VALID!= grep -c cap_rights_is_valid /usr/include/sys/capsicum.h || true
+_WITH_CAP_RIGHTS_IS_VALID!= grep -c cap_rights_is_valid ${HOST_INCLUDE_ROOT}/sys/capsicum.h || true
 .if ${_WITH_CAP_RIGHTS_IS_VALID} == 0
 SYSINCS+=	${SRCTOP}/sys/sys/capsicum.h
 SYSINCS+=	${SRCTOP}/sys/sys/caprights.h
