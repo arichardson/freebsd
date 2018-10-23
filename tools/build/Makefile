@@ -198,10 +198,6 @@ _host_abs_tools_to_symlink=	${_make_abs}:make ${_make_abs}:bmake
 .if ${.MAKE.OS} == "Darwin"
 # /usr/bin/cpp may invoke xcrun:
 _host_tools_to_symlink+=xcrun
-# the m4 in /usr/bin does not accept the flags necessary to bootstrap lex+m4.
-# Therefore we need to add this symlink and then have the bootstrap-tools phase
-# overwrite it with the correct version. This requires m4 from homebrew.
-# TODO? _host_abs_tools_to_symlink+=	/usr/local/opt/m4/bin/m4:m4
 .endif  # ${.MAKE.OS} == "Darwin"
 # On Ubuntu /bin/sh is dash which is totally useless. Let's just link bash
 # as the build sh since that will work fine. Also on MacOS /bin/sh doesn't
