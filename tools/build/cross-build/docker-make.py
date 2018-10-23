@@ -70,6 +70,14 @@ elif docker_image == "freebsd-crossbuild-alpine":
         "--cross-bindir=/usr/bin",
         "--host-compiler-type=clang",
     ]
+elif docker_image == "freebsd-crossbuild-arch":
+    env_flags += [
+    ]
+    make_args += [
+        "--host-bindir=/usr/bin",
+        "--cross-bindir=/usr/bin",
+        "--host-compiler-type=clang",
+    ]
 elif docker_image == "freebsd-crossbuild-centos":
     env_flags += [
         "--env", "XLD=/usr/bin/ld",
