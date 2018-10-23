@@ -1076,6 +1076,15 @@ waitforjob(struct job *jp, int *signaled)
 		setcurjob(jp);
 #endif
 	status = jp->ps[jp->nprocs - 1].status;
+	for (int i = 0; i < jp->nprocs; i++) {
+		TRACE(("waitforjob: ps[%d].status=%d\n", i, jp->ps[i].status));
+		if (pipefailflag && status == 0 && jp->ps[i].status != 0) {
+			status = jp->ps[i].status;
+			TRACE(("waitforjob: setting pipeline exit status to %d"
+			    " since -o pipefail is set\n", status));
+		}
+	}
+
 	if (signaled != NULL)
 		*signaled = WIFSIGNALED(status);
 	/* convert to 8 bits */
