@@ -6,6 +6,11 @@
  */
 #include <stdint.h>
 
+#if __has_include(<sys/sysmacros.h>)
+/* GLibc defines makedev/minor/major in sysmacros.h instead of sys/types.h */
+#include <sys/sysmacros.h>
+#endif
+
 #ifdef __linux__
 typedef uintptr_t __uintptr_t;
 #endif
