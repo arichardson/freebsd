@@ -591,7 +591,10 @@ _CPUTYPE!=	MAKEFLAGS= CPUTYPE=${_TARGET_CPUTYPE} ${MAKE} -f /dev/null \
 .endif
 .if make(buildworld)
 BUILD_ARCH!=	uname -p
-.if ${MACHINE_ARCH} != ${BUILD_ARCH}
+# On some Linux systems uname -p returns "unknown" so skip this check there.
+# This check only exists to tell people to use TARGET_ARCH instead of
+# MACHINE_ARCH so skipping it when crossbuilding on non-FreeBSD should be fine.
+.if ${MACHINE_ARCH} != ${BUILD_ARCH} && ${.MAKE.OS} == "FreeBSD"
 .error To cross-build, set TARGET_ARCH.
 .endif
 .endif
