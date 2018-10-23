@@ -126,7 +126,7 @@ ${X_}LINKER_FEATURES+=	retpoline
 # Upstream lld does not have support for ifunc-noplt so check the FreeBSD
 # version to check if the flag is supported.
 # TODO: what is the correct version number to check for?
-.if ${${X_}LINKER_FREEBSD_VERSION:S/-/ /:[2]} >= 1300000
+.if !empty(${X_}LINKER_FREEBSD_VERSION) && ${${X_}LINKER_FREEBSD_VERSION:S/-/ /:[2]} >= 1300000
 ${X_}LINKER_FEATURES+=	ifunc-noplt
 .endif
 .endif
