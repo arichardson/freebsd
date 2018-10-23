@@ -126,6 +126,9 @@ procargs(int argc, char **argv)
 		shellparam.nparam++;
 		argptr++;
 	}
+#ifdef PIPEFAIL_BY_DEFAULT
+	pipefailflag = 1;
+#endif
 	optschanged();
 }
 
