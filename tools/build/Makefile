@@ -4,7 +4,7 @@
 
 LIB=		egacy
 SRC=
-INCSGROUPS=	INCS SYSINCS MACHINESYSINCS UFSINCS FFSINCS X86INCS
+INCSGROUPS=	INCS SYSINCS MACHINESYSINCS UFSINCS FFSINCS X86INCS RPCINCS
 INCS=
 
 SYSINCSDIR=	${INCLUDEDIR}/sys
@@ -79,6 +79,13 @@ SYSINCS+=	${SRCTOP}/sys/sys/caprights.h
 .PATH: ${SRCTOP}/sys/kern
 SRCS+=		subr_capability.c
 .endif
+
+# rpcgen should build against the source tree rpc/types.h and not the host.
+# This is especially important on non-FreeBSD systems where the types may
+# not match.
+# TODO: should this be done only for non-FreeBSD?
+RPCINCSDIR=	${INCLUDEDIR}/rpc
+RPCINCS+=	${SRCTOP}/sys/rpc/types.h
 
 .if ${.MAKE.OS} != "FreeBSD"
 # don't copy stdlib.h when cross-building since it will cause
