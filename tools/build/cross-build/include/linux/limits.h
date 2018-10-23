@@ -1,11 +1,5 @@
 #pragma once
 
-#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L
-#if !defined(_GNU_SOURCE)
-#warning "Attempting to use limits.h with -std=c89/without _GNU_SOURCE, many macros will be missing"
-#endif
-#endif
-
 #ifdef __STRICT_ANSI__
 #warning __STRICT_ANSI__ defined
 #endif
@@ -20,9 +14,21 @@
 #include </usr/include/limits.h>
 #endif
 
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L
+#if !defined(_GNU_SOURCE)
+#warning "Attempting to use limits.h with -std=c89/without _GNU_SOURCE, many macros will be missing"
+#endif
+
+#else /* Not C89 */
+/* Not C89 -> check that all macros that we expect are defined */
 #ifndef __USE_XOPEN
 #warning __USE_XOPEN should be defined (did you forget to set _GNU_SOURCE?)
 #endif
+
+#ifndef IOV_MAX
+#error IOV_MAX should be defined
+#endif
+#endif /* C89 */
 
 #if __has_include(<linux/limits.h>)
 #include <linux/limits.h>
@@ -77,8 +83,4 @@
 #ifndef _POSIX_PATH_MAX
 #define _POSIX_PATH_MAX PATH_MAX
 // #error _POSIX_PATH_MAX should be defined
-#endif
-
-#ifndef IOV_MAX
-#error IOV_MAX should be defined
 #endif

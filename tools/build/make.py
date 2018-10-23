@@ -100,7 +100,8 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
         else:
             env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
                             "-I{src}/tools/build/cross-build/include/linux " \
-                            "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY".format(
+                            "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY " \
+                            "-D_GNU_SOURCE=1".format(
                             src=source_root, libbsd=libbsd_install_dir)
             env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
