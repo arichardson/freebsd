@@ -1,25 +1,27 @@
 #pragma once
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L
+#if !defined(_GNU_SOURCE)
+#warning "Attempting to use limits.h with -std=c89/without _GNU_SOURCE, many macros will be missing"
+#endif
+#endif
+
+#ifdef __STRICT_ANSI__
+#warning __STRICT_ANSI__ defined
 #endif
 
 #include <sys/types.h>
-
-#if __has_include(<features.h>)
-#include <features.h>
-#ifndef __USE_XOPEN
-#error __USE_XOPEN not defined!
-#endif
-#else
-#error no features
-#endif
+#include <sys/uio.h> // For IOV_MAX
 
 #include_next <limits.h>
 
 #if __has_include(</usr/include/limits.h>)
 /* For some reason GCC picks the wrong limits.h */
 #include </usr/include/limits.h>
+#endif
+
+#ifndef __USE_XOPEN
+#warning __USE_XOPEN should be defined (did you forget to set _GNU_SOURCE?)
 #endif
 
 #if __has_include(<linux/limits.h>)
