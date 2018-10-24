@@ -18,7 +18,6 @@ BINDIR=	/usr/bin
 .include "${SRCTOP}/usr.bin/m4/Makefile"
 
 bootstrap_m4_tokenizer_and_parser: ${GENFILES:S/^/init/g}
-	echo "BOOTSTRAP ${GENFILES:S/^/init/g}"
 .for _f in ${GENFILES}
 	@cmp -s ${.CURDIR}/init${_f} ${_f} || { \
 		echo "Bootstrapping ${_f}" ; \

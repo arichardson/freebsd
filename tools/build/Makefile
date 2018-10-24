@@ -66,13 +66,21 @@ INCS+=		strings.h
 SRCS+=		explicit_bzero.c
 .endif
 
+.if !exists(${HOST_INCLUDE_ROOT}/capsicum_helpers.h)
+_WITH_CAPH_ENTER=0
+.else
 _WITH_CAPH_ENTER!= grep -c caph_enter ${HOST_INCLUDE_ROOT}/capsicum_helpers.h || true
+.endif
 .if ${_WITH_CAPH_ENTER} == 0
 .PATH: ${SRCTOP}/lib/libcapsicum
 INCS+=		capsicum_helpers.h
 .endif
 
+.if !exists(${HOST_INCLUDE_ROOT}/sys/capsicum.h)
+_WITH_CAP_RIGHTS_IS_VALID=0
+.else
 _WITH_CAP_RIGHTS_IS_VALID!= grep -c cap_rights_is_valid ${HOST_INCLUDE_ROOT}/sys/capsicum.h || true
+.endif
 .if ${_WITH_CAP_RIGHTS_IS_VALID} == 0
 SYSINCS+=	${SRCTOP}/sys/sys/capsicum.h
 SYSINCS+=	${SRCTOP}/sys/sys/caprights.h
