@@ -391,8 +391,6 @@ BROKEN_OPTIONS+=NVME
 BROKEN_OPTIONS+=CLANG LLD
 # The cddl bootstrap tools still need some changes in order to compile
 BROKEN_OPTIONS+=CDDL ZFS
-# localedef currently doesn't work on Linux/Mac so disable LOCALES there
-BROKEN_OPTIONS+=LOCALES
 
 # Currently not all of the test directories build. It fails in the libc tests:
 # dd if=/dev/zero of=h_zero bs=1k count=2 status=none
