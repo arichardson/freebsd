@@ -57,7 +57,7 @@ def bootstrap_libbsd(source_root, objdir_prefix):
     libbsd_install_dir = objdir_prefix / "libbsd-install"
 
     if not sys.platform.startswith("linux"):
-	    return None
+        return None
     if (libbsd_install_dir / "lib/libbsd.a").exists():
         return libbsd_install_dir
     if not libbsd_source_dir.exists():
