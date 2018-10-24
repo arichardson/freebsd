@@ -7,12 +7,12 @@
 #include <sys/types.h>
 #include <sys/uio.h> // For IOV_MAX
 
-#include_next <limits.h>
-
 #if __has_include(</usr/include/limits.h>)
 /* For some reason GCC picks the wrong limits.h */
 #include </usr/include/limits.h>
 #endif
+
+#include_next <limits.h>
 
 #if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L
 #if !defined(_GNU_SOURCE)
