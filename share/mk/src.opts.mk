@@ -403,8 +403,6 @@ BROKEN_OPTIONS+=TESTS
 BROKEN_OPTIONS+=BOOT
 # libsnmp use ls -D which is not supported on MacOS (and possibly linux)
 BROKEN_OPTIONS+=BSNMP
-# lib/libpmc won't bootstrap yet
-BROKEN_OPTIONS+=PMC
 .if ${.MAKE.OS} == "Linux"
 # crunchgen fails for some reason on Linux (but it works on MacOS):
 # + cd /local/scratch/alr48/cheri/freebsd-mips/rescue/rescue/../../bin/cat
