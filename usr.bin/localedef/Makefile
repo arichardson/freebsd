@@ -22,5 +22,6 @@ IGNORE_PRAGMA=	yes
 CFLAGS+=	-I. -I${.CURDIR}
 CFLAGS+=	-I${SRCTOP}/lib/libc/locale
 CFLAGS+=	-I${SRCTOP}/lib/libc/stdtime
+CFLAGS+=	-D__BUILDING_LOCALEDEF=1
 
 .include <bsd.prog.mk>

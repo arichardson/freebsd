@@ -105,6 +105,8 @@ SYSINCS+=	${SRCTOP}/sys/sys/elf32.h
 SYSINCS+=	${SRCTOP}/sys/sys/elf64.h
 SYSINCS+=	${SRCTOP}/sys/sys/elf_common.h
 SYSINCS+=	${SRCTOP}/sys/sys/elf_generic.h
+SYSINCS+=	${SRCTOP}/sys/sys/tree.h
+
 _host_arch=${MACHINE}
 .if ${_host_arch} == "x86_64"
 # bmake on Linux/mac often prints that instead of amd64
