@@ -61,6 +61,8 @@ CFLAGS+=	-std=gnu99
 LDADD+=	-pthread
 
 .elif ${.MAKE.OS} == "Darwin"
+# There is no objcopy on macOS so we can't do the MK_DEBUG_FILES objcopy magic.
+MK_DEBUG_FILES:=no
 CFLAGS+=	-D_DARWIN_C_SOURCE=1
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/mac
 # The macOS ar and ranlib don't understand all the flags supported by the
