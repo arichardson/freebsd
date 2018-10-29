@@ -385,7 +385,6 @@ BROKEN_OPTIONS+=HYPERV
 BROKEN_OPTIONS+=NVME
 .endif
 
-
 .if ${.MAKE.OS} != "FreeBSD"
 # tablegen will not build on non-FreeBSD so also disable target clang and lld
 BROKEN_OPTIONS+=CLANG LLD
@@ -413,6 +412,13 @@ BROKEN_OPTIONS+=BSNMP
 # /tmp//crunchgen_rescue9yuKRG: Invalid argument
 BROKEN_OPTIONS+=RESCUE
 .endif
+.endif
+
+.if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "i386" || \
+    ${__T} == "powerpc64"
+__DEFAULT_NO_OPTIONS+=BSD_CRTBEGIN
+.else
+BROKEN_OPTIONS+=BSD_CRTBEGIN
 .endif
 
 .include <bsd.mkopt.mk>
