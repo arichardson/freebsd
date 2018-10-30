@@ -117,19 +117,6 @@ DEFINED_PROF=	${PROF}
 # can override the others.
 CFLAGS+=	${CONF_CFLAGS}
 
-
-CCLD?=	${CC}
-.if ${LD} != "ld" && (${CC:[1]:H} != ${LD:[1]:H} || ${LD:[1]:T} != "ld")
-# Add -fuse-ld=${LD} if LD is in a different directory or not called "ld".
-.if ${COMPILER_TYPE} == "clang"
-CCLD+=	-fuse-ld=${LD:[1]}
-.else
-# GCC does not support an absolute path for -fuse-ld so we just print this
-# warning instead and let the user add the required symlinks
-.warning LD (${LD}) is not the default linker for ${CC} but -fuse-ld= is not supported
-.endif
-.endif
-
 .if defined(LINKER_FEATURES) && ${LINKER_FEATURES:Mbuild-id}
 LDFLAGS+=	-Wl,--build-id=sha1
 .endif
