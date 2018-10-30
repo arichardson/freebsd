@@ -169,6 +169,20 @@ MK_${var}_SUPPORT:= yes
 .endif
 .endfor
 
+.if ${MK_CDDL} == "no"
+# ctfconvert may not exist if MK_CDDL=false
+MK_CTF:=	no
+.endif
+
+# FIXME: duplicated from bsd.own.mk since the value of MK_CTF may have changed
+.if ${MK_CTF} != "no"
+CTFCONVERT_CMD=	${CTFCONVERT} ${CTFFLAGS} ${.TARGET}
+.elif defined(.PARSEDIR) || (defined(MAKE_VERSION) && ${MAKE_VERSION} >= 5201111300)
+CTFCONVERT_CMD=
+.else
+CTFCONVERT_CMD=	@:
+.endif
+
 # Some modules only compile successfully if option FDT is set, due to #ifdef FDT
 # wrapped around declarations.  Module makefiles can optionally compile such
 # things using .if !empty(OPT_FDT)
