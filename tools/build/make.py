@@ -35,7 +35,9 @@
 # `MAKEOBJDIRPREFIX=~/obj ./tools/build/make.py buildworld -DWITH_FOO`
 # On Linux and MacOS you will either need to set XCC/XCXX/XLD/XCPP or pass
 # --cross-bindir to specify the path to the cross-compiler bindir:
-# `MAKEOBJDIRPREFIX=~/obj ./tools/build/make.py --cross-bindir=/path/to/cross/compiler buildworld -DWITH_FOO TARGET=foo TARGET_ARCH=bar`
+# `MAKEOBJDIRPREFIX=~/obj ./tools/build/make.py
+# --cross-bindir=/path/to/cross/compiler buildworld -DWITH_FOO TARGET=foo
+# TARGET_ARCH=bar`
 import argparse
 import os
 from pathlib import Path
@@ -68,8 +70,7 @@ def bootstrap_libbsd(source_root, objdir_prefix):
 
     if not libbsd_build_dir.is_dir():
         os.makedirs(str(libbsd_build_dir))
-    run(["sh", str(libbsd_source_dir / "autogen")],
-        cwd=str(libbsd_source_dir))
+    run(["sh", str(libbsd_source_dir / "autogen")], cwd=str(libbsd_source_dir))
     run([str(libbsd_source_dir / "configure"),
          "--prefix=" + str(libbsd_install_dir), "--disable-shared",
          "--enable-static"], cwd=str(libbsd_build_dir))
@@ -101,15 +102,13 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
             env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
                             "-I{src}/tools/build/cross-build/include/linux " \
                             "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY " \
-                            "-D_GNU_SOURCE=1".format(
-                            src=source_root, libbsd=libbsd_install_dir)
+                            "-D_GNU_SOURCE=1".format(src=source_root,
+                libbsd=libbsd_install_dir)
             env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
     configure_args = [
         "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
         "--with-machine=amd64",  # TODO? "--with-machine-arch=amd64",
-        "--without-filemon",
-        "--prefix=" + str(bmake_install_dir)
-    ]
+        "--without-filemon", "--prefix=" + str(bmake_install_dir)]
     run(["sh", bmake_source_dir / "boot-strap"] + configure_args,
         cwd=str(bmake_build_dir), env=env)
 
@@ -125,7 +124,8 @@ def debug(*args, **kwargs):
 
 
 def is_make_var_set(var):
-    return any(x.startswith(var + "=") or x == ("-D" + var) for x in sys.argv[1:])
+    return any(
+        x.startswith(var + "=") or x == ("-D" + var) for x in sys.argv[1:])
 
 
 def check_required_make_env_var(varname, binary_name, bindir):
@@ -133,12 +133,14 @@ def check_required_make_env_var(varname, binary_name, bindir):
     if os.getenv(varname):
         return
     if not bindir:
-        sys.exit("Could not infer value for $" + varname +
-                 ". Either set $" + varname + " or pass --cross-bindir=/path/to/cross/compiler/dir")
+        sys.exit("Could not infer value for $" + varname + ". Either set $" +
+            varname + " or pass --cross-bindir=/path/to/cross/compiler/dir")
     # try to infer the path to the tool
     guess = os.path.join(bindir, binary_name)
     if not os.path.isfile(guess):
-        sys.exit("Could not infer value for $" + varname + ": " + guess + " does not exist")
+        sys.exit(
+            "Could not infer value for $" + varname + ": " + guess + " does "
+            "not exist")
     new_env_vars[varname] = guess
     debug("Inferred", varname, "as", guess)
 
@@ -154,27 +156,36 @@ def default_cross_toolchain():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--host-bindir",
-                        help="Directory to look for cc/c++/cpp/ld to build host (" + sys.platform + ") binaries",
+                        help="Directory to look for cc/c++/cpp/ld to build "
+                        "host (" + sys.platform + ") binaries",
                         default="/usr/bin")
     parser.add_argument("--cross-bindir", default=default_cross_toolchain(),
                         help="Directory to look for cc/c++/cpp/ld to build "
                              "target binaries (only needed if XCC/XCPP/XLD are "
                              "not set)")
-    parser.add_argument("--cross-compiler-type", choices=("clang", "gcc"), default="clang",
-                        help="Compiler type to find in --cross-bindir (only needed if XCC/XCPP/XLD are not set)"
+    parser.add_argument("--cross-compiler-type", choices=("clang", "gcc"),
+                        default="clang",
+                        help="Compiler type to find in --cross-bindir (only "
+                        "needed if XCC/XCPP/XLD are not set)"
                              "Note: using CC is currently highly experimental")
-    parser.add_argument("--host-compiler-type", choices=("cc", "clang", "gcc"), default="cc",
-                        help="Compiler type to find in --host-bindir (only needed if CC/CPP/CXX are not set). ")
+    parser.add_argument("--host-compiler-type", choices=("cc", "clang", "gcc"),
+                        default="cc",
+                        help="Compiler type to find in --host-bindir (only "
+                        "needed if CC/CPP/CXX are not set). ")
     parser.add_argument("--debug", action="store_true",
                         help="Print information on inferred env vars")
     parser.add_argument("--clean", action="store_true",
-                        help="Do a clean rebuild instead of building with -DNO_CLEAN")
+                        help="Do a clean rebuild instead of building with "
+                        "-DNO_CLEAN")
     parser.add_argument("--no-clean", action="store_false", dest="clean",
-                        help="Do a clean rebuild instead of building with -DNO_CLEAN")
+                        help="Do a clean rebuild instead of building with "
+                        "-DNO_CLEAN")
     try:
         import argcomplete  # bash completion:
+
         argcomplete.autocomplete(parser)
     except ImportError:
         pass
@@ -184,24 +195,30 @@ if __name__ == "__main__":
     if not MAKEOBJDIRPREFIX:
         sys.exit("MAKEOBJDIRPREFIX is not set, cannot continue!")
     if not Path(MAKEOBJDIRPREFIX).is_dir():
-        sys.exit("Chosen MAKEOBJDIRPREFIX=" + MAKEOBJDIRPREFIX + " doesn't exit!")
+        sys.exit(
+            "Chosen MAKEOBJDIRPREFIX=" + MAKEOBJDIRPREFIX + " doesn't exit!")
     objdir_prefix = Path(MAKEOBJDIRPREFIX).absolute()
     source_root = Path(__file__).absolute().parent.parent.parent
 
     new_env_vars = {}
     if not sys.platform.startswith("freebsd"):
         if not is_make_var_set("TARGET") or not is_make_var_set("TARGET_ARCH"):
-            sys.exit("You must set explicit TARGET= and TARGET_ARCH= when building on non-FreeBSD")
+            sys.exit(
+                "You must set explicit TARGET= and TARGET_ARCH= when building"
+                " on non-FreeBSD")
         # infer values for CC/CXX/CPP
 
-        if sys.platform.startswith("linux") and parsed_args.host_compiler_type == "cc":
-            # FIXME: bsd.compiler.mk doesn't handle the output of GCC if it is /usr/bin/cc on Linux
+        if sys.platform.startswith(
+                "linux") and parsed_args.host_compiler_type == "cc":
+            # FIXME: bsd.compiler.mk doesn't handle the output of GCC if it
+            #  is /usr/bin/cc on Linux
             parsed_args.host_compiler_type = "gcc"
 
         if parsed_args.host_compiler_type == "gcc":
             default_cc, default_cxx, default_cpp = ("gcc", "g++", "cpp")
         elif parsed_args.host_compiler_type == "clang":
-            default_cc, default_cxx, default_cpp = ("clang", "clang++", "clang-cpp")
+            default_cc, default_cxx, default_cpp = (
+                "clang", "clang++", "clang-cpp")
         else:
             default_cc, default_cxx, default_cpp = ("cc", "c++", "cpp")
 
@@ -214,14 +231,16 @@ if __name__ == "__main__":
         # On non-FreeBSD we need to explicitly pass XCC/XLD/X_COMPILER_TYPE
         check_required_make_env_var("XCC", "gcc" if use_cross_gcc else "clang",
                                     parsed_args.cross_bindir)
-        check_required_make_env_var("XCXX", "g++" if use_cross_gcc else "clang++",
+        check_required_make_env_var("XCXX",
+                                    "g++" if use_cross_gcc else "clang++",
                                     parsed_args.cross_bindir)
-        check_required_make_env_var("XCPP", "cpp" if use_cross_gcc else "clang-cpp",
+        check_required_make_env_var("XCPP",
+                                    "cpp" if use_cross_gcc else "clang-cpp",
                                     parsed_args.cross_bindir)
         check_required_make_env_var("XLD", "ld" if use_cross_gcc else "ld.lld",
-                                    parsed_args.cross_bindir)
-        # if not os.getenv("X_COMPILER_TYPE"):
-        #    new_env_vars["X_COMPILER_TYPE"] = parsed_args.cross_compiler_type
+                                    parsed_args.cross_bindir)  # if not
+        # os.getenv("X_COMPILER_TYPE"):  #    new_env_vars["X_COMPILER_TYPE"]
+        # = parsed_args.cross_compiler_type
 
     libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
     bmake_binary = bootstrap_bmake(source_root, objdir_prefix,
@@ -236,8 +255,10 @@ if __name__ == "__main__":
     if parsed_args.clean is None and not is_make_var_set("NO_CLEAN"):
         # Avoid accidentally deleting all of the build tree and wasting lots of
         # time cleaning directories instead of just doing a rm -rf ${.OBJDIR}
-        if not input("You did not set -DNO_CLEAN/--clean/--no-clean. Did you really mean to do a"
-                     " clean build? y/[N] ").lower().startswith("y"):
+        if not input(
+                "You did not set -DNO_CLEAN/--clean/--no-clean. Did you "
+                "really mean to do a"
+                " clean build? y/[N] ").lower().startswith("y"):
             bmake_args.append("-DNO_CLEAN")
     # Catch errors early
     bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
@@ -247,8 +268,10 @@ if __name__ == "__main__":
         new_env_vars["XCC"] = new_env_vars.get("XCC", "") + " -integrated-as"
         new_env_vars["XCXX"] = new_env_vars.get("XCXX", "") + " -integrated-as"
 
-    env_cmd_str = " ".join(shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
-    make_cmd_str = " ".join(shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
+    env_cmd_str = " ".join(
+        shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
+    make_cmd_str = " ".join(
+        shlex.quote(s) for s in [str(bmake_binary)] + bmake_args)
     debug("Running `env ", env_cmd_str, " ", make_cmd_str, "`", sep="")
     os.environ.update(new_env_vars)
     if parsed_args.debug:
