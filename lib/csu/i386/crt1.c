@@ -1,6 +1,7 @@
 /* LINTLIBRARY */
 /*-
  * Copyright 1996-1998 John D. Polstra.
+ * Copyright 2009 Konstantin Belousov.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +38,7 @@ __FBSDID("$FreeBSD$");
 
 typedef void (*fptr)(void);
 
-extern void _start(char *, ...);
+void _start(char *, ...);
 
 #ifdef GCRT
 extern void _mcleanup(void);
@@ -46,10 +47,10 @@ extern int eprol;
 extern int etext;
 #endif
 
-void _start1(fptr, int, char *[]) __dead2;
+static void _start1(fptr, int, char *[]) __dead2 __used;
 
 /* The entry function, C part. */
-void
+static void
 _start1(fptr cleanup, int argc, char *argv[])
 {
 	char **env;
@@ -73,4 +74,28 @@ __asm__("eprol:");
 	exit(main(argc, argv, env));
 }
 
-__asm(".hidden	_start1");
+__asm(".text\n"
+	".hidden _start1\n"
+	".align 4\n"
+	".globl _start\n"
+	".type _start, @function\n"
+	"_start:\n"
+	".cfi_startproc\n"
+	"\txorl %ebp,%ebp\n"
+	"\tpushl %ebp\n"
+	".cfi_def_cfa_offset 4\n"
+	"\tmovl %esp,%ebp\n"
+	".cfi_offset %ebp,-8\n"
+	".cfi_def_cfa_register %ebp\n"
+	"\tandl $0xfffffff0,%esp # align stack\n"
+	"\tleal 8(%ebp),%eax\n"
+	"\tsubl $4,%esp\n"
+	"\tpushl %eax\n"		/* argv */
+	"\tpushl 4(%ebp)\n"	/* argc */
+	"\tpushl %edx\n"		/* rtld cleanup */
+	"\tcall _start1\n"
+	"\tint3\n"
+	".cfi_endproc\n"
+	".size _start, . - _start\n"
+	"\n"
+	".section .note.GNU-stack,\"\",%progbits\n");
