@@ -843,17 +843,6 @@ XCFLAGS+=	--sysroot=${WORLDTMP}
 XCFLAGS+=	${BFLAGS}
 .endif
 
-.if ${MK_LIB32} != "no" && ${X_LINKER_TYPE} == "lld"
-# When linking with upstream LLD 7.0 we get the following error for lib32
-# /tmp/usr/lib32/crt1.o: index past the end of the symbol table
-# This was fixed in https://reviews.llvm.org/rL345002 (will be in 7.1)
-.if empty(X_LINKER_FREEBSD_VERSION) && ${X_LINKER_VERSION} == 70000
-.warning Cannot build LIB32 with ${X_LINKER_TYPE} ${X_LINKER_VERSION} due to\
-	bugs in that version. Please update to a newer ${X_LINKER_TYPE}.
-MK_LIB32:=	no
-.endif
-.endif
-
 .if ${MK_LIB32} != "no" && (${TARGET_ARCH} == "amd64" || \
     ${TARGET_ARCH} == "powerpc64" || ${TARGET_ARCH:Mmips64*} != "")
 LIBCOMPAT= 32
