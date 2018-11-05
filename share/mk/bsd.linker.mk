@@ -38,9 +38,8 @@
 # now just need to remove quotes
 
 # with quotes removed:
-DETECTED_LD!=for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; done | head -n1 | xargs echo
-
-DETECTED2!=for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; break; done | xargs echo
+# DETECTED_LD!=for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; done | head -n1 | xargs echo
+# DETECTED2!=for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; break; done | xargs echo
 
 .if !target(__<bsd.linker.mk>__)
 __<bsd.linker.mk>__:
