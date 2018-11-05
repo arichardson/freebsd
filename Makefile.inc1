@@ -602,14 +602,14 @@ WORLDTMP?=	${OBJTOP}/tmp
 BPATH=		${CCACHE_WRAPPER_PATH_PFX}${WORLDTMP}/legacy/usr/sbin:${WORLDTMP}/legacy/usr/bin:${WORLDTMP}/legacy/bin
 XPATH=		${WORLDTMP}/usr/sbin:${WORLDTMP}/usr/bin
 
-# When building we want to find the cross tools before the host tools in tmp/legacy
+# When building we want to find the cross tools before the host tools in ${BPATH}.
 # We also need to add UNIVERSE_TOOLCHAIN_PATH so that we can find the shared
 # toolchain files (clang, lld, etc.) during make universe/tinderbox
 STRICTTMPPATH=	${XPATH}:${BPATH}:${UNIVERSE_TOOLCHAIN_PATH}
-# Avoid using tools from /usr/bin accidentally since this could cause the build
-# to break on other systems that don't have that tool. For now we still allow
-# using the old behaviour (inheriting $PATH) if BUILD_WITH_STRICT_TMPPATH is set
-# to 0 but this will eventually be removed
+# We should not be using tools from /usr/bin accidentally since this could cause
+# the build to break on other systems that don't have that tool. For now we
+# still allow using the old behaviour (inheriting $PATH) if
+# BUILD_WITH_STRICT_TMPPATH is set to 0 but this will eventually be removed.
 BUILD_WITH_STRICT_TMPPATH?=1
 .if defined(CROSSBUILD_HOST)
 # When building on non-FreeBSD we can't rely on the tools in /usr/bin being compatible
@@ -618,7 +618,6 @@ BUILD_WITH_STRICT_TMPPATH?=1
 # phase but symlink host tools that are known to work instead of building them
 BUILD_WITH_STRICT_TMPPATH:=1
 .endif
-
 .if ${BUILD_WITH_STRICT_TMPPATH} != 0
 TMPPATH=	${STRICTTMPPATH}
 .else
@@ -1027,8 +1026,8 @@ _worldtmp: .PHONY
 	${_+_}@if [ -e "${WORLDTMP}" ]; then \
 		echo ">>> Deleting stale files in build tree..."; \
 		cd ${.CURDIR}; env PATH=${TMPPATH}:${PATH} ${WMAKE:NPATH=*} \
-		    -DBATCH_DELETE_OLD_FILES _NO_INCLUDE_COMPILERMK=t \
-		    delete-old delete-old-libs >/dev/null; \
+		    _NO_INCLUDE_COMPILERMK=t -DBATCH_DELETE_OLD_FILES delete-old \
+		    delete-old-libs >/dev/null; \
 	fi
 	rm -rf ${WORLDTMP}/legacy/usr/include
 .if ${USING_SYSTEM_COMPILER} == "yes"
@@ -2060,7 +2059,8 @@ legacy: .PHONY
 # bootstrap-tools: Build tools needed for compatibility. These are binaries that
 # are built to build other binaries in the system. However, the focus of these
 # binaries is usually quite narrow. Bootstrap tools use the host's compiler and
-# libraries, augmented by -legacy.
+# libraries, augmented by -legacy, in addition to the libraries built during
+# bootstrap-tools.
 #
 _bt=		_bootstrap-tools
 
@@ -2071,11 +2071,12 @@ _bt=		_bootstrap-tools
 # output. On those platforms we only symlink the tools known to be compatible
 # (e.g. basic utilities such as mkdir) into ${WORLDTMP} and build all others
 # from the FreeBSD sources during the bootstrap-tools stage.
-# Since we want to build without the user's $PATH in the bootstrap-tools phase
-# we have to ensure that the basic commands used in that phase (ln, cp, etc)
-# have already been linked to $WORLDTMP. For all tools listed in the
-# _host_tools_to_symlink variable in tools/build/Makefile, the build must only
-# use flags that are portable across operating systems.
+# We want to build without the user's $PATH starting in the bootstrap-tools
+# phase so the tools used in that phase (ln, cp, etc) must have already been
+# linked to $WORLDTMP. The tools are listed in the _host_tools_to_symlink
+# variable in tools/build/Makefile and are linked during the legacy phase.
+# Since they could be Linux or MacOS binaries, too we must only use flags that
+# are portable across operating systems.
 
 # If BOOTSTRAP_ALL_TOOLS is set we will build all the required tools from the
 # current source tree. Otherwise we create a symlink to the version found in
@@ -2121,7 +2122,8 @@ _lex=		usr.bin/lex
 _m4=		tools/build/bootstrap-m4 usr.bin/m4
 ${_bt}-tools/build/bootstrap-m4: ${_bt}-lib/liby ${_bt}-usr.bin/lex ${_bt}-lib/libopenbsd
 ${_bt}-usr.bin/m4: ${_bt}-lib/libopenbsd ${_bt}-usr.bin/yacc ${_bt}-usr.bin/lex ${_bt}-tools/build/bootstrap-m4
-_bt_lex_depend=${_bt}-usr.bin/lex ${_bt}-usr.bin/m4
+_bt_m4_depend=${_bt}-${_m4}
+_bt_lex_depend=${_bt}-${_lex} ${_bt_m4_depend}
 .else
 _bootstrap_tools_links+=m4 lex
 .endif
@@ -2134,8 +2136,8 @@ _bootstrap_tools_links+=m4 lex
 # r339083 libelf: correct mips64el test to use ELF header
 .if ${BOOTSTRAPPING} < 1200085
 _elftoolchain_libs= lib/libelf lib/libdwarf
-${_bt}-lib/libelf: ${_bt_lex_depend}
-${_bt}-lib/libdwarf: ${_bt_lex_depend}
+${_bt}-lib/libelf: ${_bt_m4_depend}
+${_bt}-lib/libdwarf: ${_bt_m4_depend}
 .endif
 
 # r245440 mtree -N support added
@@ -2227,6 +2229,10 @@ _localedef=	usr.bin/localedef
 ${_bt}-usr.bin/localedef: ${_bt}-usr.bin/yacc ${_bt_lex_depend}
 .endif
 
+.if ${MK_LOCALES} != "no"
+_localedef=	usr.bin/localedef
+.endif
+
 .if ${MK_KERBEROS} != "no"
 _kerberos5_bootstrap_tools= \
 	kerberos5/tools/make-roken \
@@ -2257,25 +2263,25 @@ _basic_bootstrap_tools_multilink+=bin/test test,[
 _basic_bootstrap_tools=usr.bin/awk usr.bin/cut bin/expr usr.bin/gencat \
     usr.bin/join usr.bin/mktemp bin/rmdir usr.bin/sed usr.bin/sort \
     usr.bin/truncate usr.bin/tsort
-# elf2aout is required for by sparc64 build
+# elf2aout is required for sparc64 build
 _basic_bootstrap_tools+=usr.bin/elf2aout
-# file2c is needed by usr.sbin/config:
+# file2c is required for building usr.sbin/config:
 _basic_bootstrap_tools+=usr.bin/file2c
-# uuencode/uudecode needed by share/tabset
+# uuencode/uudecode required for share/tabset
 _basic_bootstrap_tools+=usr.bin/uuencode usr.bin/uudecode
-# xargs is needed by mkioctls
+# xargs is required by mkioctls
 _basic_bootstrap_tools+=usr.bin/xargs
-# needed by share/termcap:
+# cap_mkdb is required for share/termcap:
 _basic_bootstrap_tools+=usr.bin/cap_mkdb
-# ldd is needed for installcheck (TODO: just always use /usr/bin/ldd instead?)
+# services_mkdb/pwd_mkdb are required for installworld:
+_basic_bootstrap_tools+=usr.sbin/services_mkdb usr.sbin/pwd_mkdb
+# ldd is required for installcheck (TODO: just always use /usr/bin/ldd instead?)
 .if !defined(CROSSBUILD_HOST)
 # ldd is only needed for updating the running system so we don't need to
 # bootstrap ldd on non-FreeBSD systems
 _basic_bootstrap_tools+=usr.bin/ldd
 .endif
-# needed by installworld:
-_basic_bootstrap_tools+=usr.sbin/services_mkdb usr.sbin/pwd_mkdb
-# sysctl+chflags are needed for installkernel:
+# sysctl/chflags are required for installkernel:
 .if !defined(CROSSBUILD_HOST)
 _basic_bootstrap_tools+=sbin/sysctl bin/chflags
 .else
@@ -2283,7 +2289,6 @@ _basic_bootstrap_tools+=sbin/sysctl bin/chflags
 # the source tree cannot work:
 _other_bootstrap_tools+=tools/build/cross-build/fake_chflags
 _other_bootstrap_tools+=tools/build/cross-build/fake_sysctl
-.endif
 
 .if ${MK_AMD} != "no"
 # unifdef is only used by usr.sbin/amd/libamu/Makefile
@@ -2292,6 +2297,9 @@ _basic_bootstrap_tools+=usr.bin/unifdef
 
 .if ${MK_BOOT} != "no"
 _basic_bootstrap_tools+=usr.sbin/btxld
+# _basic_bootstrap_tools+=bin/dd
+# xz/unxz is used by EFI
+_basic_bootstrap_tools_multilink+=usr.bin/xz xz,unxz
 # md5 is used by boot/beri (and possibly others)
 _basic_bootstrap_tools+=sbin/md5
 .if defined(BOOTSTRAP_ALL_TOOLS)
@@ -2519,6 +2527,7 @@ _ar=usr.bin/ar
 cross-tools: .MAKE .PHONY
 .for _tool in \
     ${LOCAL_XTOOL_DIRS} \
+    ${_ar} \
     ${_clang_libs} \
     ${_clang} \
     ${_lld} \
