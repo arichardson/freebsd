@@ -31,6 +31,16 @@
 #collect2 version 6.4.0
 #/usr/local/bin/ld -v
 #GNU ld (GNU Binutils) 2.30
+# also to get ld from clang we can use this: ${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker | cut -d '"' -f2
+# unfortunately doesn't work with gcc since 1) it doesn't quote all arguments and 2) it would return collect2
+
+# possibly better: for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; done | head -n1
+# now just need to remove quotes
+
+# with quotes removed:
+DETECTED_LD!=for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; done | head -n1 | xargs echo
+
+DETECTED2!=for word in $(${CC} -xc /dev/null -o /dev/null -Wl,-v -Wl,-some-flag-for-linker -### 2>&1 | grep some-flag-for-linker); do echo $word; break; done | xargs echo
 
 .if !target(__<bsd.linker.mk>__)
 __<bsd.linker.mk>__:

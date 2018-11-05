@@ -715,23 +715,7 @@ BMAKEENV=	INSTALL="sh ${.CURDIR}/tools/install.sh" \
 		PATH=${BPATH}:${PATH} \
 		WORLDTMP=${WORLDTMP} \
 		MAKEFLAGS="-m ${.CURDIR}/tools/build/mk ${.MAKEFLAGS}"
-.if defined(CROSSBUILD_HOST)
-# Since we remove /usr/bin from $PATH when crossbuilding we need to pass an
-# absolute path for CC CPP CXX and LD
-.if ${LD} == "ld"
-LD!=	which ld
-.endif
-.if ${CC} == "cc"
-CC!=	which cc
-.endif
-.if ${CPP} == "cpp"
-CPP!=	which cpp
-.endif
-.if ${CXX} == "c++"
-CXX!=	which c++
-.endif
-BMAKEENV+=	CC=${CC} CXX=${CXX} CPP=${CPP} LD=${LD}
-.endif
+
 # need to keep this in sync with targets/pseudo/bootstrap-tools/Makefile
 BSARGS= 	DESTDIR= \
 		OBJTOP='${WORLDTMP}/obj-tools' \
