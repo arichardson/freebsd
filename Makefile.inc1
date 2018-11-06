@@ -714,7 +714,6 @@ BMAKEENV=	INSTALL="sh ${.CURDIR}/tools/install.sh" \
 		PATH=${BPATH}:${PATH} \
 		WORLDTMP=${WORLDTMP} \
 		MAKEFLAGS="-m ${.CURDIR}/tools/build/mk ${.MAKEFLAGS}"
-
 # need to keep this in sync with targets/pseudo/bootstrap-tools/Makefile
 BSARGS= 	DESTDIR= \
 		OBJTOP='${WORLDTMP}/obj-tools' \
@@ -2289,7 +2288,7 @@ _basic_bootstrap_tools+=sbin/sysctl bin/chflags
 # the source tree cannot work:
 _other_bootstrap_tools+=tools/build/cross-build/fake_chflags
 _other_bootstrap_tools+=tools/build/cross-build/fake_sysctl
-
+.endif
 .if ${MK_AMD} != "no"
 # unifdef is only used by usr.sbin/amd/libamu/Makefile
 _basic_bootstrap_tools+=usr.bin/unifdef
