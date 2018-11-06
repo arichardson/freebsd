@@ -610,7 +610,12 @@ STRICTTMPPATH=	${XPATH}:${BPATH}:${UNIVERSE_TOOLCHAIN_PATH}
 # the build to break on other systems that don't have that tool. For now we
 # still allow using the old behaviour (inheriting $PATH) if
 # BUILD_WITH_STRICT_TMPPATH is set to 0 but this will eventually be removed.
+.if ${USING_SYSTEM_LINKER} != "no" || ${USING_SYSTEM_COMPILER} != "no"
+# strict $PATH does not work yet with USING_SYSTEM_LINKER/USING_SYSTEM_COMPILER
+BUILD_WITH_STRICT_TMPPATH?=0
+.else
 BUILD_WITH_STRICT_TMPPATH?=1
+.endif
 .if defined(CROSSBUILD_HOST)
 # When building on non-FreeBSD we can't rely on the tools in /usr/bin being compatible
 # with what FreeBSD expects. Therefore we only use tools from STRICTTMPPATH
@@ -2295,7 +2300,6 @@ _basic_bootstrap_tools+=usr.bin/unifdef
 .endif
 
 .if ${MK_BOOT} != "no"
-_basic_bootstrap_tools+=usr.sbin/btxld
 # _basic_bootstrap_tools+=bin/dd
 # xz/unxz is used by EFI
 _basic_bootstrap_tools_multilink+=usr.bin/xz xz,unxz
@@ -2466,7 +2470,7 @@ kernel-tools: .PHONY
 # we get done with the earlier stages. It is the last set of tools needed
 # to begin building the target binaries.
 #
-.if ${TARGET_ARCH} != ${MACHINE_ARCH}
+.if ${TARGET_ARCH} != ${MACHINE_ARCH} || ${BUILD_WITH_STRICT_TMPPATH} != 0
 .if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "i386"
 _btxld=		usr.sbin/btxld
 .endif
