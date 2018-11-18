@@ -155,4 +155,5 @@ ${var}.${${X_}_ld_hash}:=	${${var}}
 .endif	# ${ld} == "LD" || !empty(XLD)
 .endfor	# .for ld in LD XLD
 
+
 .endif	# !target(__<bsd.linker.mk>__)
