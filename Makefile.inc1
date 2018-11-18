@@ -610,12 +610,11 @@ STRICTTMPPATH=	${XPATH}:${BPATH}:${UNIVERSE_TOOLCHAIN_PATH}
 # the build to break on other systems that don't have that tool. For now we
 # still allow using the old behaviour (inheriting $PATH) if
 # BUILD_WITH_STRICT_TMPPATH is set to 0 but this will eventually be removed.
-.if ${USING_SYSTEM_LINKER} != "no" || ${USING_SYSTEM_COMPILER} != "no"
-# strict $PATH does not work yet with USING_SYSTEM_LINKER/USING_SYSTEM_COMPILER
+
+# Currently strict $PATH can cause build failures and does not work yet with
+# USING_SYSTEM_LINKER/USING_SYSTEM_COMPILER. Once these issues have been
+# resolved it will be turned on by default.
 BUILD_WITH_STRICT_TMPPATH?=0
-.else
-BUILD_WITH_STRICT_TMPPATH?=1
-.endif
 .if defined(CROSSBUILD_HOST)
 # When building on non-FreeBSD we can't rely on the tools in /usr/bin being compatible
 # with what FreeBSD expects. Therefore we only use tools from STRICTTMPPATH
@@ -1334,7 +1333,7 @@ ITOOLS+=makewhatis
 #
 
 # Non-base distributions produced by the base system
-EXTRA_DISTRIBUTIONS=	doc
+EXTRA_DISTRIBUTIONS=
 .if defined(LIBCOMPAT)
 EXTRA_DISTRIBUTIONS+=	lib${libcompat}
 .endif
@@ -1344,7 +1343,7 @@ EXTRA_DISTRIBUTIONS+=	tests
 
 DEBUG_DISTRIBUTIONS=
 .if ${MK_DEBUG_FILES} != "no"
-DEBUG_DISTRIBUTIONS+=	base ${EXTRA_DISTRIBUTIONS:S,doc,,:S,tests,,}
+DEBUG_DISTRIBUTIONS+=	base ${EXTRA_DISTRIBUTIONS:S,tests,,}
 .endif
 
 MTREE_MAGIC?=	mtree 2.0
@@ -1481,6 +1480,18 @@ packageworld: .PHONY
 	    tar cvLf - usr/lib/debug | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/${dist}-dbg.txz
 . endif
+.endfor
+
+_sysent_dirs=	sys/kern
+_sysent_dirs+=	sys/compat/freebsd32
+_sysent_dirs+=	sys/i386/ibcs2
+_sysent_dirs+=	sys/amd64/linux		\
+		sys/amd64/linux32	\
+		sys/arm64/linux		\
+		sys/i386/linux
+sysent: .PHONY
+.for _dir in ${_sysent_dirs}
+	${_+_}${MAKE} -C ${.CURDIR}/${_dir} sysent
 .endfor
 
 #
