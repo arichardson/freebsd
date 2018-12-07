@@ -295,9 +295,9 @@ blist_alloc(blist_t bl, daddr_t count)
 	 * This loop iterates at most twice.  An allocation failure in the
 	 * first iteration leads to a second iteration only if the cursor was
 	 * non-zero.  When the cursor is zero, an allocation failure will
-	 * reduce the hint, stopping further iterations.
+	 * stop further iterations.
 	 */
-	while (count <= bl->bl_root->bm_bighint) {
+	for (;;) {
 		blk = blst_meta_alloc(bl->bl_root, bl->bl_cursor, count,
 		    bl->bl_radix);
 		if (blk != SWAPBLK_NONE) {
@@ -306,10 +306,10 @@ blist_alloc(blist_t bl, daddr_t count)
 			if (bl->bl_cursor == bl->bl_blocks)
 				bl->bl_cursor = 0;
 			return (blk);
-		}
+		} else if (bl->bl_cursor == 0)
+			return (SWAPBLK_NONE);
 		bl->bl_cursor = 0;
 	}
-	return (SWAPBLK_NONE);
 }
 
 /*
@@ -764,6 +764,8 @@ blst_meta_alloc(blmeta_t *scan, daddr_t cursor, daddr_t count, u_daddr_t radix)
 	/* Discard any candidates that appear before cursor. */
 	digit = (cursor / radix) & BLIST_META_MASK;
 	mask &= (u_daddr_t)-1 << digit;
+	if (mask == 0)
+		return (SWAPBLK_NONE);
 
 	/*
 	 * If the first try is for a block that includes the cursor, pre-undo

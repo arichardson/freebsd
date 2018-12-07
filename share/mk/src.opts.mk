@@ -71,6 +71,7 @@ __DEFAULT_YES_OPTIONS = \
     BOOTPARAMD \
     BOOTPD \
     BSD_CPIO \
+    BSD_CRTBEGIN \
     BSDINSTALL \
     BSNMP \
     BZIP2 \
@@ -193,7 +194,6 @@ __DEFAULT_YES_OPTIONS = \
     ZONEINFO
 
 __DEFAULT_NO_OPTIONS = \
-    BSD_CRTBEGIN \
     BSD_GREP \
     CLANG_EXTRAS \
     DTRACE_TESTS \
@@ -413,6 +413,11 @@ BROKEN_OPTIONS+=BSNMP
 # /tmp//crunchgen_rescue9yuKRG: Invalid argument
 BROKEN_OPTIONS+=RESCUE
 .endif
+.endif
+
+# PowerPC and Sparc64 need extra crt*.o files
+.if ${__T:Mpowerpc*} || ${__T:Msparc64}
+BROKEN_OPTIONS+=BSD_CRTBEGIN
 .endif
 
 .include <bsd.mkopt.mk>
