@@ -204,6 +204,9 @@ _host_abs_tools_to_symlink=	${_make_abs}:make ${_make_abs}:bmake
 # can we bootstrap this instead?
 _host_tools_to_symlink+=gperf
 
+# For the fake sysctl/chflags scripts
+_host_tools_to_symlink+=python3
+
 _make_abs!=	which "${MAKE}"
 _host_abs_tools_to_symlink=	${_make_abs}:make ${_make_abs}:bmake
 .if ${.MAKE.OS} == "Darwin"

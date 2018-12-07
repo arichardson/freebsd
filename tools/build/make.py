@@ -262,11 +262,6 @@ if __name__ == "__main__":
             bmake_args.append("-DNO_CLEAN")
     # Catch errors early
     bmake_args.append("-DBUILD_WITH_OPIPEFAIL")
-    # For MIPS -integrate-as is not the default (yet) but we want to build with
-    # it enabled
-    if "TARGET=mips" in sys.argv and parsed_args.cross_compiler_type == "clang":
-        new_env_vars["XCC"] = new_env_vars.get("XCC", "") + " -integrated-as"
-        new_env_vars["XCXX"] = new_env_vars.get("XCXX", "") + " -integrated-as"
 
     env_cmd_str = " ".join(
         shlex.quote(k + "=" + v) for k, v in new_env_vars.items())
