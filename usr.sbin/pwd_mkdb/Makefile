@@ -13,6 +13,5 @@ CFLAGS+= -I${SRCTOP}/lib/libc/gen		# for pw_scan.h
 .if defined(BOOTSTRAPPING) && ${.MAKE.OS} != "FreeBSD"
 CFLAGS+=-DNEED_FREEBSD_STRUCT_PASSWD
 .endif
-LDADD+=	${FREEBSD_LIBDB}
 
 .include <bsd.prog.mk>

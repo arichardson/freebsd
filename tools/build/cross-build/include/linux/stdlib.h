@@ -13,4 +13,9 @@ int	 cgetnum(char *, const char *, long *);
 int	 cgetset(const char *);
 int	 cgetstr(char *, const char *, char **);
 int	 cgetustr(char *, const char *, char **);
+
+
+const char	*getprogname(void);
+void		 setprogname(const char *progname);
+
 __END_DECLS

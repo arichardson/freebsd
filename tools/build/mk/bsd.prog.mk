@@ -9,16 +9,11 @@ NO_PIC:=	no
 .endif
 .include "../../../share/mk/bsd.prog.mk"
 
-# When building on Linux we need to add libbsd to the linker commmand line
-# If it is a static library we need to add it as the last linker argument since
-# otherwise we get linker errors with bfd due to libraries being added at the
-# end depending on libbsd (it must also come after libegacy since that depends
-# on libbsd).
-.if ${.MAKE.OS} == "Linux"
-.if ${LIBBSD_DIR} == "/usr"
-# If it is installed in /usr it's probably a shared libraries so use -lbds
-LDADD+=	-lbsd
-.else
-LDADD+=	${LIBBSD_DIR}/lib/libbsd.a
+.include <bsd.linker.mk>
+# When building with BFD we have to add libegacy.a at the end of linker
+# command line again to ensure all symbols are resolved. LLD is smart enough
+# to not need this. This happens e.g. when building compile_et (which
+# adds -lvers at then end of the command line)
+.if ${LINKER_TYPE} == "bfd"
+LDADD+=	-lfreebsd -legacy
 .endif
-.endif  # LINUX

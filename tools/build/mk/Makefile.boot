@@ -49,9 +49,6 @@ CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/common
 # TODO: only needed for uuencode and uudecode
 LDADD+=-lresolv
 
-# ensure that we use the FreeBSD versions of libdb:
-FREEBSD_LIBDB:=	-ldb-freebsd
-
 .if ${.MAKE.OS} == "Linux"
 LIBBSD_DIR?=/usr
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/linux
@@ -77,14 +74,6 @@ LDFLAGS+=	-L/usr/local/opt/libarchive/lib
 
 .else
 .error "Unsupported build OS: ${.MAKE.OS}"
-.endif
-
-.include <bsd.linker.mk>
-# When building with BFD we have to add libegacy.a at the end of linker
-# command line again to ensure all symbols are resolved. LLD is smart enough
-# to not need this.
-.if ${LINKER_TYPE} == "bfd"
-LDADD+=	-legacy
 .endif
 .endif # ${.MAKE.OS} != "FreeBSD"
 

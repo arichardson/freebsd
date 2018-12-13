@@ -40,9 +40,9 @@ _WITH_STRSVIS!=	grep -c strsvis ${HOST_INCLUDE_ROOT}/vis.h 2>/dev/null || true
 .if ${_WITH_STRSVIS} == 0
 .PATH: ${.CURDIR}/../../contrib/libc-vis
 INCS+=		vis.h
-SRCS+=		vis.c
-CFLAGS.vis.c+=	-I${.CURDIR}/../../contrib/libc-vis
-CFLAGS.vis.c+=	-I${.CURDIR}/cross-build/libc-bootstrap
+SRCS+=		vis.c unvis.c
+CFLAGS.vis.c+=	-I${.CURDIR}/../../contrib/libc-vis -I${.CURDIR}/cross-build/libc-bootstrap
+CFLAGS.unvis.c+=	-I${.CURDIR}/../../contrib/libc-vis -I${.CURDIR}/cross-build/libc-bootstrap
 .endif
 
 _WITH_REALLOCARRAY!= grep -c reallocarray ${HOST_INCLUDE_ROOT}/stdlib.h || true
@@ -57,13 +57,6 @@ _WITH_UTIMENS!= grep -c utimensat ${HOST_INCLUDE_ROOT}/sys/stat.h || true
 .if ${_WITH_UTIMENS} == 0
 SYSINCS+=	stat.h
 SRCS+=		futimens.c utimensat.c
-.endif
-
-_WITH_EXPLICIT_BZERO!= grep -c explicit_bzero ${HOST_INCLUDE_ROOT}/strings.h || true
-.if ${_WITH_EXPLICIT_BZERO} == 0
-.PATH: ${SRCTOP}/sys/libkern
-INCS+=		strings.h
-SRCS+=		explicit_bzero.c
 .endif
 
 .if exists(${HOST_INCLUDE_ROOT}/capsicum_helpers.h)
@@ -119,15 +112,6 @@ MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/elf.h
 X86INCS+=	${SRCTOP}/sys/x86/include/elf.h
 .endif
 
-.PATH: ${SRCTOP}/lib/libc/stdlib
-SRCS+=	strtonum.c
-.PATH: ${SRCTOP}/lib/libc/locale
-SRCS+=	rpmatch.c
-
-# expand_number is not provided by either Linux or MacOS libutil
-.PATH: ${SRCTOP}/lib/libutil
-SRCS+=	expand_number.c
-
 # needed for btxld:
 MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/exec.h
 MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/reloc.h
@@ -144,8 +128,6 @@ UFSINCS+=	${SRCTOP}/sys/ufs/ufs/dinode.h
 UFSINCS+=	${SRCTOP}/sys/ufs/ufs/dir.h
 FFSINCS+=	${SRCTOP}/sys/ufs/ffs/fs.h
 
-# for tzsetup:
-SRCS+=	fake_sysctl.c
 
 # for vtfontcvt:
 SYSINCS+=	${SRCTOP}/sys/sys/fnv_hash.h
@@ -157,7 +139,17 @@ INCS+=	${SRCTOP}/include/elf.h
 # I believe the db routines shipped with MacOS are compatible but on Linux they
 # definitelty aren't. To avoid any surprises let's just always build it when
 # we are crossbuilding.
-SUBDIR+=	cross-build/libdb_freebsd
+SUBDIR+=	cross-build/libfreebsd
+.endif
+
+
+# Need to search for files in sys/libkern last since otherwise we will attempt
+# to bootstrap strlcpy from sys/libkern/strlcpy.c instead of libc/string/strlcpy.c
+_WITH_EXPLICIT_BZERO!= grep -c explicit_bzero ${HOST_INCLUDE_ROOT}/strings.h || true
+.if ${_WITH_EXPLICIT_BZERO} == 0
+.PATH: ${SRCTOP}/sys/libkern
+INCS+=		strings.h
+SRCS+=		explicit_bzero.c
 .endif
 
 

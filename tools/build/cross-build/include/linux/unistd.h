@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <sys/syscall.h>
 
 #ifndef required_argument
 #error"something went wrong including getopt"
@@ -39,6 +40,12 @@ strtofflags(char **stringp, u_long *setp, u_long *clrp) {
 	if (clrp)
 		*clrp = 0;
 	return 0; /* success */
+}
+
+static inline int
+getentropy(void *buf, size_t buflen) {
+
+	return syscall(__NR_getrandom, buf, buflen, 0);
 }
 
 /* Used by elftoolchain: */

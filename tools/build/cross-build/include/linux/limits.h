@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <sys/uio.h> // For IOV_MAX
 
-#if __has_include(</usr/include/limits.h>)
+#if !defined(__clang__) && __has_include(</usr/include/limits.h>)
 /* For some reason GCC picks the wrong limits.h */
 #include </usr/include/limits.h>
 #endif

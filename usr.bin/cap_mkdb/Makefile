@@ -3,7 +3,4 @@
 
 PROG=	cap_mkdb
 
-# This is needed to bootstrap on a Linux host:
-LDADD+=	${FREEBSD_LIBDB}
-
 .include <bsd.prog.mk>

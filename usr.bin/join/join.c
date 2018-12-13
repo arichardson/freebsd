@@ -276,15 +276,17 @@ static void
 slurp(INPUT *F)
 {
 	LINE *lp, *lastlp, tmp;
-	size_t len;
+	size_t len, lbufalloc;
 	int cnt;
-	char *bp, *fieldp;
+	char *bp, *fieldp, *lbuf;
 
 	/*
 	 * Read all of the lines from an input file that have the same
 	 * join field.
 	 */
 	F->setcnt = 0;
+	lbuf = NULL;
+	lbufalloc = 0;
 	for (lastlp = NULL;; ++F->setcnt) {
 		/*
 		 * If we're out of space to hold line structures, allocate
@@ -321,8 +323,10 @@ slurp(INPUT *F)
 			F->pushbool = 0;
 			continue;
 		}
-		if ((bp = fgetln(F->fp, &len)) == NULL)
+		if ((len = getline(&lbuf, &lbufalloc, F->fp)) == -1) {
+			free(lbuf);
 			return;
+		}
 		if (lp->linealloc <= len + 1) {
 			lp->linealloc += MAX(100, len + 1 - lp->linealloc);
 			if ((lp->line =
@@ -359,6 +363,7 @@ slurp(INPUT *F)
 			break;
 		}
 	}
+	free(lbuf);
 }
 
 static char *
