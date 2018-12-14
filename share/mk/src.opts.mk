@@ -400,11 +400,6 @@ BROKEN_OPTIONS+=CDDL ZFS
 # with the ones provided by glibc
 BROKEN_OPTIONS+=LOCALES
 
-# Currently not all of the test directories build. It fails in the libc tests:
-# dd if=/dev/zero of=h_zero bs=1k count=2 status=none
-# dd: unknown operand status
-# Skip this until this makefile has been fixed or we can bootstrap dd
-BROKEN_OPTIONS+=TESTS
 # Boot cannot be built with clang yet. Will need to bootstrap GNU as..
 BROKEN_OPTIONS+=BOOT
 # libsnmp use ls -D which is not supported on MacOS (and possibly linux)

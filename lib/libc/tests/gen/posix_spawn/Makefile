@@ -20,7 +20,9 @@ CLEANFILES+=	h_nonexec
 .include "../../Makefile.netbsd-tests"
 
 h_zero:
-	dd if=/dev/zero of=h_zero bs=1k count=2 status=none
+	dd_nostatus=`dd status=none count=0 2> /dev/null && echo status=none`; \
+	    echo dd_nostatus=$${dd_nostatus}; \
+	    dd if=/dev/zero of=h_zero bs=1k count=2 $${dd_nostatus}
 	chmod a+x h_zero
 
 CLEANFILES+=	h_zero
