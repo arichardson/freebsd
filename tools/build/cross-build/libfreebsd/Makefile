@@ -72,4 +72,11 @@ SRCS+=	fparseln.c
 SRCS+=	fake_sysctl.c
 
 
+# capsicum support
+SYSINCS+=	${SRCTOP}/sys/sys/capsicum.h
+SYSINCS+=	${SRCTOP}/sys/sys/caprights.h
+# add this to .PATH last since otherwise it causes other files to be picked up from sys/kern
+.PATH: ${SRCTOP}/sys/kern
+SRCS+=		subr_capability.c
+
 .include <bsd.lib.mk>

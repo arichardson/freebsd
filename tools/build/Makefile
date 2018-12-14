@@ -59,6 +59,13 @@ SYSINCS+=	stat.h
 SRCS+=		futimens.c utimensat.c
 .endif
 
+_WITH_EXPLICIT_BZERO!= grep -c explicit_bzero ${HOST_INCLUDE_ROOT}/strings.h || true
+.if ${_WITH_EXPLICIT_BZERO} == 0
+.PATH: ${SRCTOP}/sys/libkern
+INCS+=		strings.h
+SRCS+=		explicit_bzero.c
+.endif
+
 .if exists(${HOST_INCLUDE_ROOT}/capsicum_helpers.h)
 _WITH_CAPH_ENTER!= grep -c caph_enter ${HOST_INCLUDE_ROOT}/capsicum_helpers.h || true
 .endif
@@ -67,16 +74,6 @@ _WITH_CAPH_ENTER!= grep -c caph_enter ${HOST_INCLUDE_ROOT}/capsicum_helpers.h ||
 INCS+=		capsicum_helpers.h
 .PATH: ${SRCTOP}/lib/libcasper/libcasper
 INCS+=		libcasper.h
-.endif
-
-.if exists(${HOST_INCLUDE_ROOT}/sys/capsicum.h)
-_WITH_CAP_RIGHTS_IS_VALID!= grep -c cap_rights_is_valid ${HOST_INCLUDE_ROOT}/sys/capsicum.h || true
-.endif
-.if !defined(_WITH_CAP_RIGHTS_IS_VALID) || ${_WITH_CAP_RIGHTS_IS_VALID} == 0
-SYSINCS+=	${SRCTOP}/sys/sys/capsicum.h
-SYSINCS+=	${SRCTOP}/sys/sys/caprights.h
-.PATH: ${SRCTOP}/sys/kern
-SRCS+=		subr_capability.c
 .endif
 
 # rpcgen should build against the source tree rpc/types.h and not the host.
@@ -119,7 +116,8 @@ INCS+=	${SRCTOP}/include/a.out.h
 SYSINCS+=	${SRCTOP}/sys/sys/imgact_aout.h
 
 # For mkscrfil.c:
-SYSINCS+=	${SRCTOP}/sys/sys/consio.h ${SRCTOP}/sys/sys/ioccom.h
+SYSINCS+=	${SRCTOP}/sys/sys/consio.h
+
 # for gencat:
 INCS+=	${SRCTOP}/include/nl_types.h
 
@@ -141,17 +139,6 @@ INCS+=	${SRCTOP}/include/elf.h
 # we are crossbuilding.
 SUBDIR+=	cross-build/libfreebsd
 .endif
-
-
-# Need to search for files in sys/libkern last since otherwise we will attempt
-# to bootstrap strlcpy from sys/libkern/strlcpy.c instead of libc/string/strlcpy.c
-_WITH_EXPLICIT_BZERO!= grep -c explicit_bzero ${HOST_INCLUDE_ROOT}/strings.h || true
-.if ${_WITH_EXPLICIT_BZERO} == 0
-.PATH: ${SRCTOP}/sys/libkern
-INCS+=		strings.h
-SRCS+=		explicit_bzero.c
-.endif
-
 
 .if empty(SRCS)
 SRCS=		dummy.c
