@@ -44,8 +44,9 @@
 #ifndef __section
 #define	__section(x)	__attribute__((__section__(x)))
 #endif
+
 #ifndef __alloc_size
-#define	__alloc_size(x)	__attribute__((__alloc_size__(x)))
+#define	__alloc_size(...)	__attribute__((__alloc_size__(__VA_ARGS__)))
 #endif
 #ifndef __alloc_size2
 #define	__alloc_size2(n, x)	__attribute__((__alloc_size__(n, x)))

@@ -1,4 +1,3 @@
-
 // Note: getopt.h is included multiple times by glibc so we can't use #pragma once here
 #include_next <getopt.h>
 

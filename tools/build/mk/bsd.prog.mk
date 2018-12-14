@@ -9,11 +9,15 @@ NO_PIC:=	no
 .endif
 .include "../../../share/mk/bsd.prog.mk"
 
-.include <bsd.linker.mk>
+.if ${.MAKE.OS} != "FreeBSD"
+# Add the FreeBSD compatibility functions at the end of the library list.
+LDADD+=	-lfreebsd
 # When building with BFD we have to add libegacy.a at the end of linker
 # command line again to ensure all symbols are resolved. LLD is smart enough
 # to not need this. This happens e.g. when building compile_et (which
-# adds -lvers at then end of the command line)
+# adds -lvers at then end of the command line).
+.include <bsd.linker.mk>
 .if ${LINKER_TYPE} == "bfd"
-LDADD+=	-lfreebsd -legacy
+LDADD+=	-legacy
+.endif
 .endif

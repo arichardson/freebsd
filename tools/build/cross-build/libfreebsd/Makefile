@@ -17,12 +17,10 @@ MK_SYMVER=	no
 LIBC_SRCTOP=	${SRCTOP}/lib/libc/
 .include "${LIBC_SRCTOP}/db/Makefile.inc"
 
-# dbopen and getopt behave differently on Linux and FreeBSD -> namespace the symbols to ensure that
-# we get linker errors if libfreebsd isn't linked.
-CFLAGS+=	-I ${.CURDIR}/../libc-bootstrap -Ddbopen=__freebsd_dbopen -Dgetopt=__freebsd_getopt
-INCS+=	getopt.h db.h
-.PATH: ${SRCTOP}/lib/libc/stdlib
-SRCS+=	getopt.c
+# dbopen behaves differently on Linux and FreeBSD -> namespace the symbols
+# to ensure that we get linker errors if libfreebsd isn't linked.
+CFLAGS+=	-I ${.CURDIR}/../libc-bootstrap -Ddbopen=__freebsd_dbopen
+INCS+=	db.h
 
 # for cap_mkdb:
 .PATH: ${LIBC_SRCTOP}/gen
@@ -41,28 +39,28 @@ SRCS+=	reallocf.c
 .PATH: ${SRCTOP}/lib/libc/locale
 SRCS+=	rpmatch.c
 
+.if ${.MAKE.OS} == "Linux"
 # On Linux, glibc does not provide strlcpy,strlcat or strmode
 .PATH: ${SRCTOP}/lib/libc/string
 SRCS+=	strlcpy.c strlcat.c strmode.c
-
+# include fgetln/fgetwln fallback from libbsd:
+SRCS+=	fgetln_fallback.c fgetwln_fallback.c
+# glibc doesn't provide getprogname()
+SRCS+=	progname.c
 # Also warnc and the arc4random functions are missing on Linux
 .PATH: ${SRCTOP}/lib/libc/gen
 SRCS+=	arc4random.c arc4random_uniform.c err.c
 CFLAGS.arc4random.c+=	-I${SRCTOP}/sys/crypto/chacha20
-
-# glibc doesn't provide getprogname()
-SRCS+=	progname.c
-
-.if ${.MAKE.OS} == "Linux"
-# include fgetln/fgetwln fallback from libbsd:
-SRCS+=	fgetln_fallback.c fgetwln_fallback.c
-
 SRCS+=	closefrom.c
 CFLAGS.closefrom.c+=	-DSTDC_HEADERS -DHAVE_SYS_DIR_H -DHAVE_DIRENT_H \
 	-DHAVE_DIRFD -DHAVE_SYSCONF
+
+# Do the same as we did for dbopen() for getopt() on Linux since it's not
+# compatible
+.PATH: ${SRCTOP}/lib/libc/stdlib
+CFLAGS+=	-Dgetopt=__freebsd_getopt
+SRCS+=	getopt.c
 .endif
-
-
 
 # expand_number is not provided by either Linux or MacOS libutil
 .PATH: ${SRCTOP}/lib/libutil
