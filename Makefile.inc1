@@ -2229,10 +2229,6 @@ ${_bt}-usr.bin/yacc: ${_bt}-lib/liby
 _gensnmptree=	usr.sbin/bsnmpd/gensnmptree
 .endif
 
-.if ${MK_LOCALES} != "no"
-_localedef=	usr.bin/localedef
-.endif
-
 # We need to build tblgen when we're building clang or lld, either as
 # bootstrap tools, or as the part of the normal build.
 .if ${MK_CLANG_BOOTSTRAP} != "no" || ${MK_CLANG} != "no" || \
@@ -2257,10 +2253,6 @@ ${_bt}-gnu/usr.bin/dtc: ${_bt_lex_depend}
 .if ${MK_LOCALES} != "no"
 _localedef=	usr.bin/localedef
 ${_bt}-usr.bin/localedef: ${_bt}-usr.bin/yacc ${_bt_lex_depend}
-.endif
-
-.if ${MK_LOCALES} != "no"
-_localedef=	usr.bin/localedef
 .endif
 
 .if ${MK_KERBEROS} != "no"
