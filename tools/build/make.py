@@ -53,33 +53,7 @@ def run(cmd, **kwargs):
     subprocess.check_call(cmd, **kwargs)
 
 
-def bootstrap_libbsd(source_root, objdir_prefix):
-    libbsd_source_dir = objdir_prefix / "libbsd-source"
-    libbsd_build_dir = objdir_prefix / "libbsd-build"
-    libbsd_install_dir = objdir_prefix / "libbsd-install"
-
-    if not sys.platform.startswith("linux"):
-        return None
-    if (libbsd_install_dir / "lib/libbsd.a").exists():
-        return libbsd_install_dir
-    if not libbsd_source_dir.exists():
-        run(["git", "clone", "https://anongit.freedesktop.org/git/libbsd.git",
-             str(libbsd_source_dir)])
-    else:
-        run(["git", "pull"], cwd=str(libbsd_source_dir))
-
-    if not libbsd_build_dir.is_dir():
-        os.makedirs(str(libbsd_build_dir))
-    run(["sh", str(libbsd_source_dir / "autogen")], cwd=str(libbsd_source_dir))
-    run([str(libbsd_source_dir / "configure"),
-         "--prefix=" + str(libbsd_install_dir), "--disable-shared",
-         "--enable-static"], cwd=str(libbsd_build_dir))
-    run(["make"], cwd=str(libbsd_build_dir))
-    run(["make", "install"], cwd=str(libbsd_build_dir))
-    return libbsd_install_dir
-
-
-def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
+def bootstrap_bmake(source_root, objdir_prefix):
     bmake_source_dir = source_root / "contrib/bmake"
     bmake_build_dir = objdir_prefix / "bmake-build"
     bmake_install_dir = objdir_prefix / "bmake-install"
@@ -94,17 +68,12 @@ def bootstrap_bmake(source_root, objdir_prefix, libbsd_install_dir):
     global new_env_vars
     env.update(new_env_vars)
 
-    # HACK around the deleted file bmake/missing/sys/cdefs.h
     if sys.platform.startswith("linux"):
-        if libbsd_install_dir is None:
-            debug("Compiling bmake on linux without bootstrapping libbsd")
-        else:
-            env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
-                            "-I{src}/tools/build/cross-build/include/linux " \
-                            "-I{libbsd}/include/bsd -DLIBBSD_OVERLAY " \
-                            "-D_GNU_SOURCE=1".format(src=source_root,
-                libbsd=libbsd_install_dir)
-            env["LDFLAGS"] = "-L{}/lib -lbsd".format(libbsd_install_dir)
+        # Work around the deleted file bmake/missing/sys/cdefs.h
+        # TODO: bmake should keep the compat sys/cdefs.h
+        env["CFLAGS"] = "-I{src}/tools/build/cross-build/include/common " \
+                        "-I{src}/tools/build/cross-build/include/linux " \
+                        "-D_GNU_SOURCE=1".format(src=source_root)
     configure_args = [
         "--with-default-sys-path=" + str(bmake_install_dir / "share/mk"),
         "--with-machine=amd64",  # TODO? "--with-machine-arch=amd64",
@@ -242,11 +211,7 @@ if __name__ == "__main__":
         # os.getenv("X_COMPILER_TYPE"):  #    new_env_vars["X_COMPILER_TYPE"]
         # = parsed_args.cross_compiler_type
 
-    libbsd_install_dir = bootstrap_libbsd(source_root, objdir_prefix)
-    bmake_binary = bootstrap_bmake(source_root, objdir_prefix,
-                                   libbsd_install_dir)
-    if libbsd_install_dir is not None:
-        bmake_args.append("LIBBSD_DIR=" + str(libbsd_install_dir))
+    bmake_binary = bootstrap_bmake(source_root, objdir_prefix)
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
     debug("Adding -DWITH_AUTO_OBJ")
     bmake_args.append("-DWITH_AUTO_OBJ")
