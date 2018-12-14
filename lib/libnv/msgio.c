@@ -158,11 +158,13 @@ msg_send(int sock, const struct msghdr *msg)
 }
 
 /*
- * MacOS/Linux does not define struct cmsgcred but we need to bootstrap libnv
+ * MacOS/Linux do not define struct cmsgcred but we need to bootstrap libnv
  * when building on non-FreeBSD systems. Since they are not used during
- * bootstrap we can just omit these two functions then.
+ * bootstrap we can just omit these two functions there.
  */
-#ifdef __FreeBSD__
+#ifndef __FreeBSD__
+#warning "cred_send() not supported on non-FreeBSD systems"
+#else
 int
 cred_send(int sock)
 {
