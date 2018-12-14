@@ -26,11 +26,40 @@
 #ifndef __pure
 #define __pure __attribute__((__pure__))
 #endif
-
 #ifndef __packed
 #define __packed __attribute__((__packed__))
 #endif
-
+#ifndef __dead2
+#define	__dead2		__attribute__((__noreturn__))
+#endif
+#ifndef __pure2
+#define	__pure2		__attribute__((__const__))
+#endif
+#ifndef __used
+#define	__used		__attribute__((__used__))
+#endif
+#ifndef __aligned
+#define	__aligned(x)	__attribute__((__aligned__(x)))
+#endif
+#ifndef __section
+#define	__section(x)	__attribute__((__section__(x)))
+#endif
+#ifndef __alloc_size
+#define	__alloc_size(x)	__attribute__((__alloc_size__(x)))
+#endif
+#ifndef __alloc_size2
+#define	__alloc_size2(n, x)	__attribute__((__alloc_size__(n, x)))
+#endif
+#ifndef __alloc_align
+#define	__alloc_align(x)	__attribute__((__alloc_align__(x)))
+#endif
+#ifndef __result_use_check
+#define	__result_use_check	__attribute__((__warn_unused_result__))
+#endif
+#ifndef __printflike
+#define	__printflike(fmtarg, firstvararg) \
+	    __attribute__((__format__ (__printf__, fmtarg, firstvararg)))
+#endif
 #ifndef __printf0like
 #define	__printf0like(fmtarg, firstvararg) \
 	    __attribute__((__format__ (__printf0__, fmtarg, firstvararg)))
@@ -80,6 +109,7 @@
 #define	__unreachable()	__builtin_unreachable()
 #endif
 
+
 /*
  * These should probably be in sys/types.h but mtree expects them to exist
  * without including <sys/types.h>
@@ -121,4 +151,49 @@ typedef	unsigned long	u_long;
 #define	__NULLABILITY_PRAGMA_PUSH _Pragma("clang diagnostic push")	\
 	_Pragma("clang diagnostic ignored \"-Wnullability-completeness\"")
 #define	__NULLABILITY_PRAGMA_POP _Pragma("clang diagnostic pop")
+#endif
+
+#ifndef __offsetof
+#define	__offsetof(type, field)	 __builtin_offsetof(type, field)
+#endif
+
+#define	__rangeof(type, start, end) \
+	(__offsetof(type, end) - __offsetof(type, start))
+
+#ifndef __containerof
+#define	__containerof(x, s, m) ({					\
+	const volatile __typeof(((s *)0)->m) *__x = (x);		\
+	__DEQUALIFY(s *, (const volatile char *)__x - __offsetof(s, m));\
+})
+#endif
+
+
+#ifndef __RCSID
+#define __RCSID(x)
+#endif
+#ifndef __FBSDID
+#define __FBSDID(x)
+#endif
+#ifndef __RCSID
+#define __RCSID(x)
+#endif
+#ifndef __RCSID_SOURCE
+#define __RCSID_SOURCE(x)
+#endif
+#ifndef __SCCSID
+#define __SCCSID(x)
+#endif
+#ifndef __COPYRIGHT
+#define __COPYRIGHT(x)
+#endif
+#ifndef __DECONST
+#define __DECONST(type, var)	((type)(__uintptr_t)(const void *)(var))
+#endif
+
+#ifndef __DEVOLATILE
+#define __DEVOLATILE(type, var)	((type)(__uintptr_t)(volatile void *)(var))
+#endif
+
+#ifndef __DEQUALIFY
+#define __DEQUALIFY(type, var)	((type)(__uintptr_t)(const volatile void *)(var))
 #endif

@@ -52,8 +52,8 @@ LDADD+=-lresolv
 .if ${.MAKE.OS} == "Linux"
 LIBBSD_DIR?=/usr
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/linux
-CFLAGS+=	-I${LIBBSD_DIR}/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
-CFLAGS+=	-std=gnu99
+# CFLAGS+=	-I${LIBBSD_DIR}/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
+CFLAGS+=	-std=gnu99 -D_GNU_SOURCE=1
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
 LDADD+=	-pthread
 

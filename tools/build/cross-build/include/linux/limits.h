@@ -1,4 +1,4 @@
-#pragma once
+// #pragma once
 
 #ifdef __STRICT_ANSI__
 #warning __STRICT_ANSI__ defined

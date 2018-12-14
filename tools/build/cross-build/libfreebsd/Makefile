@@ -1,10 +1,14 @@
 LIB=	freebsd
 NO_SHARED=	yes
 
+INCSGROUPS=	INCS SYSINCS
+SYSINCSDIR=	${INCLUDEDIR}/sys
+
 INCS+=	${SRCTOP}/include/mpool.h \
 		${SRCTOP}/include/ndbm.h
-
-INCS+=	${SRCTOP}/include/err.h
+INCS+=	${SRCTOP}/include/err.h \
+		${SRCTOP}/include/stringlist.h
+SYSINCS+=	${SRCTOP}/sys/sys/queue.h
 
 # Note: ${LIBC_SRCTOP}/db.h is explicitly not added here so that all cross-tools
 # include ../include/common/db.h instead (which defines dbopen to __freebsd_dbopen)
@@ -52,6 +56,10 @@ SRCS+=	progname.c
 .if ${.MAKE.OS} == "Linux"
 # include fgetln/fgetwln fallback from libbsd:
 SRCS+=	fgetln_fallback.c fgetwln_fallback.c
+
+SRCS+=	closefrom.c
+CFLAGS.closefrom.c+=	-DSTDC_HEADERS -DHAVE_SYS_DIR_H -DHAVE_DIRENT_H \
+	-DHAVE_DIRFD -DHAVE_SYSCONF
 .endif
 
 

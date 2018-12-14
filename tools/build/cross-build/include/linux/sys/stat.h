@@ -18,3 +18,7 @@
 #define st_atimespec st_atim
 #define st_mtimespec st_mtim
 #define st_ctimespec st_ctim
+
+#ifndef S_ISTXT
+#define S_ISTXT S_ISVTX
+#endif

@@ -52,4 +52,9 @@ getentropy(void *buf, size_t buflen) {
 extern char *program_invocation_name;
 extern char *program_invocation_short_name;
 
+void	*setmode(const char *);
+mode_t	 getmode(const void *, mode_t);
+
+void	closefrom(int);
+
 __END_DECLS
