@@ -10,8 +10,4 @@ NO_PIC:=	no
 # There is no objcopy on macOS so we can't do the MK_DEBUG_FILES objcopy magic.
 MK_DEBUG_FILES:=no
 
-# we do not want to capture dependencies referring to the libraries
-# XXXAR: is this still needed?
-UPDATE_DEPENDFILE= no
-
 .endif
