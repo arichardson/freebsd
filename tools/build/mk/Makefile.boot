@@ -4,7 +4,14 @@ CFLAGS+=	-I${WORLDTMP}/legacy/usr/include
 DPADD+=		${WORLDTMP}/legacy/usr/lib/libegacy.a
 LDADD+=		-legacy
 LDFLAGS+=	-L${WORLDTMP}/legacy/usr/lib
+
 .if ${.MAKE.OS} != "FreeBSD"
+# libfreebsd will depend on some symbols in libegacy so we need to add it to
+# the end of the linker command line in case the bootstrap tools are being
+# linked with bfd which is not smart enough to resolve symbols otherwise.
+LDADD+=		-lfreebsd -legacy
+DPADD+=		${WORLDTMP}/legacy/usr/lib/libfreebsd.a
+
 # On MacOS using a non-mac ar will fail the build, similarly on Linux using
 # nm may not work as expected if the nm for the target architecture comes in
 # $PATH before a nm that supports the host architecture.
@@ -50,16 +57,12 @@ CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/common
 LDADD+=-lresolv
 
 .if ${.MAKE.OS} == "Linux"
-LIBBSD_DIR?=/usr
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/linux
-# CFLAGS+=	-I${LIBBSD_DIR}/include/bsd -DLIBBSD_OVERLAY=1 -D_GNU_SOURCE=1
 CFLAGS+=	-std=gnu99 -D_GNU_SOURCE=1
 # Needed for sem_init, etc. on Linux (used by usr.bin/sort)
 LDADD+=	-pthread
 
 .elif ${.MAKE.OS} == "Darwin"
-# There is no objcopy on macOS so we can't do the MK_DEBUG_FILES objcopy magic.
-MK_DEBUG_FILES:=no
 CFLAGS+=	-D_DARWIN_C_SOURCE=1
 CFLAGS+=	-I${SRCTOP}/tools/build/cross-build/include/mac
 # The macOS ar and ranlib don't understand all the flags supported by the
@@ -69,16 +72,13 @@ RANLIBFLAGS:=
 
 # to get libarchive (needed for elftoolchain)
 # MacOS ships /usr/lib/libarchive.dylib but doesn't have the headers
-CFLAGS+=	-I/usr/local/opt/libarchive/include
+CFLAGS+=	-idirafter /usr/local/opt/libarchive/include
 LDFLAGS+=	-L/usr/local/opt/libarchive/lib
 
 .else
 .error "Unsupported build OS: ${.MAKE.OS}"
 .endif
 .endif # ${.MAKE.OS} != "FreeBSD"
-
-# we do not want to capture dependencies referring to the above
-UPDATE_DEPENDFILE= no
 
 # When building host tools we should never pull in headers from the source sys
 # directory to avoid any ABI issues that might cause the built binary to crash.
