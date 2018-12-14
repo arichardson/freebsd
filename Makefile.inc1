@@ -2556,7 +2556,6 @@ cross-tools: .MAKE .PHONY
     ${_lld} \
     ${_binutils} \
     ${_elftctools} \
-    ${_ar} \
     ${_dtrace_tools} \
     ${_gcc} \
     ${_btxld} \
