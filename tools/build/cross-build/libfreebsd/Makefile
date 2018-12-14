@@ -22,6 +22,11 @@ LIBC_SRCTOP=	${SRCTOP}/lib/libc/
 CFLAGS+=	-I ${.CURDIR}/../libc-bootstrap -Ddbopen=__freebsd_dbopen
 INCS+=	db.h
 
+# Do the same as we did for dbopen() for getopt() on since it's not compatible
+# on Linux (and to avoid surprises also compile the FreeBSD code on macOS
+.PATH: ${SRCTOP}/lib/libc/stdlib
+SRCS+=	getopt.c getopt_long.c
+
 # for cap_mkdb:
 .PATH: ${LIBC_SRCTOP}/gen
 SRCS+=	getcap.c
@@ -54,12 +59,6 @@ CFLAGS.arc4random.c+=	-I${SRCTOP}/sys/crypto/chacha20
 SRCS+=	closefrom.c
 CFLAGS.closefrom.c+=	-DSTDC_HEADERS -DHAVE_SYS_DIR_H -DHAVE_DIRENT_H \
 	-DHAVE_DIRFD -DHAVE_SYSCONF
-
-# Do the same as we did for dbopen() for getopt() on Linux since it's not
-# compatible
-.PATH: ${SRCTOP}/lib/libc/stdlib
-CFLAGS+=	-Dgetopt=__freebsd_getopt
-SRCS+=	getopt.c
 .endif
 
 # expand_number is not provided by either Linux or MacOS libutil

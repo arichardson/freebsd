@@ -1,5 +1,6 @@
 #pragma once
 #include_next <unistd.h>
+#include <getopt.h>
 
 static inline int
 check_utility_compat(const char *utility)
