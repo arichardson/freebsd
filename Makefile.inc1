@@ -2329,7 +2329,6 @@ _basic_bootstrap_tools+=usr.bin/unifdef
 .endif
 
 .if ${MK_BOOT} != "no"
-# _basic_bootstrap_tools+=bin/dd
 # xz/unxz is used by EFI
 _basic_bootstrap_tools_multilink+=usr.bin/xz xz,unxz
 # md5 is used by boot/beri (and possibly others)

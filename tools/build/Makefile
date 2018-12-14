@@ -174,7 +174,7 @@ SYSINCS+=	${SRCTOP}/sys/sys/nv.h ${SRCTOP}/sys/sys/cnv.h ${SRCTOP}/sys/sys/dnv.h
 
 # basic commands: It is fine to use the host version for all of these even on
 # Linux/MacOS since we only use flags that are supported by all of them.
-_host_tools_to_symlink=	basename bzip2 bunzip2 chmod chown cmp comm cp date \
+_host_tools_to_symlink=	basename bzip2 bunzip2 chmod chown cmp comm cp date dd \
 	dirname echo env false find fmt gzip gunzip head hostname id ln ls \
 	mkdir mv nice patch rm realpath sh sleep stat tee touch tr true uname \
 	uniq wc which
@@ -183,7 +183,7 @@ _host_tools_to_symlink=	basename bzip2 bunzip2 chmod chown cmp comm cp date \
 
 .if ${MK_BOOT} != "no"
 # xz/unxz is used by EFI
-_host_tools_to_symlink+=dd xz unxz
+_host_tools_to_symlink+=xz unxz
 .endif
 
 # We also need a symlink to the absolute path to the make binary used for
