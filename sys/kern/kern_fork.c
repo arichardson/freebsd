@@ -273,8 +273,10 @@ retry:
 	}
 
 	bit_ffc_at(&proc_id_pidmap, trypid, pid_max, &result);
-	if (result == -1)
+	if (result == -1) {
+		trypid = 100;
 		goto retry;
+	}
 	if (bit_test(&proc_id_grpidmap, result) ||
 	    bit_test(&proc_id_sessidmap, result) ||
 	    bit_test(&proc_id_reapmap, result)) {
@@ -686,15 +688,15 @@ do_fork(struct thread *td, struct fork_req *fr, struct proc *p2, struct thread *
 	PROC_UNLOCK(p2);
 
 	/*
+	 * Tell any interested parties about the new process.
+	 */
+	knote_fork(p1->p_klist, p2->p_pid);
+
+	/*
 	 * Now can be swapped.
 	 */
 	_PRELE(p1);
 	PROC_UNLOCK(p1);
-
-	/*
-	 * Tell any interested parties about the new process.
-	 */
-	knote_fork(p1->p_klist, p2->p_pid);
 	SDT_PROBE3(proc, , , create, p2, p1, fr->fr_flags);
 
 	if (fr->fr_flags & RFPROCDESC) {
@@ -836,8 +838,7 @@ fork1(struct thread *td, struct fork_req *fr)
 	 * processes; don't let root exceed the limit.
 	 */
 	nprocs_new = atomic_fetchadd_int(&nprocs, 1) + 1;
-	if ((nprocs_new >= maxproc - 10 && priv_check_cred(td->td_ucred,
-	    PRIV_MAXPROC, 0) != 0) || nprocs_new >= maxproc) {
+	if ((nprocs_new >= maxproc - 10 && priv_check_cred(td->td_ucred, PRIV_MAXPROC) != 0) || nprocs_new >= maxproc) {
 		error = EAGAIN;
 		sx_xlock(&allproc_lock);
 		if (ppsratecheck(&lastfail, &curfail, 1)) {
@@ -934,7 +935,7 @@ fork1(struct thread *td, struct fork_req *fr)
 	 *
 	 * XXXRW: Can we avoid privilege here if it's not needed?
 	 */
-	error = priv_check_cred(td->td_ucred, PRIV_PROC_LIMIT, 0);
+	error = priv_check_cred(td->td_ucred, PRIV_PROC_LIMIT);
 	if (error == 0)
 		ok = chgproccnt(td->td_ucred->cr_ruidinfo, 1, 0);
 	else {
