@@ -58,7 +58,6 @@ static void exec_setregs_funcdesc(struct thread *td, struct image_params *imgp,
 struct sysentvec elf64_freebsd_sysvec_v1 = {
 	.sv_size	= SYS_MAXSYSCALL,
 	.sv_table	= sysent,
-	.sv_mask	= 0,
 	.sv_errsize	= 0,
 	.sv_errtbl	= NULL,
 	.sv_transtrap	= NULL,
@@ -97,7 +96,6 @@ INIT_SYSENTVEC(elf64_sysvec_v1, &elf64_freebsd_sysvec_v1);
 struct sysentvec elf64_freebsd_sysvec_v2 = {
 	.sv_size	= SYS_MAXSYSCALL,
 	.sv_table	= sysent,
-	.sv_mask	= 0,
 	.sv_errsize	= 0,
 	.sv_errtbl	= NULL,
 	.sv_transtrap	= NULL,
@@ -127,6 +125,9 @@ struct sysentvec elf64_freebsd_sysvec_v2 = {
 	.sv_shared_page_len = PAGE_SIZE,
 	.sv_schedtail	= NULL,
 	.sv_thread_detach = NULL,
+	.sv_trap	= NULL,
+	.sv_hwcap	= &cpu_features,
+	.sv_hwcap2	= &cpu_features2,
 };
 INIT_SYSENTVEC(elf64_sysvec_v2, &elf64_freebsd_sysvec_v2);
 

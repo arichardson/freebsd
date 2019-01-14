@@ -1379,6 +1379,9 @@ t4_intr_all(void *arg)
 
 	MPASS(sc->intr_count == 1);
 
+	if (sc->intr_type == INTR_INTX)
+		t4_write_reg(sc, MYPF_REG(A_PCIE_PF_CLI), 0);
+
 	t4_intr_err(arg);
 	t4_intr_evt(fwq);
 }
@@ -1392,7 +1395,6 @@ t4_intr_err(void *arg)
 {
 	struct adapter *sc = arg;
 
-	t4_write_reg(sc, MYPF_REG(A_PCIE_PF_CLI), 0);
 	t4_slow_intr_handler(sc);
 }
 
@@ -3435,6 +3437,8 @@ alloc_rxq(struct vi_info *vi, struct sge_rxq *rxq, int intr_idx, int idx,
 	if (vi->ifp->if_capenable & IFCAP_LRO)
 		rxq->iq.flags |= IQ_LRO_ENABLED;
 #endif
+	if (vi->ifp->if_capenable & IFCAP_HWRXTSTMP)
+		rxq->iq.flags |= IQ_RX_TIMESTAMP;
 	rxq->ifp = vi->ifp;
 
 	children = SYSCTL_CHILDREN(oid);

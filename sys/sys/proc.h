@@ -175,6 +175,7 @@ struct filecaps;
 struct filemon;
 struct kaioinfo;
 struct kaudit_record;
+struct kcov_info;
 struct kdtrace_proc;
 struct kdtrace_thread;
 struct mqueue_notifier;
@@ -300,6 +301,7 @@ struct thread {
 	sbintime_t	td_sleeptimo;	/* (t) Sleep timeout. */
 	int		td_rtcgen;	/* (s) rtc_generation of abs. sleep */
 	size_t		td_vslock_sz;	/* (k) amount of vslock-ed space */
+	struct kcov_info *td_kcov_info;	/* (*) Kernel code coverage data */
 #define	td_endzero td_sigmask
 
 /* Copied during fork1() or create_thread(). */
@@ -1026,6 +1028,7 @@ int	enterthispgrp(struct proc *p, struct pgrp *pgrp);
 void	faultin(struct proc *p);
 void	fixjobc(struct proc *p, struct pgrp *pgrp, int entering);
 int	fork1(struct thread *, struct fork_req *);
+void	fork_rfppwait(struct thread *);
 void	fork_exit(void (*)(void *, struct trapframe *), void *,
 	    struct trapframe *);
 void	fork_return(struct thread *, struct trapframe *);
