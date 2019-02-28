@@ -1052,15 +1052,11 @@ nvme_ctrlr_passthrough_cmd(struct nvme_controller *ctrlr,
 			 *  this passthrough command.
 			 */
 			PHOLD(curproc);
-			buf = getpbuf(NULL);
+			buf = uma_zalloc(pbuf_zone, M_WAITOK);
 			buf->b_data = pt->buf;
 			buf->b_bufsize = pt->len;
 			buf->b_iocmd = pt->is_read ? BIO_READ : BIO_WRITE;
-#ifdef NVME_UNMAPPED_BIO_SUPPORT
 			if (vmapbuf(buf, 1) < 0) {
-#else
-			if (vmapbuf(buf) < 0) {
-#endif
 				ret = EFAULT;
 				goto err;
 			}
@@ -1101,7 +1097,7 @@ nvme_ctrlr_passthrough_cmd(struct nvme_controller *ctrlr,
 
 err:
 	if (buf != NULL) {
-		relpbuf(buf, NULL);
+		uma_zfree(pbuf_zone, buf);
 		PRELE(curproc);
 	}
 

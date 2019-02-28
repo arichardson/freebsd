@@ -83,7 +83,6 @@ __DEFAULT_YES_OPTIONS = \
     CPP \
     CROSS_COMPILER \
     CRYPT \
-    CTM \
     CUSE \
     CXX \
     CXGBETOOL \
@@ -195,6 +194,7 @@ __DEFAULT_YES_OPTIONS = \
     ZONEINFO
 
 __DEFAULT_NO_OPTIONS = \
+    BEARSSL \
     BSD_GREP \
     CLANG_EXTRAS \
     DTRACE_TESTS \
@@ -220,6 +220,8 @@ __DEFAULT_NO_OPTIONS = \
 __DEFAULT_DEPENDENT_OPTIONS= \
 	CLANG_FULL/CLANG \
 	LLVM_TARGET_ALL/CLANG \
+	LOADER_VERIEXEC/BEARSSL \
+	VERIEXEC/BEARSSL \
 
 # MK_*_SUPPORT options which default to "yes" unless their corresponding
 # MK_* variable is set to "no".
@@ -321,11 +323,9 @@ __DEFAULT_YES_OPTIONS+=LLVM_LIBUNWIND
 .else
 __DEFAULT_NO_OPTIONS+=LLVM_LIBUNWIND
 .endif
-.if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "armv7"
+.if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "armv7" || \
+    ${__T} == "i386"
 __DEFAULT_YES_OPTIONS+=LLD_BOOTSTRAP LLD_IS_LD
-.elif ${__T} == "i386"
-__DEFAULT_YES_OPTIONS+=LLD_BOOTSTRAP
-__DEFAULT_NO_OPTIONS+=LLD_IS_LD
 .else
 __DEFAULT_NO_OPTIONS+=LLD_BOOTSTRAP LLD_IS_LD
 .endif
