@@ -16,16 +16,16 @@ X86INCSDIR=	${INCLUDEDIR}/x86
 BOOTSTRAPPING?=	0
 
 
+HOST_INCLUDE_ROOT=/usr/include
 .if ${.MAKE.OS} == "Darwin"
-_XCODE_ROOT!=xcode-select -p
-# since macOS 10.14 C headers are no longer installed in /usr but only
-# provided via the SDK
-HOST_INCLUDE_ROOT=${_XCODE_ROOT}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include
+if !exusts(${HOST_INCLUDE_ROOT}/stdio.h)
+# since macOS 10.14 C headers are no longer installed in /usr by default and are
+# only provided via the SDK:
+MACOS_SDK_ROOT!=xcrun --show-sdk-path
+HOST_INCLUDE_ROOT=${MACOS_SDK_ROOT}/usr/include
 .if !exists(${HOST_INCLUDE_ROOT}/stdio.h)
 .error "You must install the macOS SDK (try xcode-select --install)"
 .endif
-.else
-HOST_INCLUDE_ROOT=/usr/include
 .endif
 
 _WITH_PWCACHEDB!= grep -c pwcache_groupdb ${HOST_INCLUDE_ROOT}/grp.h || true
