@@ -136,16 +136,6 @@ WriteVerticalLine(VGLBitmap *dst, int x, int y, int width, byte *line)
     }
     break;
   case VIDBUF8S:
-    pos = dst->VXsize * y + x;
-    while (width > 0) {
-      offset = VGLSetSegment(pos);
-      i = min(VGLAdpInfo.va_window_size - offset, width);
-      bcopy(line, dst->Bitmap + offset, i);
-      line += i;
-      pos += i;
-      width -= i;
-    }
-    break;
   case VIDBUF16S:
   case VIDBUF24S:
   case VIDBUF32S:
@@ -160,11 +150,8 @@ WriteVerticalLine(VGLBitmap *dst, int x, int y, int width, byte *line)
       width -= i;
     }
     break;
-  case VIDBUF8:
   case MEMBUF:
-    address = dst->Bitmap + dst->VXsize * y + x;
-    bcopy(line, address, width);
-    break;
+  case VIDBUF8:
   case VIDBUF16:
   case VIDBUF24:
   case VIDBUF32:
@@ -251,16 +238,6 @@ read_planar:
     }
     break;
   case VIDBUF8S:
-    pos = src->VXsize * y + x;
-    while (width > 0) {
-      offset = VGLSetSegment(pos);
-      i = min(VGLAdpInfo.va_window_size - offset, width);
-      bcopy(src->Bitmap + offset, line, i);
-      line += i;
-      pos += i;
-      width -= i;
-    }
-    break;
   case VIDBUF16S:
   case VIDBUF24S:
   case VIDBUF32S:
@@ -275,11 +252,8 @@ read_planar:
       width -= i;
     }
     break;
-  case VIDBUF8:
   case MEMBUF:
-    address = src->Bitmap + src->VXsize * y + x;
-    bcopy(address, line, width);
-    break;
+  case VIDBUF8:
   case VIDBUF16:
   case VIDBUF24:
   case VIDBUF32:
@@ -325,21 +299,21 @@ __VGLBitmapCopy(VGLBitmap *src, int srcx, int srcy,
   if (src->Type == MEMBUF) {
     for (srcline=srcy, dstline=dsty; srcline<srcy+hight; srcline++, dstline++) {
       WriteVerticalLine(dst, dstx, dstline, width, 
-	(src->Bitmap+(srcline*src->VXsize)+srcx));
+        src->Bitmap+(srcline*src->VXsize+srcx)*dst->PixelBytes);
     }
   }
   else if (dst->Type == MEMBUF) {
     for (srcline=srcy, dstline=dsty; srcline<srcy+hight; srcline++, dstline++) {
       ReadVerticalLine(src, srcx, srcline, width,
-	 (dst->Bitmap+(dstline*dst->VXsize)+dstx));
+        dst->Bitmap+(dstline*dst->VXsize+dstx)*src->PixelBytes);
     }
   }
   else {
     byte buffer[2048];	/* XXX */
     byte *p;
 
-    if (width > sizeof(buffer)) {
-      p = malloc(width);
+    if (width * src->PixelBytes > sizeof(buffer)) {
+      p = malloc(width * src->PixelBytes);
       if (p == NULL)
 	return 1;
     } else {
@@ -349,7 +323,7 @@ __VGLBitmapCopy(VGLBitmap *src, int srcx, int srcy,
       ReadVerticalLine(src, srcx, srcline, width, p);
       WriteVerticalLine(dst, dstx, dstline, width, p);
     }
-    if (width > sizeof(buffer))
+    if (width * src->PixelBytes > sizeof(buffer))
       free(p);
   }
   return 0;
@@ -361,9 +335,13 @@ VGLBitmapCopy(VGLBitmap *src, int srcx, int srcy,
 {
   int error;
 
-  VGLMouseFreeze(dstx, dsty, width, hight, 0);
+  if (src->Type != MEMBUF)
+    VGLMouseFreeze(srcx, srcy, width, hight, 0);
+  if (dst->Type != MEMBUF)
+    VGLMouseFreeze(dstx, dsty, width, hight, 0);
   error = __VGLBitmapCopy(src, srcx, srcy, dst, dstx, dsty, width, hight);
-  VGLMouseUnFreeze();
+  if (src->Type != MEMBUF || dst->Type != MEMBUF)
+    VGLMouseUnFreeze();
   return error;
 }
 
@@ -387,6 +365,7 @@ VGLBitmap
   object->Xorigin = 0;
   object->Yorigin = 0;
   object->Bitmap = bits;
+  object->PixelBytes = VGLDisplay->PixelBytes;
   return object;
 }
 
@@ -401,7 +380,7 @@ VGLBitmapDestroy(VGLBitmap *object)
 int
 VGLBitmapAllocateBits(VGLBitmap *object)
 {
-  object->Bitmap = (byte *)malloc(object->VXsize*object->VYsize);
+  object->Bitmap = malloc(object->VXsize*object->VYsize*object->PixelBytes);
   if (object->Bitmap == NULL)
     return -1;
   return 0;

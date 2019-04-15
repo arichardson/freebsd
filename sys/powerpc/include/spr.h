@@ -242,6 +242,8 @@
 #define	  LPCR_PECE_ME            (1ULL << 12) /* Machine Check and Hypervisor */
                                                /* Maintenance exceptions */
 #define	SPR_LPID		0x13f	/* Logical Partitioning Control */
+#define	SPR_HMER		0x150	/* Hypervisor Maintenance Exception Register */
+#define	SPR_HMEER		0x151	/* Hypervisor Maintenance Exception Enable Register */
 
 #define	SPR_PTCR		0x1d0	/* Partition Table Control Register */
 #define	SPR_SPEFSCR		0x200	/* ..8 Signal Processing Engine FSCR. */
@@ -410,6 +412,19 @@
 #define	SPR_MD_RAM0		0x339	/* ..8 IMMU RAM entry read reg 0 */
 #define	SPR_MD_RAM1		0x33a	/* ..8 IMMU RAM entry read reg 1 */
 #define	SPR_PSSCR		0x357	/* Processor Stop Status and Control Register (ISA 3.0) */
+#define	  PSSCR_PLS_S		  60
+#define	  PSSCR_PLS_M		  (0xf << PSSCR_PLS_S)
+#define	  PSSCR_SD		  (1 << 22)
+#define	  PSSCR_ESL		  (1 << 21)
+#define	  PSSCR_EC		  (1 << 20)
+#define	  PSSCR_PSLL_S		  16
+#define	  PSSCR_PSLL_M		  (0xf << PSSCR_PSLL_S)
+#define	  PSSCR_TR_S		  8
+#define	  PSSCR_TR_M		  (0x3 << PSSCR_TR_S)
+#define	  PSSCR_MTL_S		  4
+#define	  PSSCR_MTL_M		  (0xf << PSSCR_MTL_S)
+#define	  PSSCR_RL_S		  0
+#define	  PSSCR_RL_M		  (0xf << PSSCR_RL_S)
 #define	SPR_PMCR                0x374   /* Processor Management Control Register */
 #define	SPR_UMMCR2		0x3a0	/* .6. User Monitor Mode Control Register 2 */
 #define	SPR_UMMCR0		0x3a8	/* .6. User Monitor Mode Control Register 0 */

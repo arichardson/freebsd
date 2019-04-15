@@ -217,12 +217,12 @@ set_currdev_pdinfo(pdinfo_t *dp)
 		currdev.dd.d_dev = dp->pd_devsw;
 		if (dp->pd_parent == NULL) {
 			currdev.dd.d_unit = dp->pd_unit;
-			currdev.d_slice = -1;
-			currdev.d_partition = -1;
+			currdev.d_slice = D_SLICENONE;
+			currdev.d_partition = D_PARTNONE;
 		} else {
 			currdev.dd.d_unit = dp->pd_parent->pd_unit;
 			currdev.d_slice = dp->pd_unit;
-			currdev.d_partition = 255;	/* Assumes GPT */
+			currdev.d_partition = D_PARTISGPT; /* XXX Assumes GPT */
 		}
 		set_currdev_devdesc((struct devdesc *)&currdev);
 	} else {
@@ -964,6 +964,17 @@ main(int argc, CHAR16 *argv[])
 	BS->SetWatchdogTimer(0, 0, 0, NULL);
 
 	/*
+	 * Initialize the trusted/forbidden certificates from UEFI.
+	 * They will be later used to verify the manifest(s),
+	 * which should contain hashes of verified files.
+	 * This needs to be initialized before any configuration files
+	 * are loaded.
+	 */
+#ifdef EFI_SECUREBOOT
+	ve_efi_init();
+#endif
+
+	/*
 	 * Try and find a good currdev based on the image that was booted.
 	 * It might be desirable here to have a short pause to allow falling
 	 * through to the boot loader instead of returning instantly to follow
@@ -1206,7 +1217,7 @@ command_lsefi(int argc __unused, char *argv[] __unused)
 	EFI_HANDLE handle;
 	UINTN bufsz = 0, i, j;
 	EFI_STATUS status;
-	int ret;
+	int ret = 0;
 
 	status = BS->LocateHandle(AllHandles, NULL, NULL, &bufsz, buffer);
 	if (status != EFI_BUFFER_TOO_SMALL) {

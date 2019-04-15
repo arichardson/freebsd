@@ -108,6 +108,7 @@ __DEFAULT_YES_OPTIONS = \
     GDB \
     GNU_DIFF \
     GNU_GREP \
+    GOOGLETEST \
     GPIO \
     HAST \
     HTML \
@@ -181,7 +182,6 @@ __DEFAULT_YES_OPTIONS = \
     TELNET \
     TEXTPROC \
     TFTP \
-    TIMED \
     UNBOUND \
     USB \
     UTMPX \
@@ -205,6 +205,7 @@ __DEFAULT_NO_OPTIONS = \
     LOADER_FIREWIRE \
     LOADER_FORCE_LE \
     LOADER_VERBOSE \
+    LOADER_VERIEXEC_PASS_MANIFEST \
     NAND \
     OFED_EXTRA \
     OPENLDAP \
@@ -221,6 +222,7 @@ __DEFAULT_DEPENDENT_OPTIONS= \
 	CLANG_FULL/CLANG \
 	LLVM_TARGET_ALL/CLANG \
 	LOADER_VERIEXEC/BEARSSL \
+	LOADER_EFI_SECUREBOOT/LOADER_VERIEXEC \
 	VERIEXEC/BEARSSL \
 
 # MK_*_SUPPORT options which default to "yes" unless their corresponding
@@ -288,6 +290,7 @@ __DEFAULT_DEPENDENT_OPTIONS+=	LLVM_TARGET_${__llt:${__LLVM_TARGET_FILT}:tu}/LLVM
 .endfor
 
 __DEFAULT_NO_OPTIONS+=LLVM_TARGET_BPF
+__DEFAULT_NO_OPTIONS+=LLVM_TARGET_RISCV
 
 .include <bsd.compiler.mk>
 # If the compiler is not C++11 capable, disable Clang and use GCC instead.
@@ -421,6 +424,12 @@ BROKEN_OPTIONS+=RESCUE
 BROKEN_OPTIONS+=BSD_CRTBEGIN
 .endif
 
+.if ${COMPILER_FEATURES:Mc++11} && (${__T} == "amd64" || ${__T} == "i386")
+__DEFAULT_YES_OPTIONS+=OPENMP
+.else
+__DEFAULT_NO_OPTIONS+=OPENMP
+.endif
+
 .include <bsd.mkopt.mk>
 
 .if ${.MAKE.OS} != "FreeBSD"
@@ -461,11 +470,8 @@ MK_${var}:=	no
 # Order is somewhat important.
 #
 .if !${COMPILER_FEATURES:Mc++11}
+MK_GOOGLETEST:=	no
 MK_LLVM_LIBUNWIND:=	no
-.endif
-
-.if ${MK_BINUTILS} == "no"
-MK_GDB:=	no
 .endif
 
 .if ${MK_CAPSICUM} == "no"
@@ -545,6 +551,10 @@ MK_FREEBSD_UPDATE:=	no
 MK_DTRACE_TESTS:= no
 .endif
 
+.if ${MK_TESTS_SUPPORT} == "no"
+MK_GOOGLETEST:=	no
+.endif
+
 .if ${MK_ZONEINFO} == "no"
 MK_ZONEINFO_LEAPSECONDS_SUPPORT:= no
 MK_ZONEINFO_OLD_TIMEZONES_SUPPORT:= no
@@ -572,6 +582,10 @@ MK_LLDB:=	no
 MK_CLANG_EXTRAS:= no
 MK_CLANG_FULL:= no
 MK_LLVM_COV:= no
+.endif
+
+.if ${MK_LOADER_VERIEXEC} == "no"
+MK_LOADER_VERIEXEC_PASS_MANIFEST := no
 .endif
 
 #

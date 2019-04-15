@@ -36,8 +36,6 @@ __FBSDID("$FreeBSD$");
 #include <verify_file.h>
 #include <manifests.h>
 
-#define VE_NOT_CHECKED -42
-
 #ifdef UNIT_TEST
 # include <err.h>
 # define panic warn
@@ -112,7 +110,7 @@ struct verify_status {
 	struct verify_status *vs_next;
 };
 
-static int
+int
 is_verified(struct stat *stp)
 {
 	struct verify_status *vsp;
@@ -126,7 +124,7 @@ is_verified(struct stat *stp)
 }
 
 /* most recent first, since most likely to see repeated calls. */
-static void
+void
 add_verify_status(struct stat *stp, int status)
 {
 	struct verify_status *vsp;
@@ -346,7 +344,7 @@ verify_file(int fd, const char *filename, off_t off, int severity)
 			if (verbose || severity > VE_WANT) {
 #if defined(VE_DEBUG_LEVEL) && VE_DEBUG_LEVEL > 0
 				printf("Verified %s %llu,%llu\n", filename,
-				    st.st_dev, st.st_ino);
+				    (long long)st.st_dev, (long long)st.st_ino);
 #else
 				printf("Verified %s\n", filename);
 #endif
@@ -368,7 +366,7 @@ verify_file(int fd, const char *filename, off_t off, int severity)
 			return (rc);
 		}
 
-		if (severity || verbose)
+		if (severity || verbose || rc == VE_FINGERPRINT_WRONG)
 			printf("Unverified: %s\n", ve_error_get());
 		if (rc == VE_FINGERPRINT_UNKNOWN && severity < VE_MUST)
 			rc = VE_UNVERIFIED_OK;

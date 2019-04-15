@@ -613,7 +613,8 @@ XfNamespaceLocateBegin (
         (Op->Asl.ParseOpcode != PARSEOP_NAMESTRING) &&
         (Op->Asl.ParseOpcode != PARSEOP_NAMESEG)    &&
         (Op->Asl.ParseOpcode != PARSEOP_METHODCALL) &&
-        (Op->Asl.ParseOpcode != PARSEOP_EXTERNAL))
+        (Op->Asl.ParseOpcode != PARSEOP_EXTERNAL)   &&
+        (OpInfo->Type != AML_TYPE_NAMED_FIELD))
     {
         return_ACPI_STATUS (AE_OK);
     }
@@ -637,7 +638,8 @@ XfNamespaceLocateBegin (
     if ((Op->Asl.ParseOpcode == PARSEOP_NAMESTRING) ||
         (Op->Asl.ParseOpcode == PARSEOP_NAMESEG)    ||
         (Op->Asl.ParseOpcode == PARSEOP_METHODCALL) ||
-        (Op->Asl.ParseOpcode == PARSEOP_EXTERNAL))
+        (Op->Asl.ParseOpcode == PARSEOP_EXTERNAL)   ||
+        (OpInfo->Type == AML_TYPE_NAMED_FIELD))
     {
         /*
          * These are name references, do not push the scope stack
@@ -674,6 +676,10 @@ XfNamespaceLocateBegin (
 
         Path = NextOp->Asl.Value.String;
     }
+    else if (OpInfo->Type == AML_TYPE_NAMED_FIELD)
+    {
+        Path = Op->Asl.Child->Asl.Value.String;
+    }
     else
     {
         Path = Op->Asl.Value.String;
@@ -702,7 +708,7 @@ XfNamespaceLocateBegin (
              * We didn't find the name reference by path -- we can qualify this
              * a little better before we print an error message
              */
-            if (strlen (Path) == ACPI_NAME_SIZE)
+            if (strlen (Path) == ACPI_NAMESEG_SIZE)
             {
                 /* A simple, one-segment ACPI name */
 
@@ -764,7 +770,7 @@ XfNamespaceLocateBegin (
                      * doesn't exist or just can't be reached. However, we
                      * can differentiate between a NameSeg vs. NamePath.
                      */
-                    if (strlen (Op->Asl.ExternalName) == ACPI_NAME_SIZE)
+                    if (strlen (Op->Asl.ExternalName) == ACPI_NAMESEG_SIZE)
                     {
                         AslError (ASL_ERROR, ASL_MSG_NOT_FOUND, Op,
                             Op->Asl.ExternalName);
@@ -1177,6 +1183,24 @@ XfNamespaceLocateBegin (
                     Op->Asl.Child->Asl.ExtraValue);
             }
         }
+    }
+
+    /*
+     * 5) Check for external resolution
+     * By this point, everything should be loaded in the namespace. If a
+     * namespace lookup results in a namespace node that is an external, it
+     * means that this named object was not defined in the input ASL. This
+     * causes issues because there are plenty of incidents where developers
+     * use the external keyword to suppress compiler errors about undefined
+     * objects. Note: this only applies when compiling multiple definition
+     * blocks.
+     */
+    if (AslGbl_ParseTreeRoot->Asl.Child && AslGbl_ParseTreeRoot->Asl.Child->Asl.Next &&
+        (Op->Asl.ParseOpcode != PARSEOP_EXTERNAL &&
+        Op->Asl.Parent->Asl.ParseOpcode != PARSEOP_EXTERNAL) &&
+        (Node->Flags & ANOBJ_IS_EXTERNAL))
+    {
+        AslError (ASL_ERROR, ASL_MSG_UNDEFINED_EXTERNAL, Op, NULL);
     }
 
     /* 5) Check for a connection object */

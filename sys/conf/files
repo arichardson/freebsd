@@ -86,9 +86,9 @@ cam/cam_xpt.c			optional scbus
 cam/ata/ata_all.c		optional scbus
 cam/ata/ata_xpt.c		optional scbus
 cam/ata/ata_pmp.c		optional scbus
-cam/nvme/nvme_all.c		optional scbus nvme
-cam/nvme/nvme_da.c		optional scbus nvme da
-cam/nvme/nvme_xpt.c		optional scbus nvme
+cam/nvme/nvme_all.c		optional scbus
+cam/nvme/nvme_da.c		optional nda | da
+cam/nvme/nvme_xpt.c		optional scbus
 cam/scsi/scsi_xpt.c		optional scbus
 cam/scsi/scsi_all.c		optional scbus
 cam/scsi/scsi_cd.c		optional cd
@@ -1466,7 +1466,7 @@ t4fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t4fw.fwo"
 t4fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t4fw-1.22.0.3.bin.uu"	\
+	dependency	"$S/dev/cxgbe/firmware/t4fw-1.23.0.0.bin.uu"	\
 	compile-with	"${NORMAL_FW}"					\
 	no-obj no-implicit-rule						\
 	clean		"t4fw.fw"
@@ -1500,7 +1500,7 @@ t5fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t5fw.fwo"
 t5fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t5fw-1.22.0.3.bin.uu"	\
+	dependency	"$S/dev/cxgbe/firmware/t5fw-1.23.0.0.bin.uu"	\
 	compile-with	"${NORMAL_FW}"					\
 	no-obj no-implicit-rule						\
 	clean		"t5fw.fw"
@@ -1534,7 +1534,7 @@ t6fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t6fw.fwo"
 t6fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t6fw-1.22.0.3.bin.uu"	\
+	dependency	"$S/dev/cxgbe/firmware/t6fw-1.23.0.0.bin.uu"	\
 	compile-with	"${NORMAL_FW}"					\
 	no-obj no-implicit-rule						\
 	clean		"t6fw.fw"
@@ -3494,15 +3494,15 @@ fs/fdescfs/fdesc_vfsops.c	optional fdescfs
 fs/fdescfs/fdesc_vnops.c	optional fdescfs
 fs/fifofs/fifo_vnops.c		standard
 fs/cuse/cuse.c			optional cuse
-fs/fuse/fuse_device.c		optional fuse
-fs/fuse/fuse_file.c		optional fuse
-fs/fuse/fuse_internal.c		optional fuse
-fs/fuse/fuse_io.c		optional fuse
-fs/fuse/fuse_ipc.c		optional fuse
-fs/fuse/fuse_main.c		optional fuse
-fs/fuse/fuse_node.c		optional fuse
-fs/fuse/fuse_vfsops.c		optional fuse
-fs/fuse/fuse_vnops.c		optional fuse
+fs/fuse/fuse_device.c		optional fusefs
+fs/fuse/fuse_file.c		optional fusefs
+fs/fuse/fuse_internal.c		optional fusefs
+fs/fuse/fuse_io.c		optional fusefs
+fs/fuse/fuse_ipc.c		optional fusefs
+fs/fuse/fuse_main.c		optional fusefs
+fs/fuse/fuse_node.c		optional fusefs
+fs/fuse/fuse_vfsops.c		optional fusefs
+fs/fuse/fuse_vnops.c		optional fusefs
 fs/msdosfs/msdosfs_conv.c	optional msdosfs
 fs/msdosfs/msdosfs_denode.c	optional msdosfs
 fs/msdosfs/msdosfs_fat.c	optional msdosfs
@@ -3628,6 +3628,7 @@ geom/journal/g_journal.c	optional geom_journal
 geom/journal/g_journal_ufs.c	optional geom_journal
 geom/label/g_label.c		optional geom_label | geom_label_gpt
 geom/label/g_label_ext2fs.c	optional geom_label
+geom/label/g_label_flashmap.c	optional geom_label
 geom/label/g_label_iso9660.c	optional geom_label
 geom/label/g_label_msdosfs.c	optional geom_label
 geom/label/g_label_ntfs.c	optional geom_label
@@ -3722,7 +3723,8 @@ fs/cd9660/cd9660_util.c	optional cd9660
 fs/cd9660/cd9660_vfsops.c	optional cd9660
 fs/cd9660/cd9660_vnops.c	optional cd9660
 fs/cd9660/cd9660_iconv.c	optional cd9660_iconv
-gnu/gcov/gcc_4_7.c		optional gcov
+gnu/gcov/gcc_4_7.c		optional gcov  \
+	warning "kernel contains GPL licensed gcov support"
 gnu/gcov/gcov_fs.c		optional gcov  lindebugfs \
 	compile-with "${LINUXKPI_C}"
 gnu/gcov/gcov_subr.c		optional gcov
@@ -4392,10 +4394,14 @@ netpfil/ipfw/ip_fw_iface.c	optional inet ipfirewall
 netpfil/ipfw/ip_fw_nat.c	optional inet ipfirewall_nat
 netpfil/ipfw/nat64/ip_fw_nat64.c	optional inet inet6 ipfirewall \
 	ipfirewall_nat64
+netpfil/ipfw/nat64/nat64clat.c	optional inet inet6 ipfirewall \
+	ipfirewall_nat64
+netpfil/ipfw/nat64/nat64clat_control.c	optional inet inet6 ipfirewall \
+	ipfirewall_nat64
 netpfil/ipfw/nat64/nat64lsn.c	optional inet inet6 ipfirewall \
-	ipfirewall_nat64
+	ipfirewall_nat64 compile-with "${NORMAL_C} -I$S/contrib/ck/include"
 netpfil/ipfw/nat64/nat64lsn_control.c	optional inet inet6 ipfirewall \
-	ipfirewall_nat64
+	ipfirewall_nat64 compile-with "${NORMAL_C} -I$S/contrib/ck/include"
 netpfil/ipfw/nat64/nat64stl.c	optional inet inet6 ipfirewall \
 	ipfirewall_nat64
 netpfil/ipfw/nat64/nat64stl_control.c	optional inet inet6 ipfirewall \
@@ -4884,14 +4890,15 @@ security/mac_portacl/mac_portacl.c optional mac_portacl
 security/mac_seeotheruids/mac_seeotheruids.c optional mac_seeotheruids
 security/mac_stub/mac_stub.c	optional mac_stub
 security/mac_test/mac_test.c	optional mac_test
-security/mac_veriexec/mac_veriexec.c		optional mac_veriexec
-security/mac_veriexec/veriexec_fingerprint.c	optional mac_veriexec
-security/mac_veriexec/veriexec_metadata.c	optional mac_veriexec
-security/mac_veriexec/mac_veriexec_rmd160.c	optional mac_veriexec_rmd160
-security/mac_veriexec/mac_veriexec_sha1.c	optional mac_veriexec_sha1
-security/mac_veriexec/mac_veriexec_sha256.c	optional mac_veriexec_sha256
-security/mac_veriexec/mac_veriexec_sha384.c	optional mac_veriexec_sha384
-security/mac_veriexec/mac_veriexec_sha512.c	optional mac_veriexec_sha512
+security/mac_veriexec/mac_veriexec.c			optional mac_veriexec
+security/mac_veriexec/veriexec_fingerprint.c		optional mac_veriexec
+security/mac_veriexec/veriexec_metadata.c		optional mac_veriexec
+security/mac_veriexec_parser/mac_veriexec_parser.c	optional mac_veriexec mac_veriexec_parser
+security/mac_veriexec/mac_veriexec_rmd160.c		optional mac_veriexec_rmd160
+security/mac_veriexec/mac_veriexec_sha1.c		optional mac_veriexec_sha1
+security/mac_veriexec/mac_veriexec_sha256.c		optional mac_veriexec_sha256
+security/mac_veriexec/mac_veriexec_sha384.c		optional mac_veriexec_sha384
+security/mac_veriexec/mac_veriexec_sha512.c		optional mac_veriexec_sha512
 teken/teken.c			optional sc !SC_NO_TERM_TEKEN | vt
 ufs/ffs/ffs_alloc.c		optional ffs
 ufs/ffs/ffs_balloc.c		optional ffs

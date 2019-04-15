@@ -378,7 +378,6 @@ checkinode(ino_t inumber, struct inodesc *idesc, int rebuildcg)
 		idesc->id_type = SNAP;
 	else
 		idesc->id_type = ADDR;
-	idesc->id_lballoc = -1;
 	(void)ckinode(dp, idesc);
 	if (sblock.fs_magic == FS_UFS2_MAGIC && dp->dp2.di_extsize > 0) {
 		idesc->id_type = ADDR;
@@ -439,7 +438,7 @@ checkinode(ino_t inumber, struct inodesc *idesc, int rebuildcg)
 	 * at its end.
 	 */
 	if (DIP(dp, di_size) > UFS_NDADDR * sblock.fs_bsize &&
-	    idesc->id_lballoc != lblkno(&sblock, DIP(dp, di_size) - 1)) {
+	    idesc->id_lballoc < lblkno(&sblock, DIP(dp, di_size) - 1)) {
 		fixsize = lblktosize(&sblock, idesc->id_lballoc + 1);
 		pwarn("INODE %lu: FILE SIZE %ju BEYOND END OF ALLOCATED FILE, "
 		      "SIZE SHOULD BE %ju", (u_long)inumber,
@@ -565,7 +564,7 @@ pass1check(struct inodesc *idesc)
 		 */
 		idesc->id_entryno++;
 	}
-	if (idesc->id_lballoc == -1 || idesc->id_lballoc < idesc->id_lbn)
+	if (idesc->id_level == 0 && idesc->id_lballoc < idesc->id_lbn)
 		idesc->id_lballoc = idesc->id_lbn;
 	return (res);
 }

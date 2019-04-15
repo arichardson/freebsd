@@ -150,7 +150,7 @@ options 	BOOTHOWTO=RB_MULTIPLE
 #
 # Default boot tag; may use 'kern.boot_tag' loader tunable to override.  The
 # current boot's tag is also exposed via the 'kern.boot_tag' sysctl.
-options 	BOOT_TAG=\"---<<BOOT>>---\"
+options 	BOOT_TAG=\"\"
 # Maximum boot tag size the kernel's static buffer should accomodate.  Maximum
 # size for both BOOT_TAG and the assocated tunable.
 options 	BOOT_TAG_SZ=32
@@ -1071,7 +1071,7 @@ options 	NFSCL			#Network File System client
 options 	AUTOFS			#Automounter filesystem
 options 	CD9660			#ISO 9660 filesystem
 options 	FDESCFS			#File descriptor filesystem
-options 	FUSE			#FUSE support module
+options 	FUSEFS			#FUSEFS support module
 options 	MSDOSFS			#MS DOS File System (FAT, FAT32)
 options 	NFSLOCKD		#Network Lock Manager
 options 	NFSD			#Network Filesystem Server
@@ -1565,6 +1565,8 @@ options		TERMINAL_KERN_ATTR=(FG_LIGHTRED|BG_BLACK)
 #      Qlogic ISP 2300 and ISP 2312 2Gb Fibre Channel host adapters.
 #      Qlogic ISP 2322 and ISP 6322 2Gb Fibre Channel host adapters.
 # ispfw: Firmware module for Qlogic host adapters
+# mpr: LSI-Logic MPT/Fusion Gen 3
+# mps: LSI-Logic MPT/Fusion Gen 2
 # mpt: LSI-Logic MPT/Fusion 53c1020 or 53c1030 Ultra4
 #      or FC9x9 Fibre Channel host adapters.
 # sym: Symbios/Logic 53C8XX family of PCI-SCSI I/O processors:
@@ -1594,7 +1596,9 @@ hint.isp.0.topology="nport-only"
 hint.isp.0.portwnn="w50000000aaaa0000"
 hint.isp.0.nodewnn="w50000000aaaa0001"
 device		ispfw
-device		mpt
+device		mpr			# LSI-Logic MPT-Fusion 3
+device		mps			# LSI-Logic MPT-Fusion 2
+device		mpt			# LSI-Logic MPT-Fusion
 device		sym
 device		trm
 
@@ -1727,7 +1731,7 @@ device		ata
 
 # Modular ATA
 #device		atacore		# Core ATA functionality
-#device		atacard		# CARDBUS support
+#device		atapccard	# CARDBUS support
 #device		ataisa		# ISA bus support
 #device		atapci		# PCI bus support; only generic chipset support
 
