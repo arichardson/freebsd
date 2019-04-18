@@ -162,7 +162,8 @@ gen_table "cmsgtypesocket"  "SCM_[A-Z_]+[[:space:]]+0x[0-9]+"              "sys/
 if [ -e "${include_dir}/x86/sysarch.h" ]; then
 	gen_table "sysarchnum" "(AMD64|I386)_[A-Z86_]+[[:space:]]+[0-9]+"  "x86/sysarch.h"
 else
-	gen_table "sysarchnum" "[A-Z_]+[[:space:]]+[0-9]+"                 "machine/sysarch.h"
+	# There might not be any sysarch constants for this architecture -> we need || true
+	gen_table "sysarchnum" "[A-Z_]+[[:space:]]+[0-9]+"                 "machine/sysarch.h" || true
 fi
 
 # Generate a .depend file for our output file
