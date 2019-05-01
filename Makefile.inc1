@@ -759,8 +759,16 @@ XMAKE=		${BMAKE} \
 		TARGET=${TARGET} TARGET_ARCH=${TARGET_ARCH} \
 		MK_GDB=no MK_TESTS=no
 
+# after the bootstrap-tools phase we can use the newly built xinstall instead of
+# the much slower install.sh which spawns multiple processes.
+.if ${BUILD_WITH_STRICT_TMPPATH} != 0 && 0
+BOOTSTRAP_INSTALL_CMD=${WORLDTMP}/legacy/usr/bin/install
+.else
+BOOTSTRAP_INSTALL_CMD=sh ${.CURDIR}/tools/install.sh
+.endif
+
 # kernel-tools stage
-KTMAKEENV=	INSTALL="sh ${.CURDIR}/tools/install.sh" \
+KTMAKEENV=	INSTALL="${BOOTSTRAP_INSTALL_CMD}" \
 		PATH=${BPATH}:${PATH} \
 		WORLDTMP=${WORLDTMP}
 KTMAKE=		\
@@ -778,7 +786,7 @@ KTMAKE=		\
 
 # world stage
 WMAKEENV=	${CROSSENV} \
-		INSTALL="sh ${.CURDIR}/tools/install.sh" \
+		INSTALL="${BOOTSTRAP_INSTALL_CMD}" \
 		PATH=${TMPPATH} \
 		SYSROOT=${WORLDTMP}
 
