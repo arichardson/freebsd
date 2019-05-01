@@ -78,9 +78,7 @@ INCS+=		capsicum_helpers.h
 INCS+=		libcasper.h
 .endif
 
-.if !exists(/usr/include/casper/cap_fileargs.h)
 CASPERINC+=	${SRCTOP}/lib/libcasper/services/cap_fileargs/cap_fileargs.h
-.endif
 
 # rpcgen should build against the source tree rpc/types.h and not the host.
 # This is especially important on non-FreeBSD systems where the types may
