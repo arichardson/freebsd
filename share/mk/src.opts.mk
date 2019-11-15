@@ -427,6 +427,18 @@ __DEFAULT_NO_OPTIONS+=OPENMP
 
 .include <bsd.mkopt.mk>
 
+.if ${.MAKE.OS} != "FreeBSD"
+# Building on a Linux/Mac requires an external toolchain to be specified
+# since clang/gcc will not build there using the FreeBSD makefiles
+MK_BINUTILS_BOOTSTRAP:=no
+MK_CLANG_BOOTSTRAP:=no
+MK_LLD_BOOTSTRAP:=no
+MK_GCC_BOOTSTRAP:=no
+# The CDDL bootstrap tools need a few more changes before they can be used on
+# Linux/macOS
+MK_CDDL:=no
+.endif
+
 #
 # MK_* options that default to "yes" if the compiler is a C++11 compiler.
 #

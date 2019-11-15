@@ -20,7 +20,10 @@ parser.h: parser.y
 IGNORE_PRAGMA=	yes
 
 CFLAGS+=	-I. -I${.CURDIR}
-CFLAGS+=	-I${SRCTOP}/lib/libc/locale
-CFLAGS+=	-I${SRCTOP}/lib/libc/stdtime
+.if defined(BOOTSTRAPPING)
+CFLAGS+=	-D__BUILDING_LOCALEDEF_BOOTSTRAP=1
+CFLAGS+=	-I${.CURDIR}/bootstrap
+CFLAGS+=	-I${.CURDIR}/../../lib/libc/locale
+.endif
 
 .include <bsd.prog.mk>

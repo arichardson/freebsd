@@ -52,7 +52,17 @@ static __inline int
 caph_limit_stream(int fd, int flags)
 {
 	cap_rights_t rights;
-	unsigned long cmds[] = { TIOCGETA, TIOCGWINSZ, FIODTYPE };
+	unsigned long cmds[] = {
+#ifdef TIOCGETA
+	    TIOCGETA,
+#endif
+#ifdef TIOCGWINSZ
+	    TIOCGWINSZ,
+#endif
+#ifdef FIODTYPE
+	    FIODTYPE
+#endif
+	};
 
 	cap_rights_init(&rights, CAP_EVENT, CAP_FCNTL, CAP_FSTAT,
 	    CAP_IOCTL, CAP_SEEK);
