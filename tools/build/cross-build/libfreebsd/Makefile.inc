@@ -1,6 +1,7 @@
 NO_SHARED=	yes
 LIB?=	freebsd
 TOOLS_CROSSBUILD_DIR=${SRCTOP}/tools/build/cross-build
+LIBFREEBSD_DIR=${TOOLS_CROSSBUILD_DIR}/libfreebsd
 .PATH: ${TOOLS_CROSSBUILD_DIR}/libfreebsd
 
 INCSGROUPS?=	INCS SYSINCS
@@ -66,7 +67,7 @@ LIBC_SRCTOP=	${SRCTOP}/lib/libc/
 # dbopen behaves differently on Linux and FreeBSD -> namespace the symbols
 # to ensure that we get linker errors if libfreebsd isn't linked.
 CFLAGS+=	-I ${TOOLS_CROSSBUILD_DIR}/libc-bootstrap -Ddbopen=__freebsd_dbopen
-INCS+=	db.h
+INCS+=	${LIBFREEBSD_DIR}/db.h
 
 # Do the same as we did for dbopen() for getopt() on since it's not compatible
 # on Linux (and to avoid surprises also compile the FreeBSD code on macOS
