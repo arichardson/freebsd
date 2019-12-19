@@ -107,6 +107,11 @@ MK_${var}:=no
 
 .include <bsd.cpu.mk>
 
+.if ${.MAKE.OS} != "FreeBSD"
+# ctfconvert can not be bootstrapped yet
+MK_CTF:=no
+.endif
+
 .endif # !_WITHOUT_SRCCONF
 
 .endif

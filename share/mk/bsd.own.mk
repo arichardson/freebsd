@@ -152,8 +152,10 @@ __<bsd.own.mk>__:
 .include <bsd.opts.mk>		# options now here or src.opts.mk
 
 .if !defined(_WITHOUT_SRCCONF)
-
 .if ${MK_CTF} != "no"
+.if ${.MAKE.OS} != "FreeBSD"
+.error "Cannot use ctfconvert on non-FreeBSD yet"
+.endif
 CTFCONVERT_CMD=	${CTFCONVERT} ${CTFFLAGS} ${.TARGET}
 .elif defined(.PARSEDIR) || (defined(MAKE_VERSION) && ${MAKE_VERSION} >= 5201111300)
 CTFCONVERT_CMD=
