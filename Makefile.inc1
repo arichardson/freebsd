@@ -90,12 +90,17 @@ MK_GCC_BOOTSTRAP=	no
 
 # Pull in compiler metadata from buildworld/toolchain if possible to avoid
 # running CC from bsd.compiler.mk.
-.if make(installworld) || make(install) || make(distributeworld) || \
-    make(stageworld)
+.if make(installworld) || make(installsysroot) || make(install) || \
+    make(distributeworld) || make(stageworld) || make(distribution) || \
+    make(distrib-dirs)
 .-include "${OBJTOP}/toolchain-metadata.mk"
 .if !defined(_LOADED_TOOLCHAIN_METADATA)
 .error A build is required first.  You may have the wrong MAKEOBJDIRPREFIX set.
 .endif
+_TOOLCHAIN_VARS_SHOULD_BE_SET=yes
+.else
+# Computing the variables is fine in the toplevel makefile:
+_TOOLCHAIN_VARS_SHOULD_BE_SET=
 .endif
 
 # Pull in COMPILER_TYPE and COMPILER_FREEBSD_VERSION early. Pull it from the
@@ -110,6 +115,17 @@ _WANT_TOOLCHAIN_CROSS_VARS=	t
 .undef _WANT_TOOLCHAIN_CROSS_VARS
 # src.opts.mk depends on COMPILER_FEATURES
 .include "share/mk/src.opts.mk"
+
+# All sub-makes should have valid COMPILER_* variables so by setting this
+# variable we can cause an error if bsd.compiler.mk has to invoke ${CC} again.
+# Avoiding unncessary cc --version calls can noticeable speed up walking over
+# the source tree (e.g. in the make includes step)
+_TOOLCHAIN_VARS_SHOULD_BE_SET=yes
+.if ${.TARGETS:N*buildenv:N*kernel*}
+# It is fine to recompute the variables in the kernel and buildenv environment
+# but otherwise they should be set for all submakes,
+.export _TOOLCHAIN_VARS_SHOULD_BE_SET
+.endif
 
 .if ${TARGET} == ${MACHINE}
 TARGET_CPUTYPE?=${CPUTYPE}
@@ -385,6 +401,15 @@ toolchain-metadata.mk: .PHONY .META
 	@echo ".export ${_TOOLCHAIN_METADATA_VARS}" >> ${.TARGET}
 	@echo ".export ${_TOOLCHAIN_METADATA_VARS:C,^,X_,}" >> ${.TARGET}
 
+.info CC=${CC} LD=${LD} COMPILER_VERSION=${COMPILER_VERSION} COMPILER_TYPE=${COMPILER_TYPE} \
+	COMPILER_FEATURES="${COMPILER_FEATURES}" COMPILER_FREEBSD_VERSION=${COMPILER_FREEBSD_VERSION} \
+		LINKER_VERSION="${LINKER_VERSION}" LINKER_TYPE="${LINKER_TYPE}" \
+		LINKER_FEATURES="${LINKER_FEATURES}"
+.info XCC=${XCC} XLD=${XLD} X_COMPILER_VERSION=${X_COMPILER_VERSION} X_COMPILER_TYPE=${X_COMPILER_TYPE} \
+		X_COMPILER_FEATURES="${X_COMPILER_FEATURES}" X_COMPILER_FREEBSD_VERSION=${X_COMPILER_FREEBSD_VERSION} \
+		X_LINKER_VERSION="${X_LINKER_VERSION}" X_LINKER_TYPE="${X_LINKER_TYPE}" \
+		X_LINKER_FEATURES="${X_LINKER_FEATURES}"
+
 
 # We must do lib/ and libexec/ before bin/ in case of a mid-install error to
 # keep the users system reasonably usable.  For static->dynamic root upgrades,
@@ -397,7 +422,11 @@ toolchain-metadata.mk: .PHONY .META
 .if !empty(SUBDIR_OVERRIDE)
 SUBDIR=	${SUBDIR_OVERRIDE}
 .else
-SUBDIR=	lib libexec
+SUBDIR=	lib
+.if !defined(SYSROOT_ONLY)
+# We don't need libexec when only building a cross-compilation sysroot
+SUBDIR+=libexec
+.endif
 # Add LOCAL_LIB_DIRS, but only if they will not be picked up as a SUBDIR
 # of a LOCAL_DIRS directory.  This allows LOCAL_DIRS=foo and
 # LOCAL_LIB_DIRS=foo/lib to behave as expected.
@@ -409,10 +438,24 @@ _REDUNDANT_LIB_DIRS+=    ${LOCAL_LIB_DIRS:M${_DIR}*}
 SUBDIR+=	${_DIR}
 .endif
 .endfor
-.if !defined(NO_ROOT) && (make(installworld) || make(install))
+.if !defined(NO_ROOT) && (make(installworld) || make(installsysroot) || make(install))
 # Ensure libraries are installed before progressing.
 SUBDIR+=.WAIT
 .endif
+.if defined(SYSROOT_ONLY)
+# Only install libraries and headers:
+SUBDIR+=include
+.if ${MK_CDDL} != "no"
+SUBDIR+=cddl/lib
+.endif
+SUBDIR+=gnu/lib
+.if ${MK_CRYPT} != "no"
+SUBDIR+= secure/lib
+.endif
+.if ${MK_KERBEROS} != "no"
+SUBDIR+=kerberos5/lib
+.endif
+.else # !defined(SYSROOT_ONLY)
 SUBDIR+=bin
 .if ${MK_CDDL} != "no"
 SUBDIR+=cddl
@@ -438,6 +481,7 @@ SUBDIR+=sys usr.bin usr.sbin
 .if ${MK_TESTS} != "no"
 SUBDIR+=	tests
 .endif
+.endif # !defined(SYSROOT_ONLY)
 
 # Local directories are built in parallel with the base system directories.
 # Users may insert a .WAIT directive at the beginning or elsewhere within
@@ -452,10 +496,12 @@ SUBDIR+=	${_DIR}
 # by calling 'makedb' in share/man.  This is only relevant for
 # install/distribute so they build the whatis file after every manpage is
 # installed.
-.if make(installworld) || make(install)
+.if make(installworld) || make(install) || make(installsysroot)
 SUBDIR+=.WAIT
 .endif
+.if !defined(SYSROOT_ONLY)
 SUBDIR+=etc
+.endif
 
 .endif	# !empty(SUBDIR_OVERRIDE)
 
@@ -641,7 +687,7 @@ TMPPATH=	${STRICTTMPPATH}:${PATH}
 # It may not be functional, e.g., due to new ABI
 # when in the middle of installing over this system.
 #
-.if make(distributeworld) || make(installworld) || make(stageworld)
+.if make(distributeworld) || make(installworld) || make(stageworld) || make(installsysroot)
 .if ${BUILD_WITH_STRICT_TMPPATH} != 0
 MKTEMP=${WORLDTMP}/legacy/usr/bin/mktemp
 .if !exists(${MKTEMP})
@@ -1079,7 +1125,7 @@ _worldtmp: .PHONY
 	@echo "--------------------------------------------------------------"
 .if !defined(NO_CLEAN)
 	rm -rf ${WORLDTMP}
-.else
+.elif !defined(I_REALLY_MEAN_NO_CLEAN)
 # Note: for delete-old we need to set $PATH to also include the host $PATH
 # since otherwise a partial build with missing symlinks in ${WORLDTMP}/legacy/
 # will fail to run due to missing binaries. $WMAKE sets PATH to only ${TMPPATH}
@@ -1229,10 +1275,12 @@ WMAKE_TGTS+=	_libraries
 .if defined(_LIBCOMPAT) && empty(SUBDIR_OVERRIDE)
 WMAKE_TGTS+=	build${libcompat}
 .endif
+.if !defined(SYSROOT_ONLY)
 WMAKE_TGTS+=	everything
+.endif # !defined(SYSROOT_ONLY)
 
 # record buildworld time in seconds
-.if make(buildworld)
+.if make(buildworld) || make(buildsysroot)
 _BUILDWORLD_START!= date '+%s'
 .export _BUILDWORLD_START
 .endif
@@ -1291,6 +1339,14 @@ KERNEL_TOOLCHAIN_TGTS=	${TOOLCHAIN_TGTS:N_obj:N_cleanobj:N_includes:N_libraries}
 .ORDER: ${KERNEL_TOOLCHAIN_TGTS}
 .endif
 kernel-toolchain: ${KERNEL_TOOLCHAIN_TGTS} .PHONY
+
+BUILDSYSROOT_TGTS=	${WMAKE_TGTS:Neverything}
+
+buildsysroot: buildworld_prologue ${BUILDSYSROOT_TGTS} buildworld_epilogue .PHONY
+.if !empty(SUBDIR_OVERRIDE)
+	@echo "buildsysroot is incompatible with SUBDIR_OVERRIDE"
+.endif
+	@echo "Built sysroot for ${TARGET}. Run installsysroot to install it."
 
 #
 # installcheck
@@ -1392,7 +1448,7 @@ _zoneinfo=	zic tzsetup
 ITOOLS=	[ awk cap_mkdb cat chflags chmod chown cmp cp \
 	date echo egrep find grep id install ${_install-info} \
 	ln make mkdir mtree mv pwd_mkdb \
-	rm sed services_mkdb sh sort ${XSTRIP} sysctl test true uname wc ${_zoneinfo} \
+	rm sed services_mkdb sh sort strip sysctl test true uname wc ${_zoneinfo} \
 	${LOCAL_ITOOLS}
 
 # Needed for share/man
@@ -1592,7 +1648,7 @@ sysent: .PHONY
 # and do a 'make reinstall' on the *client* to install new binaries from the
 # most recent server build.
 #
-restage reinstall: .MAKE .PHONY
+restage reinstall reinstallsysroot: .MAKE .PHONY
 	@echo "--------------------------------------------------------------"
 	@echo ">>> Making hierarchy"
 	@echo "--------------------------------------------------------------"
@@ -1613,9 +1669,18 @@ restage reinstall: .MAKE .PHONY
 .if defined(_LIBCOMPAT)
 	${_+_}cd ${.CURDIR}; ${MAKE} -f Makefile.inc1 install${libcompat}
 .endif
+.if make(reinstallsysroot)
+	@echo "Removing $$(find ${DESTDIR} -type d -empty -print | wc -l) empty directories from ${DESTDIR}"
+	find ${DESTDIR} -type d -empty -delete
+	@echo
+	@echo "--------------------------------------------------------------"
+	@echo ">>> Done installing sysroot"
+	@echo "--------------------------------------------------------------"
+.endif
 	@echo "--------------------------------------------------------------"
 	@echo ">>> Installing everything completed on `LC_ALL=C date`"
 	@echo "--------------------------------------------------------------"
+
 
 redistribute: .MAKE .PHONY
 	@echo "--------------------------------------------------------------"
@@ -1628,6 +1693,9 @@ redistribute: .MAKE .PHONY
 .endif
 
 distrib-dirs distribution: .MAKE .PHONY
+.if defined(SYSROOT_ONLY)
+	@echo "Skipping make ${.TARGET} due to SYSROOT_ONLY=${SYSROOT_ONLY}"
+.else
 	${_+_}cd ${.CURDIR}/etc; ${CROSSENV} PATH=${TMPPATH} ${MAKE} \
 	    ${IMAKE_INSTALL} ${IMAKE_MTREE} METALOG=${METALOG} ${.TARGET}
 .if make(distribution)
@@ -1635,6 +1703,7 @@ distrib-dirs distribution: .MAKE .PHONY
 		${MAKE} -f Makefile.inc1 ${IMAKE_INSTALL} \
 		METALOG=${METALOG} MK_TESTS=no installconfig
 .endif
+.endif  # !defined(SYSROOT_ONLY)
 
 #
 # buildkernel and installkernel

@@ -38,7 +38,9 @@ X86INCS+=	${SRCTOP}/sys/x86/include/elf.h
 MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/exec.h
 MACHINESYSINCS+=	${SRCTOP}/sys/${_host_arch}/include/reloc.h
 INCS+=	${SRCTOP}/include/a.out.h
+INCS+=	${SRCTOP}/include/nlist.h
 SYSINCS+=	${SRCTOP}/sys/sys/imgact_aout.h
+SYSINCS+=	${SRCTOP}/sys/sys/nlist_aout.h
 
 # For mkscrfil.c:
 SYSINCS+=	${SRCTOP}/sys/sys/consio.h
