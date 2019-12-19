@@ -10,7 +10,7 @@ import sys
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 docker_images_dir = Path(__file__).parent / "docker"
 local_docker_images = list(os.listdir(str(docker_images_dir)))
-parser.add_argument("--local-docker-image", choices=local_docker_images, default="opensuse",
+parser.add_argument("--local-docker-image", choices=local_docker_images, default="ubuntu",
                     help="Which directory in tools/build/crossbuild/docker to use as a source for the Dockerfile")
 parser.add_argument("--external-docker-image",
                     help="Build with an existing docker image instead of using the Dockerfiles from the source tree")
@@ -59,8 +59,9 @@ elif docker_image == "freebsd-crossbuild-ubuntu":
         "--env", "LD=/usr/bin/ld",
     ]
     make_args += [
-        "--host-bindir=/usr/lib/llvm-7/bin",
-        "--cross-bindir=/usr/lib/llvm-7/bin",
+        "--host-bindir=/usr/lib/llvm-9/bin",
+        "--cross-bindir=/usr/lib/llvm-9/bin",
+        "--host-compiler-type=clang",
     ]
 elif docker_image == "freebsd-crossbuild-alpine":
     env_flags += [

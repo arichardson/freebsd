@@ -2420,7 +2420,11 @@ _basic_bootstrap_tools+=usr.bin/unifdef
 
 .if ${MK_BOOT} != "no"
 # xz/unxz is used by EFI
-_basic_bootstrap_tools_multilink+=usr.bin/xz xz,unxz
+# FIXME: these don't bootstrap -> we need host symlinks
+# _basic_bootstrap_tools_multilink+=usr.bin/xz xz,unxz
+# ${_bt}-usr.bin/xz: ${_bt}-lib/liblzma
+# _other_bootstrap_tools+=lib/liblzma
+
 # md5 is used by boot/beri (and possibly others)
 _basic_bootstrap_tools+=sbin/md5
 .if defined(BOOTSTRAP_ALL_TOOLS)

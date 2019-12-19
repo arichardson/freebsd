@@ -432,6 +432,11 @@ MK_BINUTILS_BOOTSTRAP:=no
 MK_CLANG_BOOTSTRAP:=no
 MK_LLD_BOOTSTRAP:=no
 MK_GCC_BOOTSTRAP:=no
+# Building the target compiler requires builtin tablegen on the host
+# which is (currently) not possible on non-FreeBSD
+MK_CLANG:=no
+MK_LLD:=no
+MK_LLDB:=o
 # The CDDL bootstrap tools need a few more changes before they can be used on
 # Linux/macOS
 MK_CDDL:=no
