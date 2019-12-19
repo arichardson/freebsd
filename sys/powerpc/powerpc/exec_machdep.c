@@ -144,6 +144,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	#endif
 	size_t sfpsize;
 	caddr_t sfp, usfp;
+	register_t sp;
 	int oonstack, rndfsize;
 	int sig;
 	int code;
@@ -155,7 +156,6 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	psp = p->p_sigacts;
 	mtx_assert(&psp->ps_mtx, MA_OWNED);
 	tf = td->td_frame;
-	oonstack = sigonstack(tf->fixreg[1]);
 
 	/*
 	 * Fill siginfo structure.
@@ -173,6 +173,8 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 		sfp = (caddr_t)&sf32;
 		sfpsize = sizeof(sf32);
 		rndfsize = roundup(sizeof(sf32), 16);
+		sp = (uint32_t)tf->fixreg[1];
+		oonstack = sigonstack(sp);
 
 		/*
 		 * Save user context
@@ -203,6 +205,8 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 		#else
 		rndfsize = roundup(sizeof(sf), 16);
 		#endif
+		sp = tf->fixreg[1];
+		oonstack = sigonstack(sp);
 
 		/*
 		 * Save user context
@@ -232,7 +236,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 		usfp = (void *)(((uintptr_t)td->td_sigstk.ss_sp +
 		   td->td_sigstk.ss_size - rndfsize) & ~0xFul);
 	} else {
-		usfp = (void *)((tf->fixreg[1] - rndfsize) & ~0xFul);
+		usfp = (void *)((sp - rndfsize) & ~0xFul);
 	}
 
 	/*
@@ -535,7 +539,7 @@ cleanup_power_extras(struct thread *td)
  * Set set up registers on exec.
  */
 void
-exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
+exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 {
 	struct trapframe	*tf;
 	register_t		argc;
@@ -581,7 +585,7 @@ exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
 
 #ifdef COMPAT_FREEBSD32
 void
-ppc32_setregs(struct thread *td, struct image_params *imgp, u_long stack)
+ppc32_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 {
 	struct trapframe	*tf;
 	uint32_t		argc;
@@ -1082,15 +1086,17 @@ emulate_mfspr(int spr, int reg, struct trapframe *frame){
 	td = curthread;
 
 	if (spr == SPR_DSCR || spr == SPR_DSCRP) {
+		if (!(cpu_features2 & PPC_FEATURE2_DSCR))
+			return (SIGILL);
 		// If DSCR was never set, get the default DSCR
 		if ((td->td_pcb->pcb_flags & PCB_CDSCR) == 0)
 			td->td_pcb->pcb_dscr = mfspr(SPR_DSCRP);
 
 		frame->fixreg[reg] = td->td_pcb->pcb_dscr;
 		frame->srr0 += 4;
-		return 0;
+		return (0);
 	} else
-		return SIGILL;
+		return (SIGILL);
 }
 
 static int
@@ -1100,13 +1106,15 @@ emulate_mtspr(int spr, int reg, struct trapframe *frame){
 	td = curthread;
 
 	if (spr == SPR_DSCR || spr == SPR_DSCRP) {
+		if (!(cpu_features2 & PPC_FEATURE2_DSCR))
+			return (SIGILL);
 		td->td_pcb->pcb_flags |= PCB_CDSCR;
 		td->td_pcb->pcb_dscr = frame->fixreg[reg];
 		mtspr(SPR_DSCRP, frame->fixreg[reg]);
 		frame->srr0 += 4;
-		return 0;
+		return (0);
 	} else
-		return SIGILL;
+		return (SIGILL);
 }
 
 #define XFX 0xFC0007FF

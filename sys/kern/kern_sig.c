@@ -57,6 +57,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 #include <sys/ktr.h>
 #include <sys/ktrace.h>
+#include <sys/limits.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mutex.h>
@@ -64,6 +65,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/namei.h>
 #include <sys/proc.h>
 #include <sys/procdesc.h>
+#include <sys/ptrace.h>
 #include <sys/posix4.h>
 #include <sys/pioctl.h>
 #include <sys/racct.h>
@@ -629,7 +631,7 @@ sigonstack(size_t sp)
 	if ((td->td_pflags & TDP_ALTSTACK) == 0)
 		return (0);
 #if defined(COMPAT_43)
-	if (td->td_sigstk.ss_size == 0)
+	if (SV_PROC_FLAG(td->td_proc, SV_AOUT) && td->td_sigstk.ss_size == 0)
 		return ((td->td_sigstk.ss_flags & SS_ONSTACK) != 0);
 #endif
 	return (sp >= (size_t)td->td_sigstk.ss_sp &&
@@ -985,12 +987,7 @@ execsigs(struct proc *p)
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	ps = p->p_sigacts;
 	mtx_lock(&ps->ps_mtx);
-	while (SIGNOTEMPTY(ps->ps_sigcatch)) {
-		sig = sig_ffs(&ps->ps_sigcatch);
-		sigdflt(ps, sig);
-		if ((sigprop(sig) & SIGPROP_IGNORE) != 0)
-			sigqueue_delete_proc(p, sig);
-	}
+	sig_drop_caught(p);
 
 	/*
 	 * As CloudABI processes cannot modify signal handlers, fully
@@ -1256,11 +1253,13 @@ kern_sigtimedwait(struct thread *td, sigset_t waitset, ksiginfo_t *ksi,
 	int error, sig, timo, timevalid = 0;
 	struct timespec rts, ets, ts;
 	struct timeval tv;
+	bool traced;
 
 	p = td->td_proc;
 	error = 0;
 	ets.tv_sec = 0;
 	ets.tv_nsec = 0;
+	traced = false;
 
 	if (timeout != NULL) {
 		if (timeout->tv_nsec >= 0 && timeout->tv_nsec < 1000000000) {
@@ -1313,6 +1312,11 @@ kern_sigtimedwait(struct thread *td, sigset_t waitset, ksiginfo_t *ksi,
 			timo = 0;
 		}
 
+		if (traced) {
+			error = EINTR;
+			break;
+		}
+
 		error = msleep(ps, &p->p_mtx, PPAUSE|PCATCH, "sigwait", timo);
 
 		if (timeout != NULL) {
@@ -1324,6 +1328,16 @@ kern_sigtimedwait(struct thread *td, sigset_t waitset, ksiginfo_t *ksi,
 				error = 0;
 			}
 		}
+
+		/*
+		 * If PTRACE_SCE or PTRACE_SCX were set after
+		 * userspace entered the syscall, return spurious
+		 * EINTR after wait was done.  Only do this as last
+		 * resort after rechecking for possible queued signals
+		 * and expired timeouts.
+		 */
+		if (error == 0 && (p->p_ptevents & PTRACE_SYSCALL) != 0)
+			traced = true;
 	}
 
 	new_block = saved_mask;
@@ -1536,6 +1550,14 @@ kern_sigsuspend(struct thread *td, sigset_t mask)
 			has_sig += postsig(sig);
 		}
 		mtx_unlock(&p->p_sigacts->ps_mtx);
+
+		/*
+		 * If PTRACE_SCE or PTRACE_SCX were set after
+		 * userspace entered the syscall, return spurious
+		 * EINTR.
+		 */
+		if ((p->p_ptevents & PTRACE_SYSCALL) != 0)
+			has_sig += 1;
 	}
 	PROC_UNLOCK(p);
 	td->td_errno = EINTR;
@@ -1657,6 +1679,36 @@ kern_sigaltstack(struct thread *td, stack_t *ss, stack_t *oss)
 	return (0);
 }
 
+struct killpg1_ctx {
+	struct thread *td;
+	ksiginfo_t *ksi;
+	int sig;
+	bool sent;
+	bool found;
+	int ret;
+};
+
+static void
+killpg1_sendsig(struct proc *p, bool notself, struct killpg1_ctx *arg)
+{
+	int err;
+
+	if (p->p_pid <= 1 || (p->p_flag & P_SYSTEM) != 0 ||
+	    (notself && p == arg->td->td_proc) || p->p_state == PRS_NEW)
+		return;
+	PROC_LOCK(p);
+	err = p_cansignal(arg->td, p, arg->sig);
+	if (err == 0 && arg->sig != 0)
+		pksignal(p, arg->sig, arg->ksi);
+	PROC_UNLOCK(p);
+	if (err != ESRCH)
+		arg->found = true;
+	if (err == 0)
+		arg->sent = true;
+	else if (arg->ret == 0 && err != ESRCH && err != EPERM)
+		arg->ret = err;
+}
+
 /*
  * Common code for kill process group/broadcast kill.
  * cp is calling process.
@@ -1666,30 +1718,21 @@ killpg1(struct thread *td, int sig, int pgid, int all, ksiginfo_t *ksi)
 {
 	struct proc *p;
 	struct pgrp *pgrp;
-	int err;
-	int ret;
+	struct killpg1_ctx arg;
 
-	ret = ESRCH;
+	arg.td = td;
+	arg.ksi = ksi;
+	arg.sig = sig;
+	arg.sent = false;
+	arg.found = false;
+	arg.ret = 0;
 	if (all) {
 		/*
 		 * broadcast
 		 */
 		sx_slock(&allproc_lock);
 		FOREACH_PROC_IN_SYSTEM(p) {
-			if (p->p_pid <= 1 || p->p_flag & P_SYSTEM ||
-			    p == td->td_proc || p->p_state == PRS_NEW) {
-				continue;
-			}
-			PROC_LOCK(p);
-			err = p_cansignal(td, p, sig);
-			if (err == 0) {
-				if (sig)
-					pksignal(p, sig, ksi);
-				ret = err;
-			}
-			else if (ret == ESRCH)
-				ret = err;
-			PROC_UNLOCK(p);
+			killpg1_sendsig(p, true, &arg);
 		}
 		sx_sunlock(&allproc_lock);
 	} else {
@@ -1709,25 +1752,14 @@ killpg1(struct thread *td, int sig, int pgid, int all, ksiginfo_t *ksi)
 		}
 		sx_sunlock(&proctree_lock);
 		LIST_FOREACH(p, &pgrp->pg_members, p_pglist) {
-			PROC_LOCK(p);
-			if (p->p_pid <= 1 || p->p_flag & P_SYSTEM ||
-			    p->p_state == PRS_NEW) {
-				PROC_UNLOCK(p);
-				continue;
-			}
-			err = p_cansignal(td, p, sig);
-			if (err == 0) {
-				if (sig)
-					pksignal(p, sig, ksi);
-				ret = err;
-			}
-			else if (ret == ESRCH)
-				ret = err;
-			PROC_UNLOCK(p);
+			killpg1_sendsig(p, false, &arg);
 		}
 		PGRP_UNLOCK(pgrp);
 	}
-	return (ret);
+	MPASS(arg.ret != 0 || arg.found || !arg.sent);
+	if (arg.ret == 0 && !arg.sent)
+		arg.ret = arg.found ? EPERM : ESRCH;
+	return (arg.ret);
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -1740,6 +1772,13 @@ struct kill_args {
 int
 sys_kill(struct thread *td, struct kill_args *uap)
 {
+
+	return (kern_kill(td, uap->pid, uap->signum));
+}
+
+int
+kern_kill(struct thread *td, pid_t pid, int signum)
+{
 	ksiginfo_t ksi;
 	struct proc *p;
 	int error;
@@ -1749,38 +1788,38 @@ sys_kill(struct thread *td, struct kill_args *uap)
 	 * The main rationale behind this is that abort(3) is implemented as
 	 * kill(getpid(), SIGABRT).
 	 */
-	if (IN_CAPABILITY_MODE(td) && uap->pid != td->td_proc->p_pid)
+	if (IN_CAPABILITY_MODE(td) && pid != td->td_proc->p_pid)
 		return (ECAPMODE);
 
-	AUDIT_ARG_SIGNUM(uap->signum);
-	AUDIT_ARG_PID(uap->pid);
-	if ((u_int)uap->signum > _SIG_MAXSIG)
+	AUDIT_ARG_SIGNUM(signum);
+	AUDIT_ARG_PID(pid);
+	if ((u_int)signum > _SIG_MAXSIG)
 		return (EINVAL);
 
 	ksiginfo_init(&ksi);
-	ksi.ksi_signo = uap->signum;
+	ksi.ksi_signo = signum;
 	ksi.ksi_code = SI_USER;
 	ksi.ksi_pid = td->td_proc->p_pid;
 	ksi.ksi_uid = td->td_ucred->cr_ruid;
 
-	if (uap->pid > 0) {
+	if (pid > 0) {
 		/* kill single process */
-		if ((p = pfind_any(uap->pid)) == NULL)
+		if ((p = pfind_any(pid)) == NULL)
 			return (ESRCH);
 		AUDIT_ARG_PROCESS(p);
-		error = p_cansignal(td, p, uap->signum);
-		if (error == 0 && uap->signum)
-			pksignal(p, uap->signum, &ksi);
+		error = p_cansignal(td, p, signum);
+		if (error == 0 && signum)
+			pksignal(p, signum, &ksi);
 		PROC_UNLOCK(p);
 		return (error);
 	}
-	switch (uap->pid) {
+	switch (pid) {
 	case -1:		/* broadcast signal */
-		return (killpg1(td, uap->signum, 0, 1, &ksi));
+		return (killpg1(td, signum, 0, 1, &ksi));
 	case 0:			/* signal own process group */
-		return (killpg1(td, uap->signum, 0, 0, &ksi));
+		return (killpg1(td, signum, 0, 0, &ksi));
 	default:		/* negative explicit process group */
-		return (killpg1(td, uap->signum, -uap->pid, 0, &ksi));
+		return (killpg1(td, signum, -pid, 0, &ksi));
 	}
 	/* NOTREACHED */
 }
@@ -2211,6 +2250,8 @@ tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 		p->p_step = 0;
 		wakeup(&p->p_step);
 	}
+	wakeup_swapper = 0;
+
 	/*
 	 * Some signals have a process-wide effect and a per-thread
 	 * component.  Most processing occurs when the process next
@@ -2313,15 +2354,13 @@ tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 		 * the PROCESS runnable, leave it stopped.
 		 * It may run a bit until it hits a thread_suspend_check().
 		 */
-		wakeup_swapper = 0;
 		PROC_SLOCK(p);
 		thread_lock(td);
-		if (TD_ON_SLEEPQ(td) && (td->td_flags & TDF_SINTR))
+		if (TD_CAN_ABORT(td))
 			wakeup_swapper = sleepq_abort(td, intrval);
-		thread_unlock(td);
+		else
+			thread_unlock(td);
 		PROC_SUNLOCK(p);
-		if (wakeup_swapper)
-			kick_proc0();
 		goto out;
 		/*
 		 * Mutexes are short lived. Threads waiting on them will
@@ -2355,8 +2394,6 @@ tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 				sigqueue_delete_proc(p, p->p_xsig);
 			} else
 				PROC_SUNLOCK(p);
-			if (wakeup_swapper)
-				kick_proc0();
 			goto out;
 		}
 	} else {
@@ -2377,6 +2414,9 @@ runfast:
 out:
 	/* If we jump here, proc slock should not be owned. */
 	PROC_SLOCK_ASSERT(p, MA_NOTOWNED);
+	if (wakeup_swapper)
+		kick_proc0();
+
 	return (ret);
 }
 
@@ -2389,10 +2429,8 @@ static void
 tdsigwakeup(struct thread *td, int sig, sig_t action, int intrval)
 {
 	struct proc *p = td->td_proc;
-	int prop;
-	int wakeup_swapper;
+	int prop, wakeup_swapper;
 
-	wakeup_swapper = 0;
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	prop = sigprop(sig);
 
@@ -2448,22 +2486,25 @@ tdsigwakeup(struct thread *td, int sig, sig_t action, int intrval)
 			sched_prio(td, PUSER);
 
 		wakeup_swapper = sleepq_abort(td, intrval);
-	} else {
-		/*
-		 * Other states do nothing with the signal immediately,
-		 * other than kicking ourselves if we are running.
-		 * It will either never be noticed, or noticed very soon.
-		 */
-#ifdef SMP
-		if (TD_IS_RUNNING(td) && td != curthread)
-			forward_signal(td);
-#endif
+		PROC_SUNLOCK(p);
+		if (wakeup_swapper)
+			kick_proc0();
+		return;
 	}
+
+	/*
+	 * Other states do nothing with the signal immediately,
+	 * other than kicking ourselves if we are running.
+	 * It will either never be noticed, or noticed very soon.
+	 */
+#ifdef SMP
+	if (TD_IS_RUNNING(td) && td != curthread)
+		forward_signal(td);
+#endif
+
 out:
 	PROC_SUNLOCK(p);
 	thread_unlock(td);
-	if (wakeup_swapper)
-		kick_proc0();
 }
 
 static int
@@ -2491,12 +2532,13 @@ sig_suspend_threads(struct thread *td, struct proc *p, int sending)
 				 */
 				KASSERT(!TD_IS_SUSPENDED(td2),
 				    ("thread with deferred stops suspended"));
-				if (TD_SBDRY_INTR(td2))
+				if (TD_SBDRY_INTR(td2)) {
 					wakeup_swapper |= sleepq_abort(td2,
 					    TD_SBDRY_ERRNO(td2));
-			} else if (!TD_IS_SUSPENDED(td2)) {
+					continue;
+				}
+			} else if (!TD_IS_SUSPENDED(td2))
 				thread_suspend_one(td2);
-			}
 		} else if (!TD_IS_SUSPENDED(td2)) {
 			if (sending || td != td2)
 				td2->td_flags |= TDF_ASTPENDING;
@@ -2576,7 +2618,15 @@ ptracestop(struct thread *td, int sig, ksiginfo_t *si)
 			    p->p_xthread == NULL)) {
 				p->p_xsig = sig;
 				p->p_xthread = td;
-				td->td_dbgflags &= ~TDB_FSTP;
+
+				/*
+				 * If we are on sleepqueue already,
+				 * let sleepqueue code decide if it
+				 * needs to go sleep after attach.
+				 */
+				if (td->td_wchan == NULL)
+					td->td_dbgflags &= ~TDB_FSTP;
+
 				p->p_flag2 &= ~P2_PTRACE_FSTP;
 				p->p_flag |= P_STOPPED_SIG | P_STOPPED_TRACE;
 				sig_suspend_threads(td, p, 0);
@@ -3390,10 +3440,16 @@ corefile_open_last(struct thread *td, char *name, int indexpos,
 	}
 
 	if (oldvp != NULL) {
-		if (nextvp == NULL)
-			nextvp = oldvp;
-		else
+		if (nextvp == NULL) {
+			if ((td->td_proc->p_flag & P_SUGID) != 0) {
+				error = EFAULT;
+				vnode_close_locked(td, oldvp);
+			} else {
+				nextvp = oldvp;
+			}
+		} else {
 			vnode_close_locked(td, oldvp);
+		}
 	}
 	if (error != 0) {
 		if (nextvp != NULL)
@@ -3419,7 +3475,7 @@ corefile_open_last(struct thread *td, char *name, int indexpos,
  */
 static int
 corefile_open(const char *comm, uid_t uid, pid_t pid, struct thread *td,
-    int compress, struct vnode **vpp, char **namep)
+    int compress, int signum, struct vnode **vpp, char **namep)
 {
 	struct sbuf sb;
 	struct nameidata nd;
@@ -3468,6 +3524,9 @@ corefile_open(const char *comm, uid_t uid, pid_t pid, struct thread *td,
 			case 'P':	/* process id */
 				sbuf_printf(&sb, "%u", pid);
 				break;
+			case 'S':	/* signal number */
+				sbuf_printf(&sb, "%i", signum);
+				break;
 			case 'U':	/* user id */
 				sbuf_printf(&sb, "%u", uid);
 				break;
@@ -3513,6 +3572,8 @@ corefile_open(const char *comm, uid_t uid, pid_t pid, struct thread *td,
 		oflags = VN_OPEN_NOAUDIT | VN_OPEN_NAMECACHE |
 		    (capmode_coredump ? VN_OPEN_NOCAPCHECK : 0);
 		flags = O_CREAT | FWRITE | O_NOFOLLOW;
+		if ((td->td_proc->p_flag & P_SUGID) != 0)
+			flags |= O_EXCL;
 
 		NDINIT(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, name, td);
 		error = vn_open_cred(&nd, &flags, cmode, oflags, td->td_ucred,
@@ -3583,16 +3644,17 @@ coredump(struct thread *td)
 	PROC_UNLOCK(p);
 
 	error = corefile_open(p->p_comm, cred->cr_uid, p->p_pid, td,
-	    compress_user_cores, &vp, &name);
+	    compress_user_cores, p->p_sig, &vp, &name);
 	if (error != 0)
 		return (error);
 
 	/*
 	 * Don't dump to non-regular files or files with links.
-	 * Do not dump into system files.
+	 * Do not dump into system files. Effective user must own the corefile.
 	 */
 	if (vp->v_type != VREG || VOP_GETATTR(vp, &vattr, cred) != 0 ||
-	    vattr.va_nlink != 1 || (vp->v_vflag & VV_SYSTEM) != 0) {
+	    vattr.va_nlink != 1 || (vp->v_vflag & VV_SYSTEM) != 0 ||
+	    vattr.va_uid != cred->cr_uid) {
 		VOP_UNLOCK(vp, 0);
 		error = EFAULT;
 		goto out;
@@ -3835,4 +3897,21 @@ sigacts_shared(struct sigacts *ps)
 {
 
 	return (ps->ps_refcnt > 1);
+}
+
+void
+sig_drop_caught(struct proc *p)
+{
+	int sig;
+	struct sigacts *ps;
+
+	ps = p->p_sigacts;
+	PROC_LOCK_ASSERT(p, MA_OWNED);
+	mtx_assert(&ps->ps_mtx, MA_OWNED);
+	while (SIGNOTEMPTY(ps->ps_sigcatch)) {
+		sig = sig_ffs(&ps->ps_sigcatch);
+		sigdflt(ps, sig);
+		if ((sigprop(sig) & SIGPROP_IGNORE) != 0)
+			sigqueue_delete_proc(p, sig);
+	}
 }

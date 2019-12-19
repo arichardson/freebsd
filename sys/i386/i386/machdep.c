@@ -194,21 +194,6 @@ long realmem = 0;
 FEATURE(pae, "Physical Address Extensions");
 #endif
 
-/*
- * The number of PHYSMAP entries must be one less than the number of
- * PHYSSEG entries because the PHYSMAP entry that spans the largest
- * physical address that is accessible by ISA DMA is split into two
- * PHYSSEG entries.
- */
-#define	PHYSMAP_SIZE	(2 * (VM_PHYSSEG_MAX - 1))
-
-vm_paddr_t phys_avail[PHYSMAP_SIZE + 2];
-vm_paddr_t dump_avail[PHYSMAP_SIZE + 2];
-
-/* must be 2 less so 0 0 can signal end of chunks */
-#define	PHYS_AVAIL_ARRAY_END (nitems(phys_avail) - 2)
-#define	DUMP_AVAIL_ARRAY_END (nitems(dump_avail) - 2)
-
 struct kva_md_info kmi;
 
 static struct trapframe proc0_tf;
@@ -1139,7 +1124,7 @@ setup_priv_lcall_gate(struct proc *p)
  * Reset registers to default values on exec.
  */
 void
-exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
+exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 {
 	struct trapframe *regs;
 	struct pcb *pcb;
@@ -1736,7 +1721,7 @@ add_physmap_entry(uint64_t base, uint64_t length, vm_paddr_t *physmap,
 
 	physmap_idx += 2;
 	*physmap_idxp = physmap_idx;
-	if (physmap_idx == PHYSMAP_SIZE) {
+	if (physmap_idx == PHYS_AVAIL_ENTRIES) {
 		printf(
 		"Too many segments in the physical address map, giving up\n");
 		return (0);
@@ -1823,7 +1808,7 @@ getmemsize(int first)
 {
 	int has_smap, off, physmap_idx, pa_indx, da_indx;
 	u_long memtest;
-	vm_paddr_t physmap[PHYSMAP_SIZE];
+	vm_paddr_t physmap[PHYS_AVAIL_ENTRIES];
 	quad_t dcons_addr, dcons_size, physmem_tunable;
 	int hasbrokenint12, i, res;
 	u_int extmem;
@@ -2136,7 +2121,7 @@ skip_memtest:
 				phys_avail[pa_indx] += PAGE_SIZE;
 			} else {
 				pa_indx++;
-				if (pa_indx == PHYS_AVAIL_ARRAY_END) {
+				if (pa_indx == PHYS_AVAIL_ENTRIES) {
 					printf(
 		"Too many holes in the physical address space, giving up\n");
 					pa_indx--;
@@ -2152,7 +2137,7 @@ do_dump_avail:
 				dump_avail[da_indx] += PAGE_SIZE;
 			} else {
 				da_indx++;
-				if (da_indx == DUMP_AVAIL_ARRAY_END) {
+				if (da_indx == PHYS_AVAIL_ENTRIES) {
 					da_indx--;
 					goto do_next;
 				}
@@ -2694,9 +2679,9 @@ spinlock_enter(void)
 		flags = intr_disable();
 		td->td_md.md_spinlock_count = 1;
 		td->td_md.md_saved_flags = flags;
+		critical_enter();
 	} else
 		td->td_md.md_spinlock_count++;
-	critical_enter();
 }
 
 void
@@ -2706,11 +2691,12 @@ spinlock_exit(void)
 	register_t flags;
 
 	td = curthread;
-	critical_exit();
 	flags = td->td_md.md_saved_flags;
 	td->td_md.md_spinlock_count--;
-	if (td->td_md.md_spinlock_count == 0)
+	if (td->td_md.md_spinlock_count == 0) {
+		critical_exit();
 		intr_restore(flags);
+	}
 }
 
 #if defined(I586_CPU) && !defined(NO_F00F_HACK)

@@ -84,14 +84,13 @@ struct	intr_entropy {
 	uintptr_t event;
 };
 
-struct	intr_event *clk_intr_event;
 struct	intr_event *tty_intr_event;
 void	*vm_ih;
 struct proc *intrproc;
 
 static MALLOC_DEFINE(M_ITHREAD, "ithread", "Interrupt Threads");
 
-static int intr_storm_threshold = 1000;
+static int intr_storm_threshold = 0;
 SYSCTL_INT(_hw, OID_AUTO, intr_storm_threshold, CTLFLAG_RWTUN,
     &intr_storm_threshold, 0,
     "Number of consecutive interrupts before storm protection is enabled");
@@ -380,6 +379,25 @@ intr_event_bind_ithread(struct intr_event *ie, int cpu)
 	return (_intr_event_bind(ie, cpu, false, true));
 }
 
+/*
+ * Bind an interrupt event's ithread to the specified cpuset.
+ */
+int
+intr_event_bind_ithread_cpuset(struct intr_event *ie, cpuset_t *cs)
+{
+	lwpid_t id;
+
+	mtx_lock(&ie->ie_lock);
+	if (ie->ie_thread != NULL) {
+		id = ie->ie_thread->it_thread->td_tid;
+		mtx_unlock(&ie->ie_lock);
+		return (cpuset_setthread(id, cs));
+	} else {
+		mtx_unlock(&ie->ie_lock);
+	}
+	return (ENODEV);
+}
+
 static struct intr_event *
 intr_lookup(int irq)
 {
@@ -540,8 +558,8 @@ ithread_destroy(struct intr_thread *ithread)
 	if (TD_AWAITING_INTR(td)) {
 		TD_CLR_IWAIT(td);
 		sched_add(td, SRQ_INTR);
-	}
-	thread_unlock(td);
+	} else
+		thread_unlock(td);
 }
 
 int
@@ -967,8 +985,8 @@ intr_event_schedule_thread(struct intr_event *ie)
 	} else {
 		CTR5(KTR_INTR, "%s: pid %d (%s): it_need %d, state %d",
 		    __func__, td->td_proc->p_pid, td->td_name, it->it_need, td->td_state);
+		thread_unlock(td);
 	}
-	thread_unlock(td);
 
 	return (0);
 }
@@ -1233,13 +1251,14 @@ ithread_loop(void *arg)
 		    (ithd->it_flags & (IT_DEAD | IT_WAIT)) == 0) {
 			TD_SET_IWAIT(td);
 			ie->ie_count = 0;
-			mi_switch(SW_VOL | SWT_IWAIT, NULL);
+			mi_switch(SW_VOL | SWT_IWAIT);
+		} else {
+			if (ithd->it_flags & IT_WAIT) {
+				wake = 1;
+				ithd->it_flags &= ~IT_WAIT;
+			}
+			thread_unlock(td);
 		}
-		if (ithd->it_flags & IT_WAIT) {
-			wake = 1;
-			ithd->it_flags &= ~IT_WAIT;
-		}
-		thread_unlock(td);
 		if (wake) {
 			wakeup(ithd);
 			wake = 0;

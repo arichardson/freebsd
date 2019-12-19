@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/reboot.h>
 #include <sys/boot.h>
+#include <paths.h>
 #include <stdint.h>
 #include <string.h>
 #include <setjmp.h>
@@ -127,7 +128,7 @@ has_keyboard(void)
 	 */
 	hin_end = &hin[sz / sizeof(*hin)];
 	for (walker = hin; walker < hin_end; walker++) {
-		status = BS->HandleProtocol(*walker, &devid, (VOID **)&path);
+		status = OpenProtocolByHandle(*walker, &devid, (void **)&path);
 		if (EFI_ERROR(status))
 			continue;
 
@@ -237,8 +238,11 @@ sanity_check_currdev(void)
 {
 	struct stat st;
 
-	return (stat("/boot/defaults/loader.conf", &st) == 0 ||
-	    stat("/boot/kernel/kernel", &st) == 0);
+	return (stat(PATH_DEFAULTS_LOADER_CONF, &st) == 0 ||
+#ifdef PATH_BOOTABLE_TOKEN
+	    stat(PATH_BOOTABLE_TOKEN, &st) == 0 || /* non-standard layout */
+#endif
+	    stat(PATH_KERNEL, &st) == 0);
 }
 
 #ifdef EFI_ZFS_BOOT
@@ -684,7 +688,7 @@ setenv_int(const char *key, int val)
  * ACPI name space to map the UID for the serial port to a port. The
  * latter is especially hard.
  */
-static int
+int
 parse_uefi_con_out(void)
 {
 	int how, rv;
@@ -699,8 +703,11 @@ parse_uefi_con_out(void)
 	how = 0;
 	sz = sizeof(buf);
 	rv = efi_global_getenv("ConOut", buf, &sz);
-	if (rv != EFI_SUCCESS)
+	if (rv != EFI_SUCCESS) {
+		/* If we don't have any ConOut default to serial */
+		how = RB_SERIAL;
 		goto out;
+	}
 	ep = buf + sz;
 	node = (EFI_DEVICE_PATH *)buf;
 	while ((char *)node < ep) {
@@ -734,7 +741,7 @@ parse_uefi_con_out(void)
 			 */
 			pci_pending = true;
 		}
-		node = NextDevicePathNode(node); /* Skip the end node */
+		node = NextDevicePathNode(node);
 	}
 	if (pci_pending && vid_seen == 0)
 		vid_seen = ++seen;
@@ -859,11 +866,14 @@ main(int argc, CHAR16 *argv[])
 	archsw.arch_getdev = efi_getdev;
 	archsw.arch_copyin = efi_copyin;
 	archsw.arch_copyout = efi_copyout;
+#ifdef __amd64__
+	archsw.arch_hypervisor = x86_hypervisor;
+#endif
 	archsw.arch_readin = efi_readin;
 	archsw.arch_zfs_probe = efi_zfs_probe;
 
         /* Get our loaded image protocol interface structure. */
-	BS->HandleProtocol(IH, &imgid, (VOID**)&boot_img);
+	(void) OpenProtocolByHandle(IH, &imgid, (void **)&boot_img);
 
 	/*
 	 * Chicken-and-egg problem; we want to have console output early, but
@@ -908,20 +918,6 @@ main(int argc, CHAR16 *argv[])
 		howto |= RB_SERIAL | RB_MULTIPLE;
 	howto &= ~RB_PROBE;
 	uhowto = parse_uefi_con_out();
-
-	/*
-	 * Scan the BLOCK IO MEDIA handles then
-	 * march through the device switch probing for things.
-	 */
-	i = efipart_inithandles();
-	if (i != 0 && i != ENOENT) {
-		printf("efipart_inithandles failed with ERRNO %d, expect "
-		    "failures\n", i);
-	}
-
-	for (i = 0; devsw[i] != NULL; i++)
-		if (devsw[i]->dv_init != NULL)
-			(devsw[i]->dv_init)();
 
 	/*
 	 * Read additional environment variables from the boot device's
@@ -1003,6 +999,7 @@ main(int argc, CHAR16 *argv[])
 		printf(" %S", argv[i]);
 	printf("\n");
 
+	printf("   Image base: 0x%lx\n", (unsigned long)boot_img->ImageBase);
 	printf("   EFI version: %d.%02d\n", ST->Hdr.Revision >> 16,
 	    ST->Hdr.Revision & 0xffff);
 	printf("   EFI Firmware: %S (rev %d.%02d)\n", ST->FirmwareVendor,
@@ -1017,7 +1014,8 @@ main(int argc, CHAR16 *argv[])
 		efi_free_devpath_name(text);
 	}
 
-	rv = BS->HandleProtocol(boot_img->DeviceHandle, &devid, (void **)&imgpath);
+	rv = OpenProtocolByHandle(boot_img->DeviceHandle, &devid,
+	    (void **)&imgpath);
 	if (rv == EFI_SUCCESS) {
 		text = efi_devpath_name(imgpath);
 		if (text != NULL) {
@@ -1292,10 +1290,8 @@ command_mode(int argc, char *argv[])
 	unsigned int mode;
 	int i;
 	char *cp;
-	char rowenv[8];
 	EFI_STATUS status;
 	SIMPLE_TEXT_OUTPUT_INTERFACE *conout;
-	extern void HO(void);
 
 	conout = ST->ConOut;
 
@@ -1315,9 +1311,7 @@ command_mode(int argc, char *argv[])
 			printf("couldn't set mode %d\n", mode);
 			return (CMD_ERROR);
 		}
-		sprintf(rowenv, "%u", (unsigned)rows);
-		setenv("LINES", rowenv, 1);
-		HO();		/* set cursor */
+		(void) efi_cons_update_mode();
 		return (CMD_OK);
 	}
 
@@ -1452,6 +1446,14 @@ command_chain(int argc, char *argv[])
 		return (CMD_ERROR);
 	}
 
+#ifdef LOADER_VERIEXEC
+	if (verify_file(fd, name, 0, VE_MUST) < 0) {
+		sprintf(command_errbuf, "can't verify: %s", name);
+		close(fd);
+		return (CMD_ERROR);
+	}
+#endif
+
 	if (fstat(fd, &st) < -1) {
 		command_errmsg = "stat failed";
 		close(fd);
@@ -1477,7 +1479,7 @@ command_chain(int argc, char *argv[])
 		command_errmsg = "LoadImage failed";
 		return (CMD_ERROR);
 	}
-	status = BS->HandleProtocol(loaderhandle, &LoadedImageGUID,
+	status = OpenProtocolByHandle(loaderhandle, &LoadedImageGUID,
 	    (void **)&loaded_image);
 
 	if (argc > 2) {

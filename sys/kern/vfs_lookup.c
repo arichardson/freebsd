@@ -139,6 +139,10 @@ static struct vop_vector crossmp_vnodeops = {
 	.vop_lock1 =		crossmp_vop_lock1,
 	.vop_unlock =		crossmp_vop_unlock,
 };
+/*
+ * VFS_VOP_VECTOR_REGISTER(crossmp_vnodeops) is not used here since the vnode
+ * gets allocated early. See nameiinit for the direct call below.
+ */
 
 struct nameicap_tracker {
 	struct vnode *dp;
@@ -156,6 +160,7 @@ nameiinit(void *dummy __unused)
 	    UMA_ALIGN_PTR, 0);
 	nt_zone = uma_zcreate("rentr", sizeof(struct nameicap_tracker),
 	    NULL, NULL, NULL, NULL, UMA_ALIGN_PTR, 0);
+	vfs_vector_op_register(&crossmp_vnodeops);
 	getnewvnode("crossmp", NULL, &crossmp_vnodeops, &vp_crossmp);
 }
 SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_SECOND, nameiinit, NULL);
@@ -867,7 +872,7 @@ dirloop:
 			}
 			if ((dp->v_vflag & VV_ROOT) == 0)
 				break;
-			if (dp->v_iflag & VI_DOOMED) {	/* forced unmount */
+			if (VN_IS_DOOMED(dp)) {	/* forced unmount */
 				error = ENOENT;
 				goto bad;
 			}
@@ -911,7 +916,7 @@ unionlookup:
 	if ((cnp->cn_flags & LOCKPARENT) && (cnp->cn_flags & ISLASTCN) &&
 	    dp != vp_crossmp && VOP_ISLOCKED(dp) == LK_SHARED)
 		vn_lock(dp, LK_UPGRADE|LK_RETRY);
-	if ((dp->v_iflag & VI_DOOMED) != 0) {
+	if (VN_IS_DOOMED(dp)) {
 		error = ENOENT;
 		goto bad;
 	}
@@ -1028,7 +1033,7 @@ good:
 	    ((cnp->cn_flags & FOLLOW) || (cnp->cn_flags & TRAILINGSLASH) ||
 	     *ndp->ni_next == '/')) {
 		cnp->cn_flags |= ISSYMLINK;
-		if (dp->v_iflag & VI_DOOMED) {
+		if (VN_IS_DOOMED(dp)) {
 			/*
 			 * We can't know whether the directory was mounted with
 			 * NOSYMFOLLOW, so we can't follow safely.
@@ -1135,7 +1140,7 @@ success:
 	if (needs_exclusive_leaf(dp->v_mount, cnp->cn_flags) &&
 	    VOP_ISLOCKED(dp) != LK_EXCLUSIVE) {
 		vn_lock(dp, LK_UPGRADE | LK_RETRY);
-		if (dp->v_iflag & VI_DOOMED) {
+		if (VN_IS_DOOMED(dp)) {
 			error = ENOENT;
 			goto bad2;
 		}
@@ -1332,6 +1337,10 @@ NDFREE(struct nameidata *ndp, const u_int flags)
 	if (!(flags & NDF_NO_VP_UNLOCK) &&
 	    (ndp->ni_cnd.cn_flags & LOCKLEAF) && ndp->ni_vp)
 		unlock_vp = 1;
+	if (!(flags & NDF_NO_DVP_UNLOCK) &&
+	    (ndp->ni_cnd.cn_flags & LOCKPARENT) &&
+	    ndp->ni_dvp != ndp->ni_vp)
+		unlock_dvp = 1;
 	if (!(flags & NDF_NO_VP_RELE) && ndp->ni_vp) {
 		if (unlock_vp) {
 			vput(ndp->ni_vp);
@@ -1342,10 +1351,6 @@ NDFREE(struct nameidata *ndp, const u_int flags)
 	}
 	if (unlock_vp)
 		VOP_UNLOCK(ndp->ni_vp, 0);
-	if (!(flags & NDF_NO_DVP_UNLOCK) &&
-	    (ndp->ni_cnd.cn_flags & LOCKPARENT) &&
-	    ndp->ni_dvp != ndp->ni_vp)
-		unlock_dvp = 1;
 	if (!(flags & NDF_NO_DVP_RELE) &&
 	    (ndp->ni_cnd.cn_flags & (LOCKPARENT|WANTPARENT))) {
 		if (unlock_dvp) {

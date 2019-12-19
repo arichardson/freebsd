@@ -55,6 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_extern.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_page.h>
+#include <vm/vm_phys.h>
 #include <vm/vm_map.h>
 
 #include <machine/atomic.h>
@@ -155,8 +156,6 @@ struct bus_dmamap {
 	bus_dma_tag_t	dmat;
 	struct memdesc	mem;
 	int		flags;
-	void		*origbuffer;
-	void		*allocbuffer;
 	TAILQ_ENTRY(bus_dmamap)	freelist;
 	STAILQ_ENTRY(bus_dmamap) links;
 	bus_dmamap_callback_t *callback;
@@ -204,11 +203,8 @@ dmamap_ctor(void *mem, int size, void *arg, int flags)
 
 	dmat->map_count++;
 
+	bzero(map, sizeof(*map));
 	map->dmat = dmat;
-	map->flags = 0;
-	map->slist = NULL;
-	map->allocbuffer = NULL;
-	map->sync_count = 0;
 	STAILQ_INIT(&map->bpages);
 
 	return (0);

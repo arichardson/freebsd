@@ -32,6 +32,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
+#include "opt_kern_tls.h"
 #include "opt_ratelimit.h"
 
 #include <sys/types.h>
@@ -39,6 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mbuf.h>
 #include <sys/socket.h>
 #include <sys/kernel.h>
+#include <sys/ktls.h>
 #include <sys/malloc.h>
 #include <sys/queue.h>
 #include <sys/sbuf.h>
@@ -47,6 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sglist.h>
 #include <sys/sysctl.h>
 #include <sys/smp.h>
+#include <sys/socketvar.h>
 #include <sys/counter.h>
 #include <net/bpf.h>
 #include <net/ethernet.h>
@@ -83,7 +86,9 @@ __FBSDID("$FreeBSD$");
 #endif
 
 /* Internal mbuf flags stored in PH_loc.eight[1]. */
+#define	MC_NOMAP		0x01
 #define	MC_RAW_WR		0x02
+#define	MC_TLS			0x04
 
 /*
  * Ethernet frames are DMA'd at this byte offset into the freelist buffer.
@@ -289,14 +294,14 @@ static inline u_int txpkt_vm_len16(u_int, u_int);
 static inline u_int txpkts0_len16(u_int);
 static inline u_int txpkts1_len16(void);
 static u_int write_raw_wr(struct sge_txq *, void *, struct mbuf *, u_int);
-static u_int write_txpkt_wr(struct sge_txq *, struct fw_eth_tx_pkt_wr *,
-    struct mbuf *, u_int);
+static u_int write_txpkt_wr(struct adapter *, struct sge_txq *,
+    struct fw_eth_tx_pkt_wr *, struct mbuf *, u_int);
 static u_int write_txpkt_vm_wr(struct adapter *, struct sge_txq *,
     struct fw_eth_tx_pkt_vm_wr *, struct mbuf *, u_int);
 static int try_txpkts(struct mbuf *, struct mbuf *, struct txpkts *, u_int);
 static int add_to_txpkts(struct mbuf *, struct txpkts *, u_int);
-static u_int write_txpkts_wr(struct sge_txq *, struct fw_eth_tx_pkts_wr *,
-    struct mbuf *, const struct txpkts *, u_int);
+static u_int write_txpkts_wr(struct adapter *, struct sge_txq *,
+    struct fw_eth_tx_pkts_wr *, struct mbuf *, const struct txpkts *, u_int);
 static void write_gl_to_txd(struct sge_txq *, struct mbuf *, caddr_t *, int);
 static inline void copy_to_txd(struct sge_eq *, caddr_t, caddr_t *, int);
 static inline void ring_eq_db(struct adapter *, struct sge_eq *, u_int);
@@ -1111,26 +1116,12 @@ t4_teardown_adapter_queues(struct adapter *sc)
 
 /* Maximum payload that can be delivered with a single iq descriptor */
 static inline int
-mtu_to_max_payload(struct adapter *sc, int mtu, const int toe)
+mtu_to_max_payload(struct adapter *sc, int mtu)
 {
-	int payload;
 
-#ifdef TCP_OFFLOAD
-	if (toe) {
-		int rxcs = G_RXCOALESCESIZE(t4_read_reg(sc, A_TP_PARA_REG2));
-
-		/* Note that COP can set rx_coalesce on/off per connection. */
-		payload = max(mtu, rxcs);
-	} else {
-#endif
-		/* large enough even when hw VLAN extraction is disabled */
-		payload = sc->params.sge.fl_pktshift + ETHER_HDR_LEN +
-		    ETHER_VLAN_ENCAP_LEN + mtu;
-#ifdef TCP_OFFLOAD
-	}
-#endif
-
-	return (payload);
+	/* large enough even when hw VLAN extraction is disabled */
+	return (sc->params.sge.fl_pktshift + ETHER_HDR_LEN +
+	    ETHER_VLAN_ENCAP_LEN + mtu);
 }
 
 int
@@ -1200,7 +1191,7 @@ t4_setup_vi_queues(struct vi_info *vi)
 	 * Allocate rx queues first because a default iqid is required when
 	 * creating a tx queue.
 	 */
-	maxp = mtu_to_max_payload(sc, mtu, 0);
+	maxp = mtu_to_max_payload(sc, mtu);
 	oid = SYSCTL_ADD_NODE(&vi->ctx, children, OID_AUTO, "rxq",
 	    CTLFLAG_RD, NULL, "rx queues");
 	for_each_rxq(vi, i, rxq) {
@@ -1222,7 +1213,6 @@ t4_setup_vi_queues(struct vi_info *vi)
 		intr_idx = saved_idx + max(vi->nrxq, vi->nnmrxq);
 #endif
 #ifdef TCP_OFFLOAD
-	maxp = mtu_to_max_payload(sc, mtu, 1);
 	oid = SYSCTL_ADD_NODE(&vi->ctx, children, OID_AUTO, "ofld_rxq",
 	    CTLFLAG_RD, NULL, "rx queues for offloaded TCP connections");
 	for_each_ofld_rxq(vi, i, ofld_rxq) {
@@ -2193,7 +2183,7 @@ t4_update_fl_bufsize(struct ifnet *ifp)
 	struct sge_fl *fl;
 	int i, maxp, mtu = ifp->if_mtu;
 
-	maxp = mtu_to_max_payload(sc, mtu, 0);
+	maxp = mtu_to_max_payload(sc, mtu);
 	for_each_rxq(vi, i, rxq) {
 		fl = &rxq->fl;
 
@@ -2202,7 +2192,6 @@ t4_update_fl_bufsize(struct ifnet *ifp)
 		FL_UNLOCK(fl);
 	}
 #ifdef TCP_OFFLOAD
-	maxp = mtu_to_max_payload(sc, mtu, 1);
 	for_each_ofld_rxq(vi, i, ofld_rxq) {
 		fl = &ofld_rxq->fl;
 
@@ -2255,7 +2244,8 @@ mbuf_len16(struct mbuf *m)
 
 	M_ASSERTPKTHDR(m);
 	n = m->m_pkthdr.PH_loc.eight[0];
-	MPASS(n > 0 && n <= SGE_MAX_WR_LEN / 16);
+	if (!(mbuf_cflags(m) & MC_TLS))
+		MPASS(n > 0 && n <= SGE_MAX_WR_LEN / 16);
 
 	return (n);
 }
@@ -2322,10 +2312,10 @@ set_mbuf_eo_tsclk_tsoff(struct mbuf *m, uint8_t tsclk_tsoff)
 }
 
 static inline int
-needs_eo(struct mbuf *m)
+needs_eo(struct cxgbe_snd_tag *cst)
 {
 
-	return (m->m_pkthdr.snd_tag != NULL);
+	return (cst != NULL && cst->type == IF_SND_TAG_TYPE_RATE_LIMIT);
 }
 #endif
 
@@ -2355,6 +2345,16 @@ alloc_wr_mbuf(int len, int how)
 }
 
 static inline int
+needs_hwcsum(struct mbuf *m)
+{
+
+	M_ASSERTPKTHDR(m);
+
+	return (m->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_UDP | CSUM_IP |
+	    CSUM_TSO | CSUM_UDP_IPV6 | CSUM_TCP_IPV6));
+}
+
+static inline int
 needs_tso(struct mbuf *m)
 {
 
@@ -2373,6 +2373,15 @@ needs_l3_csum(struct mbuf *m)
 }
 
 static inline int
+needs_tcp_csum(struct mbuf *m)
+{
+
+	M_ASSERTPKTHDR(m);
+	return (m->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_TCP_IPV6 | CSUM_TSO));
+}
+
+#ifdef RATELIMIT
+static inline int
 needs_l4_csum(struct mbuf *m)
 {
 
@@ -2382,15 +2391,6 @@ needs_l4_csum(struct mbuf *m)
 	    CSUM_TCP_IPV6 | CSUM_TSO));
 }
 
-static inline int
-needs_tcp_csum(struct mbuf *m)
-{
-
-	M_ASSERTPKTHDR(m);
-	return (m->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_TCP_IPV6 | CSUM_TSO));
-}
-
-#ifdef RATELIMIT
 static inline int
 needs_udp_csum(struct mbuf *m)
 {
@@ -2434,15 +2434,78 @@ m_advance(struct mbuf **pm, int *poffset, int len)
 	return ((void *)p);
 }
 
+static inline int
+count_mbuf_ext_pgs(struct mbuf *m, int skip, vm_paddr_t *nextaddr)
+{
+	struct mbuf_ext_pgs *ext_pgs;
+	vm_paddr_t paddr;
+	int i, len, off, pglen, pgoff, seglen, segoff;
+	int nsegs = 0;
+
+	MBUF_EXT_PGS_ASSERT(m);
+	ext_pgs = m->m_ext.ext_pgs;
+	off = mtod(m, vm_offset_t);
+	len = m->m_len;
+	off += skip;
+	len -= skip;
+
+	if (ext_pgs->hdr_len != 0) {
+		if (off >= ext_pgs->hdr_len) {
+			off -= ext_pgs->hdr_len;
+		} else {
+			seglen = ext_pgs->hdr_len - off;
+			segoff = off;
+			seglen = min(seglen, len);
+			off = 0;
+			len -= seglen;
+			paddr = pmap_kextract(
+			    (vm_offset_t)&ext_pgs->hdr[segoff]);
+			if (*nextaddr != paddr)
+				nsegs++;
+			*nextaddr = paddr + seglen;
+		}
+	}
+	pgoff = ext_pgs->first_pg_off;
+	for (i = 0; i < ext_pgs->npgs && len > 0; i++) {
+		pglen = mbuf_ext_pg_len(ext_pgs, i, pgoff);
+		if (off >= pglen) {
+			off -= pglen;
+			pgoff = 0;
+			continue;
+		}
+		seglen = pglen - off;
+		segoff = pgoff + off;
+		off = 0;
+		seglen = min(seglen, len);
+		len -= seglen;
+		paddr = ext_pgs->pa[i] + segoff;
+		if (*nextaddr != paddr)
+			nsegs++;
+		*nextaddr = paddr + seglen;
+		pgoff = 0;
+	};
+	if (len != 0) {
+		seglen = min(len, ext_pgs->trail_len - off);
+		len -= seglen;
+		paddr = pmap_kextract((vm_offset_t)&ext_pgs->trail[off]);
+		if (*nextaddr != paddr)
+			nsegs++;
+		*nextaddr = paddr + seglen;
+	}
+
+	return (nsegs);
+}
+
+
 /*
  * Can deal with empty mbufs in the chain that have m_len = 0, but the chain
  * must have at least one mbuf that's not empty.  It is possible for this
  * routine to return 0 if skip accounts for all the contents of the mbuf chain.
  */
 static inline int
-count_mbuf_nsegs(struct mbuf *m, int skip)
+count_mbuf_nsegs(struct mbuf *m, int skip, uint8_t *cflags)
 {
-	vm_paddr_t lastb, next;
+	vm_paddr_t nextaddr, paddr;
 	vm_offset_t va;
 	int len, nsegs;
 
@@ -2451,9 +2514,8 @@ count_mbuf_nsegs(struct mbuf *m, int skip)
 	MPASS(m->m_pkthdr.len >= skip);
 
 	nsegs = 0;
-	lastb = 0;
+	nextaddr = 0;
 	for (; m; m = m->m_next) {
-
 		len = m->m_len;
 		if (__predict_false(len == 0))
 			continue;
@@ -2461,14 +2523,20 @@ count_mbuf_nsegs(struct mbuf *m, int skip)
 			skip -= len;
 			continue;
 		}
+		if ((m->m_flags & M_NOMAP) != 0) {
+			*cflags |= MC_NOMAP;
+			nsegs += count_mbuf_ext_pgs(m, skip, &nextaddr);
+			skip = 0;
+			continue;
+		}
 		va = mtod(m, vm_offset_t) + skip;
 		len -= skip;
 		skip = 0;
-		next = pmap_kextract(va);
+		paddr = pmap_kextract(va);
 		nsegs += sglist_count((void *)(uintptr_t)va, len);
-		if (lastb + 1 == next)
+		if (paddr == nextaddr)
 			nsegs--;
-		lastb = pmap_kextract(va + len - 1);
+		nextaddr = pmap_kextract(va + len - 1) + 1;
 	}
 
 	return (nsegs);
@@ -2489,8 +2557,13 @@ parse_pkt(struct adapter *sc, struct mbuf **mp)
 #if defined(INET) || defined(INET6)
 	struct tcphdr *tcp;
 #endif
+#if defined(KERN_TLS) || defined(RATELIMIT)
+	struct cxgbe_snd_tag *cst;
+#endif
 	uint16_t eh_type;
+	uint8_t cflags;
 
+	cflags = 0;
 	M_ASSERTPKTHDR(m0);
 	if (__predict_false(m0->m_pkthdr.len < ETHER_HDR_LEN)) {
 		rc = EINVAL;
@@ -2506,7 +2579,27 @@ restart:
 	 */
 	M_ASSERTPKTHDR(m0);
 	MPASS(m0->m_pkthdr.len > 0);
-	nsegs = count_mbuf_nsegs(m0, 0);
+	nsegs = count_mbuf_nsegs(m0, 0, &cflags);
+#if defined(KERN_TLS) || defined(RATELIMIT)
+	if (m0->m_pkthdr.csum_flags & CSUM_SND_TAG)
+		cst = mst_to_cst(m0->m_pkthdr.snd_tag);
+	else
+		cst = NULL;
+#endif
+#ifdef KERN_TLS
+	if (cst != NULL && cst->type == IF_SND_TAG_TYPE_TLS) {
+		int len16;
+
+		cflags |= MC_TLS;
+		set_mbuf_cflags(m0, cflags);
+		rc = t6_ktls_parse_pkt(m0, &nsegs, &len16);
+		if (rc != 0)
+			goto fail;
+		set_mbuf_nsegs(m0, nsegs);
+		set_mbuf_len16(m0, len16);
+		return (0);
+	}
+#endif
 	if (nsegs > (needs_tso(m0) ? TX_SGL_SEGS_TSO : TX_SGL_SEGS)) {
 		if (defragged++ > 0 || (m = m_defrag(m0, M_NOWAIT)) == NULL) {
 			rc = EFBIG;
@@ -2516,7 +2609,8 @@ restart:
 		goto restart;
 	}
 
-	if (__predict_false(nsegs > 2 && m0->m_pkthdr.len <= MHLEN)) {
+	if (__predict_false(nsegs > 2 && m0->m_pkthdr.len <= MHLEN &&
+	    !(cflags & MC_NOMAP))) {
 		m0 = m_pullup(m0, m0->m_pkthdr.len);
 		if (m0 == NULL) {
 			/* Should have left well enough alone. */
@@ -2527,7 +2621,7 @@ restart:
 		goto restart;
 	}
 	set_mbuf_nsegs(m0, nsegs);
-	set_mbuf_cflags(m0, 0);
+	set_mbuf_cflags(m0, cflags);
 	if (sc->flags & IS_VF)
 		set_mbuf_len16(m0, txpkt_vm_len16(nsegs, needs_tso(m0)));
 	else
@@ -2539,15 +2633,19 @@ restart:
 	 * checksumming is enabled.  needs_l4_csum happens to check for all the
 	 * right things.
 	 */
-	if (__predict_false(needs_eo(m0) && !needs_l4_csum(m0)))
+	if (__predict_false(needs_eo(cst) && !needs_l4_csum(m0))) {
+		m_snd_tag_rele(m0->m_pkthdr.snd_tag);
 		m0->m_pkthdr.snd_tag = NULL;
+		m0->m_pkthdr.csum_flags &= ~CSUM_SND_TAG;
+		cst = NULL;
+	}
 #endif
 
-	if (!needs_tso(m0) &&
+	if (!needs_hwcsum(m0)
 #ifdef RATELIMIT
-	    !needs_eo(m0) &&
+   		 && !needs_eo(cst)
 #endif
-	    !(sc->flags & IS_VF && (needs_l3_csum(m0) || needs_l4_csum(m0))))
+	)
 		return (0);
 
 	m = m0;
@@ -2607,13 +2705,15 @@ restart:
 #endif
 	}
 #ifdef RATELIMIT
-	if (needs_eo(m0)) {
+	if (needs_eo(cst)) {
 		u_int immhdrs;
 
 		/* EO WRs have the headers in the WR and not the GL. */
 		immhdrs = m0->m_pkthdr.l2hlen + m0->m_pkthdr.l3hlen +
 		    m0->m_pkthdr.l4hlen;
-		nsegs = count_mbuf_nsegs(m0, immhdrs);
+		cflags = 0;
+		nsegs = count_mbuf_nsegs(m0, immhdrs, &cflags);
+		MPASS(cflags == mbuf_cflags(m0));
 		set_mbuf_eo_nsegs(m0, nsegs);
 		set_mbuf_eo_len16(m0,
 		    txpkt_eo_len16(nsegs, immhdrs, needs_tso(m0)));
@@ -2770,7 +2870,7 @@ cannot_use_txpkts(struct mbuf *m)
 {
 	/* maybe put a GL limit too, to avoid silliness? */
 
-	return (needs_tso(m) || (mbuf_cflags(m) & MC_RAW_WR) != 0);
+	return (needs_tso(m) || (mbuf_cflags(m) & (MC_RAW_WR | MC_TLS)) != 0);
 }
 
 static inline int
@@ -2788,6 +2888,7 @@ wr_can_update_eq(struct fw_eth_tx_pkts_wr *wr)
 	case FW_ULPTX_WR:
 	case FW_ETH_TX_PKT_WR:
 	case FW_ETH_TX_PKTS_WR:
+	case FW_ETH_TX_PKTS2_WR:
 	case FW_ETH_TX_PKT_VM_WR:
 		return (1);
 	default:
@@ -2845,7 +2946,8 @@ eth_tx(struct mp_ring *r, u_int cidx, u_int pidx)
 		M_ASSERTPKTHDR(m0);
 		MPASS(m0->m_nextpkt == NULL);
 
-		if (available < SGE_MAX_WR_NDESC) {
+		if (available < howmany(mbuf_len16(m0), EQ_ESIZE / 16)) {
+			MPASS(howmany(mbuf_len16(m0), EQ_ESIZE / 16) <= 64);
 			available += reclaim_tx_descs(txq, 64);
 			if (available < howmany(mbuf_len16(m0), EQ_ESIZE / 16))
 				break;	/* out of descriptors */
@@ -2856,7 +2958,19 @@ eth_tx(struct mp_ring *r, u_int cidx, u_int pidx)
 			next_cidx = 0;
 
 		wr = (void *)&eq->desc[eq->pidx];
-		if (sc->flags & IS_VF) {
+		if (mbuf_cflags(m0) & MC_RAW_WR) {
+			total++;
+			remaining--;
+			n = write_raw_wr(txq, (void *)wr, m0, available);
+#ifdef KERN_TLS
+		} else if (mbuf_cflags(m0) & MC_TLS) {
+			total++;
+			remaining--;
+			ETHER_BPF_MTAP(ifp, m0);
+			n = t6_ktls_write_wr(txq,(void *)wr, m0,
+			    mbuf_nsegs(m0), available);
+#endif
+		} else if (sc->flags & IS_VF) {
 			total++;
 			remaining--;
 			ETHER_BPF_MTAP(ifp, m0);
@@ -2887,20 +3001,18 @@ eth_tx(struct mp_ring *r, u_int cidx, u_int pidx)
 					next_cidx = 0;
 			}
 
-			n = write_txpkts_wr(txq, wr, m0, &txp, available);
+			n = write_txpkts_wr(sc, txq, wr, m0, &txp, available);
 			total += txp.npkt;
 			remaining -= txp.npkt;
-		} else if (mbuf_cflags(m0) & MC_RAW_WR) {
-			total++;
-			remaining--;
-			n = write_raw_wr(txq, (void *)wr, m0, available);
 		} else {
 			total++;
 			remaining--;
 			ETHER_BPF_MTAP(ifp, m0);
-			n = write_txpkt_wr(txq, (void *)wr, m0, available);
+			n = write_txpkt_wr(sc, txq, (void *)wr, m0, available);
 		}
-		MPASS(n >= 1 && n <= available && n <= SGE_MAX_WR_NDESC);
+		MPASS(n >= 1 && n <= available);
+		if (!(mbuf_cflags(m0) & MC_TLS))
+			MPASS(n <= SGE_MAX_WR_NDESC);
 
 		available -= n;
 		dbdiff += n;
@@ -3140,7 +3252,7 @@ alloc_iq_fl(struct vi_info *vi, struct sge_iq *iq, struct sge_fl *fl,
 		}
 		c.fl0dcaen_to_fl0cidxfthresh =
 		    htobe16(V_FW_IQ_CMD_FL0FBMIN(chip_id(sc) <= CHELSIO_T5 ?
-			X_FETCHBURSTMIN_128B : X_FETCHBURSTMIN_64B) |
+			X_FETCHBURSTMIN_128B : X_FETCHBURSTMIN_64B_T6) |
 			V_FW_IQ_CMD_FL0FBMAX(chip_id(sc) <= CHELSIO_T5 ?
 			X_FETCHBURSTMAX_512B : X_FETCHBURSTMAX_256B));
 		c.fl0size = htobe16(fl->qsize);
@@ -3652,6 +3764,10 @@ alloc_nm_txq(struct vi_info *vi, struct sge_nm_txq *nm_txq, int iqidx, int idx,
 	nm_txq->cpl_ctrl0 = htobe32(V_TXPKT_OPCODE(CPL_TX_PKT) |
 	    V_TXPKT_INTF(pi->tx_chan) | V_TXPKT_PF(sc->pf) |
 	    V_TXPKT_VF(vi->vin) | V_TXPKT_VF_VLD(vi->vfvld));
+	if (sc->params.fw_vers >= FW_VERSION32(1, 24, 11, 0))
+		nm_txq->op_pkd = htobe32(V_FW_WR_OP(FW_ETH_TX_PKTS2_WR));
+	else
+		nm_txq->op_pkd = htobe32(V_FW_WR_OP(FW_ETH_TX_PKTS_WR));
 	nm_txq->cntxt_id = INVALID_NM_TXQ_CNTXT_ID;
 
 	snprintf(name, sizeof(name), "%d", idx);
@@ -3726,7 +3842,8 @@ ctrl_eq_alloc(struct adapter *sc, struct sge_eq *eq)
 		V_FW_EQ_CTRL_CMD_PCIECHN(eq->tx_chan) |
 		F_FW_EQ_CTRL_CMD_FETCHRO | V_FW_EQ_CTRL_CMD_IQID(eq->iqid));
 	c.dcaen_to_eqsize =
-	    htobe32(V_FW_EQ_CTRL_CMD_FBMIN(X_FETCHBURSTMIN_64B) |
+	    htobe32(V_FW_EQ_CTRL_CMD_FBMIN(chip_id(sc) <= CHELSIO_T5 ?
+		X_FETCHBURSTMIN_64B : X_FETCHBURSTMIN_64B_T6) |
 		V_FW_EQ_CTRL_CMD_FBMAX(X_FETCHBURSTMAX_512B) |
 		V_FW_EQ_CTRL_CMD_CIDXFTHRESH(qsize_to_fthresh(qsize)) |
 		V_FW_EQ_CTRL_CMD_EQSIZE(qsize));
@@ -3770,9 +3887,11 @@ eth_eq_alloc(struct adapter *sc, struct vi_info *vi, struct sge_eq *eq)
 	    htobe32(V_FW_EQ_ETH_CMD_HOSTFCMODE(X_HOSTFCMODE_NONE) |
 		V_FW_EQ_ETH_CMD_PCIECHN(eq->tx_chan) | F_FW_EQ_ETH_CMD_FETCHRO |
 		V_FW_EQ_ETH_CMD_IQID(eq->iqid));
-	c.dcaen_to_eqsize = htobe32(V_FW_EQ_ETH_CMD_FBMIN(X_FETCHBURSTMIN_64B) |
-	    V_FW_EQ_ETH_CMD_FBMAX(X_FETCHBURSTMAX_512B) |
-	    V_FW_EQ_ETH_CMD_EQSIZE(qsize));
+	c.dcaen_to_eqsize =
+	    htobe32(V_FW_EQ_ETH_CMD_FBMIN(chip_id(sc) <= CHELSIO_T5 ?
+		X_FETCHBURSTMIN_64B : X_FETCHBURSTMIN_64B_T6) |
+		V_FW_EQ_ETH_CMD_FBMAX(X_FETCHBURSTMAX_512B) |
+		V_FW_EQ_ETH_CMD_EQSIZE(qsize));
 	c.eqaddr = htobe64(eq->ba);
 
 	rc = -t4_wr_mbox(sc, sc->mbox, &c, sizeof(c), &c);
@@ -3814,7 +3933,8 @@ ofld_eq_alloc(struct adapter *sc, struct vi_info *vi, struct sge_eq *eq)
 		    V_FW_EQ_OFLD_CMD_PCIECHN(eq->tx_chan) |
 		    F_FW_EQ_OFLD_CMD_FETCHRO | V_FW_EQ_OFLD_CMD_IQID(eq->iqid));
 	c.dcaen_to_eqsize =
-	    htobe32(V_FW_EQ_OFLD_CMD_FBMIN(X_FETCHBURSTMIN_64B) |
+	    htobe32(V_FW_EQ_OFLD_CMD_FBMIN(chip_id(sc) <= CHELSIO_T5 ?
+		X_FETCHBURSTMIN_64B : X_FETCHBURSTMIN_64B_T6) |
 		V_FW_EQ_OFLD_CMD_FBMAX(X_FETCHBURSTMAX_512B) |
 		V_FW_EQ_OFLD_CMD_CIDXFTHRESH(qsize_to_fthresh(qsize)) |
 		V_FW_EQ_OFLD_CMD_EQSIZE(qsize));
@@ -4051,7 +4171,7 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 		txq->cpl_ctrl0 = htobe32(V_TXPKT_OPCODE(CPL_TX_PKT_XT) |
 		    V_TXPKT_INTF(pi->tx_chan));
 	else
-		txq->cpl_ctrl0 = htobe32(V_TXPKT_OPCODE(CPL_TX_PKT) |
+		txq->cpl_ctrl0 = htobe32(V_TXPKT_OPCODE(CPL_TX_PKT_XT) |
 		    V_TXPKT_INTF(pi->tx_chan) | V_TXPKT_PF(sc->pf) |
 		    V_TXPKT_VF(vi->vin) | V_TXPKT_VF_VLD(vi->vfvld));
 	txq->tc_idx = -1;
@@ -4112,6 +4232,49 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 	    "# of frames tx'd using type1 txpkts work requests");
 	SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO, "raw_wrs", CTLFLAG_RD,
 	    &txq->raw_wrs, "# of raw work requests (non-packets)");
+	SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO, "tls_wrs", CTLFLAG_RD,
+	    &txq->tls_wrs, "# of TLS work requests (TLS records)");
+
+#ifdef KERN_TLS
+	if (sc->flags & KERN_TLS_OK) {
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_records", CTLFLAG_RD, &txq->kern_tls_records,
+		    "# of NIC TLS records transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_short", CTLFLAG_RD, &txq->kern_tls_short,
+		    "# of short NIC TLS records transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_partial", CTLFLAG_RD, &txq->kern_tls_partial,
+		    "# of partial NIC TLS records transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_full", CTLFLAG_RD, &txq->kern_tls_full,
+		    "# of full NIC TLS records transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_octets", CTLFLAG_RD, &txq->kern_tls_octets,
+		    "# of payload octets in transmitted NIC TLS records");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_waste", CTLFLAG_RD, &txq->kern_tls_waste,
+		    "# of octets DMAd but not transmitted in NIC TLS records");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_options", CTLFLAG_RD, &txq->kern_tls_options,
+		    "# of NIC TLS options-only packets transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_header", CTLFLAG_RD, &txq->kern_tls_header,
+		    "# of NIC TLS header-only packets transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_fin", CTLFLAG_RD, &txq->kern_tls_fin,
+		    "# of NIC TLS FIN-only packets transmitted");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_fin_short", CTLFLAG_RD, &txq->kern_tls_fin_short,
+		    "# of NIC TLS padded FIN packets on short TLS records");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_cbc", CTLFLAG_RD, &txq->kern_tls_cbc,
+		    "# of NIC TLS sessions using AES-CBC");
+		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
+		    "kern_tls_gcm", CTLFLAG_RD, &txq->kern_tls_gcm,
+		    "# of NIC TLS sessions using AES-GCM");
+	}
+#endif
 
 	SYSCTL_ADD_COUNTER_U64(&vi->ctx, children, OID_AUTO, "r_enqueues",
 	    CTLFLAG_RD, &txq->r->enqueues,
@@ -4479,6 +4642,55 @@ imm_payload(u_int ndesc)
 	return (n);
 }
 
+static inline uint64_t
+csum_to_ctrl(struct adapter *sc, struct mbuf *m)
+{
+	uint64_t ctrl;
+	int csum_type;
+
+	M_ASSERTPKTHDR(m);
+
+	if (needs_hwcsum(m) == 0)
+		return (F_TXPKT_IPCSUM_DIS | F_TXPKT_L4CSUM_DIS);
+
+	ctrl = 0;
+	if (needs_l3_csum(m) == 0)
+		ctrl |= F_TXPKT_IPCSUM_DIS;
+	switch (m->m_pkthdr.csum_flags &
+	    (CSUM_IP_TCP | CSUM_IP_UDP | CSUM_IP6_TCP | CSUM_IP6_UDP)) {
+	case CSUM_IP_TCP:
+		csum_type = TX_CSUM_TCPIP;
+		break;
+	case CSUM_IP_UDP:
+		csum_type = TX_CSUM_UDPIP;
+		break;
+	case CSUM_IP6_TCP:
+		csum_type = TX_CSUM_TCPIP6;
+		break;
+	case CSUM_IP6_UDP:
+		csum_type = TX_CSUM_UDPIP6;
+		break;
+	default:
+		/* needs_hwcsum told us that at least some hwcsum is needed. */
+		MPASS(ctrl == 0);
+		MPASS(m->m_pkthdr.csum_flags & CSUM_IP);
+		ctrl |= F_TXPKT_L4CSUM_DIS;
+		csum_type = TX_CSUM_IP;
+		break;
+	}
+
+	MPASS(m->m_pkthdr.l2hlen > 0);
+	MPASS(m->m_pkthdr.l3hlen > 0);
+	ctrl |= V_TXPKT_CSUM_TYPE(csum_type) |
+	    V_TXPKT_IPHDR_LEN(m->m_pkthdr.l3hlen);
+	if (chip_id(sc) <= CHELSIO_T5)
+		ctrl |= V_TXPKT_ETHHDR_LEN(m->m_pkthdr.l2hlen - ETHER_HDR_LEN);
+	else
+		ctrl |= V_T6_TXPKT_ETHHDR_LEN(m->m_pkthdr.l2hlen - ETHER_HDR_LEN);
+
+	return (ctrl);
+}
+
 /*
  * Write a VM txpkt WR for this packet to the hardware descriptors, update the
  * software descriptor, and advance the pidx.  It is guaranteed that enough
@@ -4495,7 +4707,7 @@ write_txpkt_vm_wr(struct adapter *sc, struct sge_txq *txq,
 	struct cpl_tx_pkt_core *cpl;
 	uint32_t ctrl;	/* used in many unrelated places */
 	uint64_t ctrl1;
-	int csum_type, len16, ndesc, pktlen, nsegs;
+	int len16, ndesc, pktlen, nsegs;
 	caddr_t dst;
 
 	TXQ_LOCK_ASSERT_OWNED(txq);
@@ -4520,7 +4732,7 @@ write_txpkt_vm_wr(struct adapter *sc, struct sge_txq *txq,
 	wr->equiq_to_len16 = htobe32(ctrl);
 	wr->r3[0] = 0;
 	wr->r3[1] = 0;
-	
+
 	/*
 	 * Copy over ethmacdst, ethmacsrc, ethtype, and vlantci.
 	 * vlantci is ignored unless the ethtype is 0x8100, so it's
@@ -4530,7 +4742,6 @@ write_txpkt_vm_wr(struct adapter *sc, struct sge_txq *txq,
 	 */
 	m_copydata(m0, 0, sizeof(struct ether_header) + 2, wr->ethmacdst);
 
-	csum_type = -1;
 	if (needs_tso(m0)) {
 		struct cpl_tx_pkt_lso_core *lso = (void *)(wr + 1);
 
@@ -4540,10 +4751,10 @@ write_txpkt_vm_wr(struct adapter *sc, struct sge_txq *txq,
 			__func__, m0));
 
 		ctrl = V_LSO_OPCODE(CPL_TX_PKT_LSO) | F_LSO_FIRST_SLICE |
-		    F_LSO_LAST_SLICE | V_LSO_IPHDR_LEN(m0->m_pkthdr.l3hlen >> 2)
-		    | V_LSO_TCPHDR_LEN(m0->m_pkthdr.l4hlen >> 2);
-		if (m0->m_pkthdr.l2hlen == sizeof(struct ether_vlan_header))
-			ctrl |= V_LSO_ETHHDR_LEN(1);
+		    F_LSO_LAST_SLICE | V_LSO_ETHHDR_LEN((m0->m_pkthdr.l2hlen -
+			ETHER_HDR_LEN) >> 2) |
+		    V_LSO_IPHDR_LEN(m0->m_pkthdr.l3hlen >> 2) |
+		    V_LSO_TCPHDR_LEN(m0->m_pkthdr.l4hlen >> 2);
 		if (m0->m_pkthdr.l3hlen == sizeof(struct ip6_hdr))
 			ctrl |= F_LSO_IPV6;
 
@@ -4553,70 +4764,15 @@ write_txpkt_vm_wr(struct adapter *sc, struct sge_txq *txq,
 		lso->seqno_offset = htobe32(0);
 		lso->len = htobe32(pktlen);
 
-		if (m0->m_pkthdr.l3hlen == sizeof(struct ip6_hdr))
-			csum_type = TX_CSUM_TCPIP6;
-		else
-			csum_type = TX_CSUM_TCPIP;
-
 		cpl = (void *)(lso + 1);
 
 		txq->tso_wrs++;
-	} else {
-		if (m0->m_pkthdr.csum_flags & CSUM_IP_TCP)
-			csum_type = TX_CSUM_TCPIP;
-		else if (m0->m_pkthdr.csum_flags & CSUM_IP_UDP)
-			csum_type = TX_CSUM_UDPIP;
-		else if (m0->m_pkthdr.csum_flags & CSUM_IP6_TCP)
-			csum_type = TX_CSUM_TCPIP6;
-		else if (m0->m_pkthdr.csum_flags & CSUM_IP6_UDP)
-			csum_type = TX_CSUM_UDPIP6;
-#if defined(INET)
-		else if (m0->m_pkthdr.csum_flags & CSUM_IP) {
-			/*
-			 * XXX: The firmware appears to stomp on the
-			 * fragment/flags field of the IP header when
-			 * using TX_CSUM_IP.  Fall back to doing
-			 * software checksums.
-			 */
-			u_short *sump;
-			struct mbuf *m;
-			int offset;
-
-			m = m0;
-			offset = 0;
-			sump = m_advance(&m, &offset, m0->m_pkthdr.l2hlen +
-			    offsetof(struct ip, ip_sum));
-			*sump = in_cksum_skip(m0, m0->m_pkthdr.l2hlen +
-			    m0->m_pkthdr.l3hlen, m0->m_pkthdr.l2hlen);
-			m0->m_pkthdr.csum_flags &= ~CSUM_IP;
-		}
-#endif
-
+	} else
 		cpl = (void *)(wr + 1);
-	}
 
 	/* Checksum offload */
-	ctrl1 = 0;
-	if (needs_l3_csum(m0) == 0)
-		ctrl1 |= F_TXPKT_IPCSUM_DIS;
-	if (csum_type >= 0) {
-		KASSERT(m0->m_pkthdr.l2hlen > 0 && m0->m_pkthdr.l3hlen > 0,
-	    ("%s: mbuf %p needs checksum offload but missing header lengths",
-			__func__, m0));
-
-		if (chip_id(sc) <= CHELSIO_T5) {
-			ctrl1 |= V_TXPKT_ETHHDR_LEN(m0->m_pkthdr.l2hlen -
-			    ETHER_HDR_LEN);
-		} else {
-			ctrl1 |= V_T6_TXPKT_ETHHDR_LEN(m0->m_pkthdr.l2hlen -
-			    ETHER_HDR_LEN);
-		}
-		ctrl1 |= V_TXPKT_IPHDR_LEN(m0->m_pkthdr.l3hlen);
-		ctrl1 |= V_TXPKT_CSUM_TYPE(csum_type);
-	} else
-		ctrl1 |= F_TXPKT_L4CSUM_DIS;
-	if (m0->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TCP | CSUM_UDP |
-	    CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO))
+	ctrl1 = csum_to_ctrl(sc, m0);
+	if (ctrl1 != (F_TXPKT_IPCSUM_DIS | F_TXPKT_L4CSUM_DIS))
 		txq->txcsum++;	/* some hardware assistance provided */
 
 	/* VLAN tag insertion */
@@ -4699,8 +4855,8 @@ write_raw_wr(struct sge_txq *txq, void *wr, struct mbuf *m0, u_int available)
  * The return value is the # of hardware descriptors used.
  */
 static u_int
-write_txpkt_wr(struct sge_txq *txq, struct fw_eth_tx_pkt_wr *wr,
-    struct mbuf *m0, u_int available)
+write_txpkt_wr(struct adapter *sc, struct sge_txq *txq,
+    struct fw_eth_tx_pkt_wr *wr, struct mbuf *m0, u_int available)
 {
 	struct sge_eq *eq = &txq->eq;
 	struct tx_sdesc *txsd;
@@ -4720,7 +4876,8 @@ write_txpkt_wr(struct sge_txq *txq, struct fw_eth_tx_pkt_wr *wr,
 	ctrl = sizeof(struct cpl_tx_pkt_core);
 	if (needs_tso(m0))
 		ctrl += sizeof(struct cpl_tx_pkt_lso_core);
-	else if (pktlen <= imm_payload(2) && available >= 2) {
+	else if (!(mbuf_cflags(m0) & MC_NOMAP) && pktlen <= imm_payload(2) &&
+	    available >= 2) {
 		/* Immediate data.  Recalculate len16 and set nsegs to 0. */
 		ctrl += pktlen;
 		len16 = howmany(sizeof(struct fw_eth_tx_pkt_wr) +
@@ -4748,10 +4905,10 @@ write_txpkt_wr(struct sge_txq *txq, struct fw_eth_tx_pkt_wr *wr,
 			__func__, m0));
 
 		ctrl = V_LSO_OPCODE(CPL_TX_PKT_LSO) | F_LSO_FIRST_SLICE |
-		    F_LSO_LAST_SLICE | V_LSO_IPHDR_LEN(m0->m_pkthdr.l3hlen >> 2)
-		    | V_LSO_TCPHDR_LEN(m0->m_pkthdr.l4hlen >> 2);
-		if (m0->m_pkthdr.l2hlen == sizeof(struct ether_vlan_header))
-			ctrl |= V_LSO_ETHHDR_LEN(1);
+		    F_LSO_LAST_SLICE | V_LSO_ETHHDR_LEN((m0->m_pkthdr.l2hlen -
+			ETHER_HDR_LEN) >> 2) |
+		    V_LSO_IPHDR_LEN(m0->m_pkthdr.l3hlen >> 2) |
+		    V_LSO_TCPHDR_LEN(m0->m_pkthdr.l4hlen >> 2);
 		if (m0->m_pkthdr.l3hlen == sizeof(struct ip6_hdr))
 			ctrl |= F_LSO_IPV6;
 
@@ -4768,13 +4925,8 @@ write_txpkt_wr(struct sge_txq *txq, struct fw_eth_tx_pkt_wr *wr,
 		cpl = (void *)(wr + 1);
 
 	/* Checksum offload */
-	ctrl1 = 0;
-	if (needs_l3_csum(m0) == 0)
-		ctrl1 |= F_TXPKT_IPCSUM_DIS;
-	if (needs_l4_csum(m0) == 0)
-		ctrl1 |= F_TXPKT_L4CSUM_DIS;
-	if (m0->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TCP | CSUM_UDP |
-	    CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO))
+	ctrl1 = csum_to_ctrl(sc, m0);
+	if (ctrl1 != (F_TXPKT_IPCSUM_DIS | F_TXPKT_L4CSUM_DIS))
 		txq->txcsum++;	/* some hardware assistance provided */
 
 	/* VLAN tag insertion */
@@ -4895,8 +5047,9 @@ add_to_txpkts(struct mbuf *m, struct txpkts *txp, u_int available)
  * The return value is the # of hardware descriptors used.
  */
 static u_int
-write_txpkts_wr(struct sge_txq *txq, struct fw_eth_tx_pkts_wr *wr,
-    struct mbuf *m0, const struct txpkts *txp, u_int available)
+write_txpkts_wr(struct adapter *sc, struct sge_txq *txq,
+    struct fw_eth_tx_pkts_wr *wr, struct mbuf *m0, const struct txpkts *txp,
+    u_int available)
 {
 	struct sge_eq *eq = &txq->eq;
 	struct tx_sdesc *txsd;
@@ -4960,13 +5113,8 @@ write_txpkts_wr(struct sge_txq *txq, struct fw_eth_tx_pkts_wr *wr,
 		}
 
 		/* Checksum offload */
-		ctrl1 = 0;
-		if (needs_l3_csum(m) == 0)
-			ctrl1 |= F_TXPKT_IPCSUM_DIS;
-		if (needs_l4_csum(m) == 0)
-			ctrl1 |= F_TXPKT_L4CSUM_DIS;
-		if (m->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TCP | CSUM_UDP |
-		    CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO))
+		ctrl1 = csum_to_ctrl(sc, m);
+		if (ctrl1 != (F_TXPKT_IPCSUM_DIS | F_TXPKT_L4CSUM_DIS))
 			txq->txcsum++;	/* some hardware assistance provided */
 
 		/* VLAN tag insertion */
@@ -5660,7 +5808,7 @@ done:
 #define ETID_FLOWC_LEN16 (howmany(ETID_FLOWC_LEN, 16))
 
 static int
-send_etid_flowc_wr(struct cxgbe_snd_tag *cst, struct port_info *pi,
+send_etid_flowc_wr(struct cxgbe_rate_tag *cst, struct port_info *pi,
     struct vi_info *vi)
 {
 	struct wrq_cookie cookie;
@@ -5706,7 +5854,7 @@ send_etid_flowc_wr(struct cxgbe_snd_tag *cst, struct port_info *pi,
 #define ETID_FLUSH_LEN16 (howmany(sizeof (struct fw_flowc_wr), 16))
 
 void
-send_etid_flush_wr(struct cxgbe_snd_tag *cst)
+send_etid_flush_wr(struct cxgbe_rate_tag *cst)
 {
 	struct fw_flowc_wr *flowc;
 	struct wrq_cookie cookie;
@@ -5732,7 +5880,7 @@ send_etid_flush_wr(struct cxgbe_snd_tag *cst)
 }
 
 static void
-write_ethofld_wr(struct cxgbe_snd_tag *cst, struct fw_eth_tx_eo_wr *wr,
+write_ethofld_wr(struct cxgbe_rate_tag *cst, struct fw_eth_tx_eo_wr *wr,
     struct mbuf *m0, int compl)
 {
 	struct cpl_tx_pkt_core *cpl;
@@ -5794,10 +5942,10 @@ write_ethofld_wr(struct cxgbe_snd_tag *cst, struct fw_eth_tx_eo_wr *wr,
 
 			ctrl = V_LSO_OPCODE(CPL_TX_PKT_LSO) |
 			    F_LSO_FIRST_SLICE | F_LSO_LAST_SLICE |
+			    V_LSO_ETHHDR_LEN((m0->m_pkthdr.l2hlen -
+				ETHER_HDR_LEN) >> 2) |
 			    V_LSO_IPHDR_LEN(m0->m_pkthdr.l3hlen >> 2) |
 			    V_LSO_TCPHDR_LEN(m0->m_pkthdr.l4hlen >> 2);
-			if (m0->m_pkthdr.l2hlen == sizeof(struct ether_vlan_header))
-				ctrl |= V_LSO_ETHHDR_LEN(1);
 			if (m0->m_pkthdr.l3hlen == sizeof(struct ip6_hdr))
 				ctrl |= F_LSO_IPV6;
 			lso->lso_ctrl = htobe32(ctrl);
@@ -5814,8 +5962,8 @@ write_ethofld_wr(struct cxgbe_snd_tag *cst, struct fw_eth_tx_eo_wr *wr,
 	}
 
 	/* Checksum offload must be requested for ethofld. */
-	ctrl1 = 0;
 	MPASS(needs_l4_csum(m0));
+	ctrl1 = csum_to_ctrl(cst->adapter, m0);
 
 	/* VLAN tag insertion */
 	if (needs_vlan_insertion(m0)) {
@@ -5881,7 +6029,7 @@ write_ethofld_wr(struct cxgbe_snd_tag *cst, struct fw_eth_tx_eo_wr *wr,
 }
 
 static void
-ethofld_tx(struct cxgbe_snd_tag *cst)
+ethofld_tx(struct cxgbe_rate_tag *cst)
 {
 	struct mbuf *m;
 	struct wrq_cookie cookie;
@@ -5914,7 +6062,7 @@ ethofld_tx(struct cxgbe_snd_tag *cst)
 		cst->tx_credits -= next_credits;
 		cst->tx_nocompl += next_credits;
 		compl = cst->ncompl == 0 || cst->tx_nocompl >= cst->tx_total / 2;
-		ETHER_BPF_MTAP(cst->com.ifp, m);
+		ETHER_BPF_MTAP(cst->com.com.ifp, m);
 		write_ethofld_wr(cst, wr, m, compl);
 		commit_wrq_wr(cst->eo_txq, wr, &cookie);
 		if (compl) {
@@ -5922,6 +6070,21 @@ ethofld_tx(struct cxgbe_snd_tag *cst)
 			cst->tx_nocompl	= 0;
 		}
 		(void) mbufq_dequeue(&cst->pending_tx);
+
+		/*
+		 * Drop the mbuf's reference on the tag now rather
+		 * than waiting until m_freem().  This ensures that
+		 * cxgbe_rate_tag_free gets called when the inp drops
+		 * its reference on the tag and there are no more
+		 * mbufs in the pending_tx queue and can flush any
+		 * pending requests.  Otherwise if the last mbuf
+		 * doesn't request a completion the etid will never be
+		 * released.
+		 */
+		m->m_pkthdr.snd_tag = NULL;
+		m->m_pkthdr.csum_flags &= ~CSUM_SND_TAG;
+		m_snd_tag_rele(&cst->com.com);
+
 		mbufq_enqueue(&cst->pending_fwack, m);
 	}
 }
@@ -5929,12 +6092,13 @@ ethofld_tx(struct cxgbe_snd_tag *cst)
 int
 ethofld_transmit(struct ifnet *ifp, struct mbuf *m0)
 {
-	struct cxgbe_snd_tag *cst;
+	struct cxgbe_rate_tag *cst;
 	int rc;
 
 	MPASS(m0->m_nextpkt == NULL);
+	MPASS(m0->m_pkthdr.csum_flags & CSUM_SND_TAG);
 	MPASS(m0->m_pkthdr.snd_tag != NULL);
-	cst = mst_to_cst(m0->m_pkthdr.snd_tag);
+	cst = mst_to_crt(m0->m_pkthdr.snd_tag);
 
 	mtx_lock(&cst->lock);
 	MPASS(cst->flags & EO_SND_TAG_REF);
@@ -5967,8 +6131,18 @@ ethofld_transmit(struct ifnet *ifp, struct mbuf *m0)
 	mbufq_enqueue(&cst->pending_tx, m0);
 	cst->plen += m0->m_pkthdr.len;
 
+	/*
+	 * Hold an extra reference on the tag while generating work
+	 * requests to ensure that we don't try to free the tag during
+	 * ethofld_tx() in case we are sending the final mbuf after
+	 * the inp was freed.
+	 */
+	m_snd_tag_ref(&cst->com.com);
 	ethofld_tx(cst);
-	rc = 0;
+	mtx_unlock(&cst->lock);
+	m_snd_tag_rele(&cst->com.com);
+	return (0);
+
 done:
 	mtx_unlock(&cst->lock);
 	if (__predict_false(rc != 0))
@@ -5983,7 +6157,7 @@ ethofld_fw4_ack(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m0
 	const struct cpl_fw4_ack *cpl = (const void *)(rss + 1);
 	struct mbuf *m;
 	u_int etid = G_CPL_FW4_ACK_FLOWID(be32toh(OPCODE_TID(cpl)));
-	struct cxgbe_snd_tag *cst;
+	struct cxgbe_rate_tag *cst;
 	uint8_t credits = cpl->credits;
 
 	cst = lookup_etid(sc, etid);
@@ -6015,8 +6189,7 @@ ethofld_fw4_ack(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m0
 
 			cst->flags &= ~EO_FLUSH_RPL_PENDING;
 			cst->tx_credits += cpl->credits;
-freetag:
-			cxgbe_snd_tag_free_locked(cst);
+			cxgbe_rate_tag_free_locked(cst);
 			return (0);	/* cst is gone. */
 		}
 		KASSERT(m != NULL,
@@ -6033,21 +6206,26 @@ freetag:
 	cst->tx_credits += cpl->credits;
 	MPASS(cst->tx_credits <= cst->tx_total);
 
-	m = mbufq_first(&cst->pending_tx);
-	if (m != NULL && cst->tx_credits >= mbuf_eo_len16(m))
-		ethofld_tx(cst);
-
-	if (__predict_false((cst->flags & EO_SND_TAG_REF) == 0) &&
-	    cst->ncompl == 0) {
-		if (cst->tx_credits == cst->tx_total)
-			goto freetag;
-		else {
-			MPASS((cst->flags & EO_FLUSH_RPL_PENDING) == 0);
-			send_etid_flush_wr(cst);
-		}
+	if (cst->flags & EO_SND_TAG_REF) {
+		/*
+		 * As with ethofld_transmit(), hold an extra reference
+		 * so that the tag is stable across ethold_tx().
+		 */
+		m_snd_tag_ref(&cst->com.com);
+		m = mbufq_first(&cst->pending_tx);
+		if (m != NULL && cst->tx_credits >= mbuf_eo_len16(m))
+			ethofld_tx(cst);
+		mtx_unlock(&cst->lock);
+		m_snd_tag_rele(&cst->com.com);
+	} else {
+		/*
+		 * There shouldn't be any pending packets if the tag
+		 * was freed by the kernel since any pending packet
+		 * should hold a reference to the tag.
+		 */
+		MPASS(mbufq_first(&cst->pending_tx) == NULL);
+		mtx_unlock(&cst->lock);
 	}
-
-	mtx_unlock(&cst->lock);
 
 	return (0);
 }

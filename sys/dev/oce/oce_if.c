@@ -593,27 +593,26 @@ oce_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		if (rc)
 			break;
 
-		if (i2c.dev_addr != PAGE_NUM_A0 &&
-		    i2c.dev_addr != PAGE_NUM_A2) {
+		if (i2c.dev_addr == PAGE_NUM_A0) {
+			offset = i2c.offset;
+		} else if (i2c.dev_addr == PAGE_NUM_A2) {
+			offset = TRANSCEIVER_A0_SIZE + i2c.offset;
+		} else {
 			rc = EINVAL;
 			break;
 		}
 
-		if (i2c.len > sizeof(i2c.data)) {
+		if (i2c.len > sizeof(i2c.data) ||
+		    i2c.len + offset > sizeof(sfp_vpd_dump_buffer)) {
 			rc = EINVAL;
 			break;
 		}
 
 		rc = oce_mbox_read_transrecv_data(sc, i2c.dev_addr);
-		if(rc) {
+		if (rc) {
 			rc = -rc;
 			break;
 		}
-
-		if (i2c.dev_addr == PAGE_NUM_A0)
-			offset = i2c.offset;
-		else
-			offset = TRANSCEIVER_A0_SIZE + i2c.offset;
 
 		memcpy(&i2c.data[0], &sfp_vpd_dump_buffer[offset], i2c.len);
 
@@ -836,11 +835,13 @@ oce_fast_isr(void *arg)
 static int
 oce_alloc_intr(POCE_SOFTC sc, int vector, void (*isr) (void *arg, int pending))
 {
-	POCE_INTR_INFO ii = &sc->intrs[vector];
+	POCE_INTR_INFO ii;
 	int rc = 0, rr;
 
 	if (vector >= OCE_MAX_EQ)
 		return (EINVAL);
+
+	ii = &sc->intrs[vector];
 
 	/* Set the resource id for the interrupt.
 	 * MSIx is vector + 1 for the resource id,
@@ -2394,10 +2395,20 @@ oce_eqd_set_periodic(POCE_SOFTC sc)
 			goto modify_eqd;
 		}
 
-		rq = sc->rq[i];
-		rxpkts = rq->rx_stats.rx_pkts;
-		wq = sc->wq[i];
-		tx_reqs = wq->tx_stats.tx_reqs;
+		if (i == 0) {
+			rq = sc->rq[0];
+			rxpkts = rq->rx_stats.rx_pkts;
+		} else
+			rxpkts = 0;
+		if (i + 1 < sc->nrqs) {
+			rq = sc->rq[i + 1];
+			rxpkts += rq->rx_stats.rx_pkts;
+		}
+		if (i < sc->nwqs) {
+			wq = sc->wq[i];
+			tx_reqs = wq->tx_stats.tx_reqs;
+		} else
+			tx_reqs = 0;
 		now = ticks;
 
 		if (!aic->ticks || now < aic->ticks ||

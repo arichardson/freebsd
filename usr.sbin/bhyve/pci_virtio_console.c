@@ -187,7 +187,7 @@ pci_vtcon_reset(void *vsc)
 
 	sc = vsc;
 
-	DPRINTF(("vtcon: device reset requested!\n"));
+	DPRINTF(("vtcon: device reset requested!\n\r"));
 	vi_reset_dev(&sc->vsc_vs);
 }
 
@@ -356,8 +356,11 @@ out:
 	if (fd != -1)
 		close(fd);
 
-	if (error != 0 && s != -1)
-		close(s);
+	if (error != 0) {
+		if (s != -1)
+			close(s);
+		free(sock);
+	}
 
 	return (error);
 }
@@ -420,7 +423,7 @@ pci_vtcon_sock_rx(int fd __unused, enum ev_type t __unused, void *arg)
 		len = readv(sock->vss_conn_fd, &iov, n);
 
 		if (len == 0 || (len < 0 && errno == EWOULDBLOCK)) {
-			vq_retchain(vq);
+			vq_retchains(vq, 1);
 			vq_endchains(vq, 0);
 			if (len == 0)
 				goto close;
@@ -495,7 +498,7 @@ pci_vtcon_control_tx(struct pci_vtcon_port *port, void *arg, struct iovec *iov,
 
 	case VTCON_PORT_READY:
 		if (ctrl->id >= sc->vsc_nports) {
-			WPRINTF(("VTCON_PORT_READY event for unknown port %d\n",
+			WPRINTF(("VTCON_PORT_READY event for unknown port %d\n\r",
 			    ctrl->id));
 			return;
 		}
@@ -607,7 +610,7 @@ pci_vtcon_notify_rx(void *vsc, struct vqueue_info *vq)
 
 	if (!port->vsp_rx_ready) {
 		port->vsp_rx_ready = 1;
-		vq->vq_used->vu_flags |= VRING_USED_F_NO_NOTIFY;
+		vq_kick_disable(vq);
 	}
 }
 

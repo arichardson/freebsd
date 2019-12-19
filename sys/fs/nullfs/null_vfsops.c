@@ -205,7 +205,7 @@ nullfs_mount(struct mount *mp)
 		    (MNTK_SHARED_WRITES | MNTK_LOOKUP_SHARED |
 		    MNTK_EXTENDED_SHARED);
 	}
-	mp->mnt_kern_flag |= MNTK_LOOKUP_EXCL_DOTDOT;
+	mp->mnt_kern_flag |= MNTK_LOOKUP_EXCL_DOTDOT | MNTK_NOMSYNC;
 	mp->mnt_kern_flag |= lowerrootvp->v_mount->mnt_kern_flag &
 	    (MNTK_USES_BCACHE | MNTK_NO_IOPF | MNTK_UNMAPPED_BUFS);
 	MNT_IUNLOCK(mp);
@@ -442,7 +442,7 @@ nullfs_unlink_lowervp(struct mount *mp, struct vnode *lowervp)
 		 * extra unlock before allowing the final vdrop() to
 		 * free the vnode.
 		 */
-		KASSERT((vp->v_iflag & VI_DOOMED) != 0,
+		KASSERT(VN_IS_DOOMED(vp),
 		    ("not reclaimed nullfs vnode %p", vp));
 		VOP_UNLOCK(vp, 0);
 	} else {
@@ -453,7 +453,7 @@ nullfs_unlink_lowervp(struct mount *mp, struct vnode *lowervp)
 		 * relevant for future reclamations.
 		 */
 		ASSERT_VOP_ELOCKED(vp, "unlink_lowervp");
-		KASSERT((vp->v_iflag & VI_DOOMED) == 0,
+		KASSERT(!VN_IS_DOOMED(vp),
 		    ("reclaimed nullfs vnode %p", vp));
 		xp->null_flags &= ~NULLV_NOUNLOCK;
 	}

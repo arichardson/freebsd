@@ -14,11 +14,11 @@ mlx5_fs_cmd.c \
 mlx5_fs_tree.c \
 mlx5_fw.c \
 mlx5_fwdump.c \
-mlx5_fwdump_regmaps.c \
 mlx5_health.c \
 mlx5_mad.c \
 mlx5_main.c \
 mlx5_mcg.c \
+mlx5_mpfs.c \
 mlx5_mr.c \
 mlx5_pagealloc.c \
 mlx5_pd.c \
@@ -26,6 +26,7 @@ mlx5_port.c \
 mlx5_qp.c \
 mlx5_rl.c \
 mlx5_srq.c \
+mlx5_tls.c \
 mlx5_transobj.c \
 mlx5_uar.c \
 mlx5_vport.c \

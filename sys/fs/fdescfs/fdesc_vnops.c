@@ -91,6 +91,7 @@ static struct vop_vector fdesc_vnodeops = {
 	.vop_reclaim =		fdesc_reclaim,
 	.vop_setattr =		fdesc_setattr,
 };
+VFS_VOP_VECTOR_REGISTER(fdesc_vnodeops);
 
 static void fdesc_insmntque_dtr(struct vnode *, void *);
 static void fdesc_remove_entry(struct fdescnode *);
@@ -347,7 +348,7 @@ fdesc_lookup(struct vop_lookup_args *ap)
 		vn_lock(dvp, LK_RETRY | LK_EXCLUSIVE);
 		vdrop(dvp);
 		fvp = dvp;
-		if ((dvp->v_iflag & VI_DOOMED) != 0)
+		if (VN_IS_DOOMED(dvp))
 			error = ENOENT;
 	} else {
 		/*

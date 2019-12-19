@@ -136,8 +136,6 @@ _CPUCFLAGS = -Wa,-me500 -msoft-float
 .  else
 _CPUCFLAGS = -mcpu=${CPUTYPE} -mno-powerpc64
 .  endif
-. elif ${MACHINE_ARCH} == "powerpcspe"
-_CPUCFLAGS = -Wa,-me500 -mspe=yes -mabi=spe -mfloat-gprs=double -mcpu=8548
 . elif ${MACHINE_ARCH} == "powerpc64"
 _CPUCFLAGS = -mcpu=${CPUTYPE}
 . elif ${MACHINE_CPUARCH} == "mips"
@@ -314,27 +312,20 @@ MACHINE_CPU = v9 ultrasparc ultrasparc3
 
 .if ${MACHINE_CPUARCH} == "mips"
 CFLAGS += -G0
+AFLAGS+= -${MIPS_ENDIAN} -mabi=${MIPS_ABI}
+CFLAGS+= -${MIPS_ENDIAN} -mabi=${MIPS_ABI}
+LDFLAGS+= -${MIPS_ENDIAN} -mabi=${MIPS_ABI}
 . if ${MACHINE_ARCH:Mmips*el*} != ""
-AFLAGS += -EL
-CFLAGS += -EL
-LDFLAGS += -EL
+MIPS_ENDIAN=	EL
 . else
-AFLAGS += -EB
-CFLAGS += -EB
-LDFLAGS += -EB
+MIPS_ENDIAN=	EB
 . endif
 . if ${MACHINE_ARCH:Mmips64*} != ""
-AFLAGS+= -mabi=64
-CFLAGS+= -mabi=64
-LDFLAGS+= -mabi=64
+MIPS_ABI?=	64
 . elif ${MACHINE_ARCH:Mmipsn32*} != ""
-AFLAGS+= -mabi=n32
-CFLAGS+= -mabi=n32
-LDFLAGS+= -mabi=n32
+MIPS_ABI?=	n32
 . else
-AFLAGS+= -mabi=32
-CFLAGS+= -mabi=32
-LDFLAGS+= -mabi=32
+MIPS_ABI?=	32
 . endif
 . if ${MACHINE_ARCH:Mmips*hf}
 CFLAGS += -mhard-float
@@ -369,8 +360,13 @@ CFLAGS += -mfloat-abi=softfp
 .endif
 .endif
 
+.if ${MACHINE_ARCH} == "powerpc" || ${MACHINE_ARCH} == "powerpcspe"
+LDFLAGS+= -Wl,--secure-plt
+.endif
+
 .if ${MACHINE_ARCH} == "powerpcspe"
-CFLAGS += -mcpu=8548 -Wa,-me500 -mspe=yes -mabi=spe -mfloat-gprs=double
+CFLAGS += -mcpu=8548 -mspe
+CFLAGS.gcc+= -mabi=spe -mfloat-gprs=double -Wa,-me500
 .endif
 
 .if ${MACHINE_CPUARCH} == "riscv"
@@ -378,6 +374,10 @@ CFLAGS += -mcpu=8548 -Wa,-me500 -mspe=yes -mabi=spe -mfloat-gprs=double
 CFLAGS += -march=rv64imac -mabi=lp64
 .else
 CFLAGS += -march=rv64imafdc -mabi=lp64d
+.endif
+
+.if ${LINKER_FEATURES:U:Mriscv-relaxations} == ""
+CFLAGS += -mno-relax
 .endif
 .endif
 

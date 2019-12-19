@@ -189,10 +189,10 @@ static u_int vpid_alloc_failed;
 SYSCTL_UINT(_hw_vmm_vmx, OID_AUTO, vpid_alloc_failed, CTLFLAG_RD,
 	    &vpid_alloc_failed, 0, NULL);
 
-static int guest_l1d_flush;
+int guest_l1d_flush;
 SYSCTL_INT(_hw_vmm_vmx, OID_AUTO, l1d_flush, CTLFLAG_RD,
     &guest_l1d_flush, 0, NULL);
-static int guest_l1d_flush_sw;
+int guest_l1d_flush_sw;
 SYSCTL_INT(_hw_vmm_vmx, OID_AUTO, l1d_flush_sw, CTLFLAG_RD,
     &guest_l1d_flush_sw, 0, NULL);
 
@@ -1071,6 +1071,7 @@ vmx_vminit(struct vm *vm, pmap_t pmap)
 		vmx->cap[i].set = 0;
 		vmx->cap[i].proc_ctls = procbased_ctls;
 		vmx->cap[i].proc_ctls2 = procbased_ctls2;
+		vmx->cap[i].exc_bitmap = exc_bitmap;
 
 		vmx->state[i].nextrip = ~0;
 		vmx->state[i].lastcpu = NOCPU;
@@ -1973,20 +1974,20 @@ ept_fault_type(uint64_t ept_qual)
 	return (fault_type);
 }
 
-static boolean_t
+static bool
 ept_emulation_fault(uint64_t ept_qual)
 {
 	int read, write;
 
 	/* EPT fault on an instruction fetch doesn't make sense here */
 	if (ept_qual & EPT_VIOLATION_INST_FETCH)
-		return (FALSE);
+		return (false);
 
 	/* EPT fault must be a read fault or a write fault */
 	read = ept_qual & EPT_VIOLATION_DATA_READ ? 1 : 0;
 	write = ept_qual & EPT_VIOLATION_DATA_WRITE ? 1 : 0;
 	if ((read | write) == 0)
-		return (FALSE);
+		return (false);
 
 	/*
 	 * The EPT violation must have been caused by accessing a
@@ -1995,10 +1996,10 @@ ept_emulation_fault(uint64_t ept_qual)
 	 */
 	if ((ept_qual & EPT_VIOLATION_GLA_VALID) == 0 ||
 	    (ept_qual & EPT_VIOLATION_XLAT_VALID) == 0) {
-		return (FALSE);
+		return (false);
 	}
 
-	return (TRUE);
+	return (true);
 }
 
 static __inline int
@@ -2545,6 +2546,18 @@ vmx_exit_process(struct vmx *vmx, int vcpu, struct vm_exit *vmexit)
 			VCPU_CTR0(vmx->vm, vcpu, "Vectoring to MCE handler");
 			__asm __volatile("int $18");
 			return (1);
+		}
+
+		/*
+		 * If the hypervisor has requested user exits for
+		 * debug exceptions, bounce them out to userland.
+		 */
+		if (intr_type == VMCS_INTR_T_SWEXCEPTION && intr_vec == IDT_BP &&
+		    (vmx->cap[vcpu].set & (1 << VM_CAP_BPT_EXIT))) {
+			vmexit->exitcode = VM_EXITCODE_BPT;
+			vmexit->u.bpt.inst_length = vmexit->inst_length;
+			vmexit->inst_length = 0;
+			break;
 		}
 
 		if (intr_vec == IDT_PF) {
@@ -3296,6 +3309,9 @@ vmx_getcap(void *arg, int vcpu, int type, int *retval)
 		if (cap_invpcid)
 			ret = 0;
 		break;
+	case VM_CAP_BPT_EXIT:
+		ret = 0;
+		break;
 	default:
 		break;
 	}
@@ -3367,11 +3383,25 @@ vmx_setcap(void *arg, int vcpu, int type, int val)
 			reg = VMCS_SEC_PROC_BASED_CTLS;
 		}
 		break;
+	case VM_CAP_BPT_EXIT:
+		retval = 0;
+
+		/* Don't change the bitmap if we are tracing all exceptions. */
+		if (vmx->cap[vcpu].exc_bitmap != 0xffffffff) {
+			pptr = &vmx->cap[vcpu].exc_bitmap;
+			baseval = *pptr;
+			flag = (1 << IDT_BP);
+			reg = VMCS_EXCEPTION_BITMAP;
+		}
+		break;
 	default:
 		break;
 	}
 
-	if (retval == 0) {
+	if (retval)
+		return (retval);
+
+	if (pptr != NULL) {
 		if (val) {
 			baseval |= flag;
 		} else {
@@ -3381,26 +3411,23 @@ vmx_setcap(void *arg, int vcpu, int type, int val)
 		error = vmwrite(reg, baseval);
 		VMCLEAR(vmcs);
 
-		if (error) {
-			retval = error;
-		} else {
-			/*
-			 * Update optional stored flags, and record
-			 * setting
-			 */
-			if (pptr != NULL) {
-				*pptr = baseval;
-			}
+		if (error)
+			return (error);
 
-			if (val) {
-				vmx->cap[vcpu].set |= (1 << type);
-			} else {
-				vmx->cap[vcpu].set &= ~(1 << type);
-			}
-		}
+		/*
+		 * Update optional stored flags, and record
+		 * setting
+		 */
+		*pptr = baseval;
 	}
 
-	return (retval);
+	if (val) {
+		vmx->cap[vcpu].set |= (1 << type);
+	} else {
+		vmx->cap[vcpu].set &= ~(1 << type);
+	}
+
+	return (0);
 }
 
 struct vlapic_vtx {
@@ -3790,20 +3817,20 @@ vmx_vlapic_cleanup(void *arg, struct vlapic *vlapic)
 }
 
 struct vmm_ops vmm_ops_intel = {
-	vmx_init,
-	vmx_cleanup,
-	vmx_restore,
-	vmx_vminit,
-	vmx_run,
-	vmx_vmcleanup,
-	vmx_getreg,
-	vmx_setreg,
-	vmx_getdesc,
-	vmx_setdesc,
-	vmx_getcap,
-	vmx_setcap,
-	ept_vmspace_alloc,
-	ept_vmspace_free,
-	vmx_vlapic_init,
-	vmx_vlapic_cleanup,
+	.init		= vmx_init,
+	.cleanup	= vmx_cleanup,
+	.resume		= vmx_restore,
+	.vminit		= vmx_vminit,
+	.vmrun		= vmx_run,
+	.vmcleanup	= vmx_vmcleanup,
+	.vmgetreg	= vmx_getreg,
+	.vmsetreg	= vmx_setreg,
+	.vmgetdesc	= vmx_getdesc,
+	.vmsetdesc	= vmx_setdesc,
+	.vmgetcap	= vmx_getcap,
+	.vmsetcap	= vmx_setcap,
+	.vmspace_alloc	= ept_vmspace_alloc,
+	.vmspace_free	= ept_vmspace_free,
+	.vlapic_init	= vmx_vlapic_init,
+	.vlapic_cleanup	= vmx_vlapic_cleanup,
 };

@@ -49,6 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/callout.h>
 #include <sys/epoch.h>
+#include <sys/eventhandler.h>
 #include <sys/gtaskqueue.h>
 #include <sys/kdb.h>
 #include <sys/kernel.h>
@@ -281,8 +282,7 @@ deadlkres(void)
 				if (TD_ON_LOCK(td))
 					deadlres_td_on_lock(p, td,
 					    blkticks);
-				else if (TD_IS_SLEEPING(td) &&
-				    TD_ON_SLEEPQ(td))
+				else if (TD_IS_SLEEPING(td))
 					deadlres_td_sleep_q(p, td,
 					    slpticks);
 				thread_unlock(td);
@@ -643,6 +643,7 @@ statclock(int cnt, int usermode)
 	struct proc *p;
 	long rss;
 	long *cp_time;
+	uint64_t runtime, new_switchtime;
 
 	td = curthread;
 	p = td->td_proc;
@@ -698,8 +699,18 @@ statclock(int cnt, int usermode)
 	    "prio:%d", td->td_priority, "stathz:%d", (stathz)?stathz:hz);
 	SDT_PROBE2(sched, , , tick, td, td->td_proc);
 	thread_lock_flags(td, MTX_QUIET);
-	for ( ; cnt > 0; cnt--)
-		sched_clock(td);
+
+	/*
+	 * Compute the amount of time during which the current
+	 * thread was running, and add that to its total so far.
+	 */
+	new_switchtime = cpu_ticks();
+	runtime = new_switchtime - PCPU_GET(switchtime);
+	td->td_runtime += runtime;
+	td->td_incruntime += runtime;
+	PCPU_SET(switchtime, new_switchtime);
+
+	sched_clock(td, cnt);
 	thread_unlock(td);
 #ifdef HWPMC_HOOKS
 	if (td->td_intr_frame != NULL)

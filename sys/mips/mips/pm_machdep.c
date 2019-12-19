@@ -40,13 +40,13 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/sysent.h>
 #include <sys/proc.h>
 #include <sys/signalvar.h>
 #include <sys/exec.h>
+#include <sys/ktr.h>
 #include <sys/imgact.h>
 #include <sys/ucontext.h>
 #include <sys/lock.h>
@@ -410,7 +410,7 @@ set_fpregs(struct thread *td, struct fpreg *fpregs)
  * code by the MIPS elf abi).
  */
 void
-exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
+exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 {
 
 	bzero((caddr_t)td->td_frame, sizeof(struct trapframe));

@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/memdesc.h>
+#include <sys/mutex.h>
 #include <sys/rman.h>
 #include <sys/rwlock.h>
 #include <sys/taskqueue.h>
@@ -54,6 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <x86/include/busdma_impl.h>
 #include <x86/iommu/intel_reg.h>
 #include <x86/iommu/busdma_dmar.h>
+#include <dev/pci/pcireg.h>
 #include <x86/iommu/intel_dmar.h>
 #include <dev/pci/pcivar.h>
 #include <x86/iommu/iommu_intrmap.h>

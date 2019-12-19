@@ -102,6 +102,7 @@ struct vop_vector fifo_specops = {
 	.vop_symlink =		VOP_PANIC,
 	.vop_write =		VOP_PANIC,
 };
+VFS_VOP_VECTOR_REGISTER(fifo_specops);
 
 /*
  * Dispose of fifo resources.
@@ -174,7 +175,7 @@ fifo_open(ap)
 			if (fip->fi_writers > 0)
 				wakeup(&fip->fi_writers);
 		}
-		fp->f_seqcount = fpipe->pipe_wgen - fip->fi_writers;
+		fp->f_pipegen = fpipe->pipe_wgen - fip->fi_writers;
 	}
 	if (ap->a_mode & FWRITE) {
 		if ((ap->a_mode & O_NONBLOCK) && fip->fi_readers == 0) {

@@ -35,17 +35,18 @@ __FBSDID("$FreeBSD$");
 #include "opt_bus.h"
 
 #include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/module.h>
+#include <sys/conf.h>
+#include <sys/endian.h>
+#include <sys/eventhandler.h>
+#include <sys/fcntl.h>
+#include <sys/kernel.h>
 #include <sys/limits.h>
 #include <sys/linker.h>
-#include <sys/fcntl.h>
-#include <sys/conf.h>
-#include <sys/kernel.h>
+#include <sys/malloc.h>
+#include <sys/module.h>
 #include <sys/queue.h>
 #include <sys/sysctl.h>
-#include <sys/endian.h>
+#include <sys/systm.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -99,8 +100,6 @@ static void		pci_assign_interrupt(device_t bus, device_t dev,
 static int		pci_add_map(device_t bus, device_t dev, int reg,
 			    struct resource_list *rl, int force, int prefetch);
 static int		pci_probe(device_t dev);
-static int		pci_attach(device_t dev);
-static int		pci_detach(device_t dev);
 static void		pci_load_vendor_data(void);
 static int		pci_describe_parse_line(char **ptr, int *vendor,
 			    int *device, char **desc);
@@ -276,13 +275,6 @@ static const struct pci_quirk pci_quirks[] = {
 	{ 0x74501022, PCI_QUIRK_DISABLE_MSI,	0,	0 },
 
 	/*
-	 * MSI-X allocation doesn't work properly for devices passed through
-	 * by VMware up to at least ESXi 5.1.
-	 */
-	{ 0x079015ad, PCI_QUIRK_DISABLE_MSIX,	0,	0 }, /* PCI/PCI-X */
-	{ 0x07a015ad, PCI_QUIRK_DISABLE_MSIX,	0,	0 }, /* PCIe */
-
-	/*
 	 * Some virtualization environments emulate an older chipset
 	 * but support MSI just fine.  QEMU uses the Intel 82440.
 	 */
@@ -446,18 +438,18 @@ pci_find_bsf(uint8_t bus, uint8_t slot, uint8_t func)
 device_t
 pci_find_dbsf(uint32_t domain, uint8_t bus, uint8_t slot, uint8_t func)
 {
-	struct pci_devinfo *dinfo;
+	struct pci_devinfo *dinfo = NULL;
 
 	STAILQ_FOREACH(dinfo, &pci_devq, pci_links) {
 		if ((dinfo->cfg.domain == domain) &&
 		    (dinfo->cfg.bus == bus) &&
 		    (dinfo->cfg.slot == slot) &&
 		    (dinfo->cfg.func == func)) {
-			return (dinfo->cfg.dev);
+			break;
 		}
 	}
 
-	return (NULL);
+	return (dinfo != NULL ? dinfo->cfg.dev : NULL);
 }
 
 /* Find a device_t by vendor/device ID */
@@ -1670,10 +1662,13 @@ pci_mask_msix(device_t dev, u_int index)
 	KASSERT(msix->msix_msgnum > index, ("bogus index"));
 	offset = msix->msix_table_offset + index * 16 + 12;
 	val = bus_read_4(msix->msix_table_res, offset);
-	if (!(val & PCIM_MSIX_VCTRL_MASK)) {
-		val |= PCIM_MSIX_VCTRL_MASK;
-		bus_write_4(msix->msix_table_res, offset, val);
-	}
+	val |= PCIM_MSIX_VCTRL_MASK;
+
+	/*
+	 * Some devices (e.g. Samsung PM961) do not support reads of this
+	 * register, so always write the new value.
+	 */
+	bus_write_4(msix->msix_table_res, offset, val);
 }
 
 void
@@ -1686,10 +1681,13 @@ pci_unmask_msix(device_t dev, u_int index)
 	KASSERT(msix->msix_table_len > index, ("bogus index"));
 	offset = msix->msix_table_offset + index * 16 + 12;
 	val = bus_read_4(msix->msix_table_res, offset);
-	if (val & PCIM_MSIX_VCTRL_MASK) {
-		val &= ~PCIM_MSIX_VCTRL_MASK;
-		bus_write_4(msix->msix_table_res, offset, val);
-	}
+	val &= ~PCIM_MSIX_VCTRL_MASK;
+
+	/*
+	 * Some devices (e.g. Samsung PM961) do not support reads of this
+	 * register, so always write the new value.
+	 */
+	bus_write_4(msix->msix_table_res, offset, val);
 }
 
 int
@@ -4366,7 +4364,7 @@ pci_attach_common(device_t dev)
 	return (0);
 }
 
-static int
+int
 pci_attach(device_t dev)
 {
 	int busno, domain, error;
@@ -4387,7 +4385,7 @@ pci_attach(device_t dev)
 	return (bus_generic_attach(dev));
 }
 
-static int
+int
 pci_detach(device_t dev)
 {
 #ifdef PCI_RES_BUS

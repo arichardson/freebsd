@@ -136,7 +136,8 @@ static struct vfsops nfs_vfsops = {
 	.vfs_init =		ncl_init,
 	.vfs_mount =		nfs_mount,
 	.vfs_cmount =		nfs_cmount,
-	.vfs_root =		nfs_root,
+	.vfs_root =		vfs_cache_root,
+	.vfs_cachedroot =	nfs_root,
 	.vfs_statfs =		nfs_statfs,
 	.vfs_sync =		nfs_sync,
 	.vfs_uninit =		ncl_uninit,
@@ -1150,7 +1151,7 @@ nfs_mount(struct mount *mp)
 	if (vfs_getopt(mp->mnt_optnew, "minorversion", (void **)&opt, NULL) ==
 	    0) {
 		ret = sscanf(opt, "%d", &minvers);
-		if (ret != 1 || minvers < 0 || minvers > 1 ||
+		if (ret != 1 || minvers < 0 || minvers > 2 ||
 		    (args.flags & NFSMNT_NFSV4) == 0) {
 			vfs_mount_error(mp, "illegal minorversion: %s", opt);
 			error = EINVAL;
@@ -1626,6 +1627,7 @@ mountnfs(struct nfs_args *argp, struct mount *mp, struct sockaddr *nam,
 		 * Lose the lock but keep the ref.
 		 */
 		NFSVOPUNLOCK(*vpp, 0);
+		vfs_cache_root_set(mp, *vpp);
 		return (0);
 	}
 	error = EIO;
@@ -1713,13 +1715,13 @@ nfs_unmount(struct mount *mp, int mntflags)
 		mtx_unlock(&nmp->nm_mtx);
 	}
 	/* Make sure no nfsiods are assigned to this mount. */
-	mtx_lock(&ncl_iod_mutex);
+	NFSLOCKIOD();
 	for (i = 0; i < NFS_MAXASYNCDAEMON; i++)
 		if (ncl_iodmount[i] == nmp) {
 			ncl_iodwant[i] = NFSIOD_AVAILABLE;
 			ncl_iodmount[i] = NULL;
 		}
-	mtx_unlock(&ncl_iod_mutex);
+	NFSUNLOCKIOD();
 
 	/*
 	 * We can now set mnt_data to NULL and wait for

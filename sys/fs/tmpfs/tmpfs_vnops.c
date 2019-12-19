@@ -59,8 +59,6 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm.h>
 #include <vm/vm_param.h>
 #include <vm/vm_object.h>
-#include <vm/vm_page.h>
-#include <vm/vm_pager.h>
 
 #include <fs/tmpfs/tmpfs_vnops.h>
 #include <fs/tmpfs/tmpfs.h>
@@ -325,13 +323,19 @@ tmpfs_access(struct vop_access_args *v)
 	struct vnode *vp = v->a_vp;
 	accmode_t accmode = v->a_accmode;
 	struct ucred *cred = v->a_cred;
-
+	mode_t all_x = S_IXUSR | S_IXGRP | S_IXOTH;
 	int error;
 	struct tmpfs_node *node;
 
 	MPASS(VOP_ISLOCKED(vp));
 
 	node = VP_TO_TMPFS_NODE(vp);
+
+	/*
+	 * Common case path lookup.
+	 */
+	if (__predict_true(accmode == VEXEC && (node->tn_mode & all_x) == all_x))
+		return (0);
 
 	switch (vp->v_type) {
 	case VDIR:
@@ -794,24 +798,24 @@ tmpfs_rename(struct vop_rename_args *v)
 	struct vnode *tdvp = v->a_tdvp;
 	struct vnode *tvp = v->a_tvp;
 	struct componentname *tcnp = v->a_tcnp;
-	struct mount *mp = NULL;
-
 	char *newname;
-	int error;
 	struct tmpfs_dirent *de;
 	struct tmpfs_mount *tmp;
 	struct tmpfs_node *fdnode;
 	struct tmpfs_node *fnode;
 	struct tmpfs_node *tnode;
 	struct tmpfs_node *tdnode;
+	int error;
 
 	MPASS(VOP_ISLOCKED(tdvp));
 	MPASS(IMPLIES(tvp != NULL, VOP_ISLOCKED(tvp)));
 	MPASS(fcnp->cn_flags & HASBUF);
 	MPASS(tcnp->cn_flags & HASBUF);
 
-	/* Disallow cross-device renames.
-	 * XXX Why isn't this done by the caller? */
+	/*
+	 * Disallow cross-device renames.
+	 * XXX Why isn't this done by the caller?
+	 */
 	if (fvp->v_mount != tdvp->v_mount ||
 	    (tvp != NULL && fvp->v_mount != tvp->v_mount)) {
 		error = EXDEV;
@@ -824,22 +828,16 @@ tmpfs_rename(struct vop_rename_args *v)
 		goto out;
 	}
 
-	/* If we need to move the directory between entries, lock the
-	 * source so that we can safely operate on it. */
+	/*
+	 * If we need to move the directory between entries, lock the
+	 * source so that we can safely operate on it.
+	 */
 	if (fdvp != tdvp && fdvp != tvp) {
 		if (vn_lock(fdvp, LK_EXCLUSIVE | LK_NOWAIT) != 0) {
-			mp = tdvp->v_mount;
-			error = vfs_busy(mp, 0);
-			if (error != 0) {
-				mp = NULL;
-				goto out;
-			}
 			error = tmpfs_rename_relock(fdvp, &fvp, tdvp, &tvp,
 			    fcnp, tcnp);
-			if (error != 0) {
-				vfs_unbusy(mp);
+			if (error != 0)
 				return (error);
-			}
 			ASSERT_VOP_ELOCKED(fdvp,
 			    "tmpfs_rename: fdvp not locked");
 			ASSERT_VOP_ELOCKED(tdvp,
@@ -861,8 +859,10 @@ tmpfs_rename(struct vop_rename_args *v)
 	fnode = VP_TO_TMPFS_NODE(fvp);
 	de = tmpfs_dir_lookup(fdnode, fnode, fcnp);
 
-	/* Entry can disappear before we lock fdvp,
-	 * also avoid manipulating '.' and '..' entries. */
+	/*
+	 * Entry can disappear before we lock fdvp,
+	 * also avoid manipulating '.' and '..' entries.
+	 */
 	if (de == NULL) {
 		if ((fcnp->cn_flags & ISDOTDOT) != 0 ||
 		    (fcnp->cn_namelen == 1 && fcnp->cn_nameptr[0] == '.'))
@@ -873,11 +873,13 @@ tmpfs_rename(struct vop_rename_args *v)
 	}
 	MPASS(de->td_node == fnode);
 
-	/* If re-naming a directory to another preexisting directory
+	/*
+	 * If re-naming a directory to another preexisting directory
 	 * ensure that the target directory is empty so that its
 	 * removal causes no side effects.
 	 * Kern_rename guarantees the destination to be a directory
-	 * if the source is one. */
+	 * if the source is one.
+	 */
 	if (tvp != NULL) {
 		MPASS(tnode != NULL);
 
@@ -910,29 +912,39 @@ tmpfs_rename(struct vop_rename_args *v)
 		goto out_locked;
 	}
 
-	/* Ensure that we have enough memory to hold the new name, if it
-	 * has to be changed. */
+	/*
+	 * Ensure that we have enough memory to hold the new name, if it
+	 * has to be changed.
+	 */
 	if (fcnp->cn_namelen != tcnp->cn_namelen ||
 	    bcmp(fcnp->cn_nameptr, tcnp->cn_nameptr, fcnp->cn_namelen) != 0) {
 		newname = malloc(tcnp->cn_namelen, M_TMPFSNAME, M_WAITOK);
 	} else
 		newname = NULL;
 
-	/* If the node is being moved to another directory, we have to do
-	 * the move. */
+	/*
+	 * If the node is being moved to another directory, we have to do
+	 * the move.
+	 */
 	if (fdnode != tdnode) {
-		/* In case we are moving a directory, we have to adjust its
-		 * parent to point to the new parent. */
+		/*
+		 * In case we are moving a directory, we have to adjust its
+		 * parent to point to the new parent.
+		 */
 		if (de->td_node->tn_type == VDIR) {
 			struct tmpfs_node *n;
 
-			/* Ensure the target directory is not a child of the
+			/*
+			 * Ensure the target directory is not a child of the
 			 * directory being moved.  Otherwise, we'd end up
-			 * with stale nodes. */
+			 * with stale nodes.
+			 */
 			n = tdnode;
-			/* TMPFS_LOCK garanties that no nodes are freed while
+			/*
+			 * TMPFS_LOCK guaranties that no nodes are freed while
 			 * traversing the list. Nodes can only be marked as
-			 * removed: tn_parent == NULL. */
+			 * removed: tn_parent == NULL.
+			 */
 			TMPFS_LOCK(tmp);
 			TMPFS_NODE_LOCK(n);
 			while (n != n->tn_dir.tn_parent) {
@@ -975,9 +987,11 @@ tmpfs_rename(struct vop_rename_args *v)
 			de->td_node->tn_dir.tn_parent = tdnode;
 			TMPFS_NODE_UNLOCK(de->td_node);
 
-			/* As a result of changing the target of the '..'
+			/*
+			 * As a result of changing the target of the '..'
 			 * entry, the link count of the source and target
-			 * directories has to be adjusted. */
+			 * directories has to be adjusted.
+			 */
 			TMPFS_NODE_LOCK(tdnode);
 			TMPFS_ASSERT_LOCKED(tdnode);
 			tdnode->tn_links++;
@@ -990,8 +1004,10 @@ tmpfs_rename(struct vop_rename_args *v)
 		}
 	}
 
-	/* Do the move: just remove the entry from the source directory
-	 * and insert it into the target one. */
+	/*
+	 * Do the move: just remove the entry from the source directory
+	 * and insert it into the target one.
+	 */
 	tmpfs_dir_detach(fdvp, de);
 
 	if (fcnp->cn_flags & DOWHITEOUT)
@@ -999,8 +1015,10 @@ tmpfs_rename(struct vop_rename_args *v)
 	if (tcnp->cn_flags & ISWHITEOUT)
 		tmpfs_dir_whiteout_remove(tdvp, tcnp);
 
-	/* If the name has changed, we need to make it effective by changing
-	 * it in the directory entry. */
+	/*
+	 * If the name has changed, we need to make it effective by changing
+	 * it in the directory entry.
+	 */
 	if (newname != NULL) {
 		MPASS(tcnp->cn_namelen <= MAXNAMLEN);
 
@@ -1012,8 +1030,10 @@ tmpfs_rename(struct vop_rename_args *v)
 		tdnode->tn_status |= TMPFS_NODE_MODIFIED;
 	}
 
-	/* If we are overwriting an entry, we have to remove the old one
-	 * from the target directory. */
+	/*
+	 * If we are overwriting an entry, we have to remove the old one
+	 * from the target directory.
+	 */
 	if (tvp != NULL) {
 		struct tmpfs_dirent *tde;
 
@@ -1021,9 +1041,11 @@ tmpfs_rename(struct vop_rename_args *v)
 		tde = tmpfs_dir_lookup(tdnode, tnode, tcnp);
 		tmpfs_dir_detach(tdvp, tde);
 
-		/* Free the directory entry we just deleted.  Note that the
+		/*
+		 * Free the directory entry we just deleted.  Note that the
 		 * node referred by it will not be removed until the vnode is
-		 * really reclaimed. */
+		 * really reclaimed.
+		 */
 		tmpfs_free_dirent(VFS_TO_TMPFS(tvp->v_mount), tde);
 	}
 
@@ -1043,9 +1065,11 @@ out_locked:
 		VOP_UNLOCK(fdvp, 0);
 
 out:
-	/* Release target nodes. */
-	/* XXX: I don't understand when tdvp can be the same as tvp, but
-	 * other code takes care of this... */
+	/*
+	 * Release target nodes.
+	 * XXX: I don't understand when tdvp can be the same as tvp, but
+	 * other code takes care of this...
+	 */
 	if (tdvp == tvp)
 		vrele(tdvp);
 	else
@@ -1057,10 +1081,7 @@ out:
 	vrele(fdvp);
 	vrele(fvp);
 
-	if (mp != NULL)
-		vfs_unbusy(mp);
-
-	return error;
+	return (error);
 }
 
 static int
@@ -1283,6 +1304,27 @@ tmpfs_inactive(struct vop_inactive_args *v)
 	return (0);
 }
 
+static int
+tmpfs_need_inactive(struct vop_need_inactive_args *ap)
+{
+	struct vnode *vp;
+	struct tmpfs_node *node;
+	struct vm_object *obj;
+
+	vp = ap->a_vp;
+	node = VP_TO_TMPFS_NODE(vp);
+	if (node->tn_links == 0)
+		goto need;
+	if (vp->v_type == VREG) {
+		obj = vp->v_object;
+		if (obj->generation != obj->cleangeneration)
+			goto need;
+	}
+	return (0);
+need:
+	return (1);
+}
+
 int
 tmpfs_reclaim(struct vop_reclaim_args *v)
 {
@@ -1296,8 +1338,6 @@ tmpfs_reclaim(struct vop_reclaim_args *v)
 
 	if (vp->v_type == VREG)
 		tmpfs_destroy_vobject(vp, node->tn_reg.tn_aobj);
-	else
-		vnode_destroy_vobject(vp);
 	vp->v_object = NULL;
 	if (tmpfs_use_nc(vp))
 		cache_purge(vp);
@@ -1538,7 +1578,7 @@ restart:
 				tmpfs_free_node(tm, tnp);
 				return (0);
 			}
-			if ((vp->v_iflag & VI_DOOMED) != 0) {
+			if (VN_IS_DOOMED(vp)) {
 				tmpfs_free_node(tm, tnp);
 				return (ENOENT);
 			}
@@ -1584,6 +1624,7 @@ struct vop_vector tmpfs_vnodeop_entries = {
 	.vop_readdir =			tmpfs_readdir,
 	.vop_readlink =			tmpfs_readlink,
 	.vop_inactive =			tmpfs_inactive,
+	.vop_need_inactive =		tmpfs_need_inactive,
 	.vop_reclaim =			tmpfs_reclaim,
 	.vop_print =			tmpfs_print,
 	.vop_pathconf =			tmpfs_pathconf,
@@ -1591,7 +1632,11 @@ struct vop_vector tmpfs_vnodeop_entries = {
 	.vop_whiteout =			tmpfs_whiteout,
 	.vop_bmap =			VOP_EOPNOTSUPP,
 	.vop_vptocnp =			tmpfs_vptocnp,
+	.vop_lock1 =			vop_lock,
+	.vop_unlock = 			vop_unlock,
+	.vop_islocked = 		vop_islocked,
 };
+VFS_VOP_VECTOR_REGISTER(tmpfs_vnodeop_entries);
 
 /*
  * Same vector for mounts which do not use namecache.
@@ -1600,3 +1645,4 @@ struct vop_vector tmpfs_vnodeop_nonc_entries = {
 	.vop_default =			&tmpfs_vnodeop_entries,
 	.vop_lookup =			tmpfs_lookup,
 };
+VFS_VOP_VECTOR_REGISTER(tmpfs_vnodeop_nonc_entries);

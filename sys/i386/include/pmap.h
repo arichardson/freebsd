@@ -234,14 +234,12 @@ struct pv_chunk {
 
 #ifdef	_KERNEL
 
-extern vm_paddr_t phys_avail[];
-extern vm_paddr_t dump_avail[];
 extern char *ptvmmap;		/* poor name! */
 extern vm_offset_t virtual_avail;
 extern vm_offset_t virtual_end;
 
 #define	pmap_page_get_memattr(m)	((vm_memattr_t)(m)->md.pat_mode)
-#define	pmap_page_is_write_mapped(m)	(((m)->aflags & PGA_WRITEABLE) != 0)
+#define	pmap_page_is_write_mapped(m)	(((m)->a.flags & PGA_WRITEABLE) != 0)
 #define	pmap_unmapbios(va, sz)	pmap_unmapdev((va), (sz))
 
 static inline int

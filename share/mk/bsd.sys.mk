@@ -29,6 +29,15 @@ CFLAGS+=	-std=${CSTD}
 CXXFLAGS+=	-std=${CXXSTD}
 .endif
 
+#
+# Turn off -Werror for gcc 4.2.1. The compiler is on the glide path out of the
+# system, and any warnings specific to it are no longer relevant as there are
+# too many false positives.
+#
+.if ${COMPILER_VERSION} <  50000
+NO_WERROR.gcc=	yes
+.endif
+
 # -pedantic is problematic because it also imposes namespace restrictions
 #CFLAGS+=	-pedantic
 .if defined(WARNS)
@@ -128,6 +137,7 @@ CWARNFLAGS+=	-Wno-error=address			\
 		-Wno-error=bool-compare			\
 		-Wno-error=cast-align			\
 		-Wno-error=clobbered			\
+		-Wno-error=deprecated-declarations	\
 		-Wno-error=enum-compare			\
 		-Wno-error=extra			\
 		-Wno-error=inline			\
@@ -186,13 +196,10 @@ FORMAT_EXTENSIONS=	-fformat-extensions
 CWARNFLAGS+=	-Wno-unknown-pragmas
 .endif # IGNORE_PRAGMA
 
-# We need this conditional because many places that use it
-# only enable it for some files with CLFAGS.$FILE+=${CLANG_NO_IAS}.
-# unconditionally, and can't easily use the CFLAGS.clang=
-# mechanism.
-.if ${COMPILER_TYPE} == "clang"
-CLANG_NO_IAS=	 -no-integrated-as
+# This warning is utter nonsense
+CFLAGS+=	-Wno-format-zero-length
 
+.if ${COMPILER_TYPE} == "clang"
 # The headers provided by clang are incompatible with the FreeBSD headers.
 # If the version of clang is not one that has been patched to omit the
 # incompatible headers, we need to compile with -nobuiltininc and add the
@@ -244,30 +251,34 @@ DEBUG_FILES_CFLAGS?= -g
 .if ${MK_WARNS} != "no"
 CFLAGS+=	${CWARNFLAGS:M*} ${CWARNFLAGS.${COMPILER_TYPE}}
 CFLAGS+=	${CWARNFLAGS.${.IMPSRC:T}}
+CXXFLAGS+=	${CXXWARNFLAGS:M*} ${CXXWARNFLAGS.${COMPILER_TYPE}}
+CXXFLAGS+=	${CXXWARNFLAGS.${.IMPSRC:T}}
 .endif
 
 CFLAGS+=	 ${CFLAGS.${COMPILER_TYPE}}
 CXXFLAGS+=	 ${CXXFLAGS.${COMPILER_TYPE}}
 
 AFLAGS+=	${AFLAGS.${.IMPSRC:T}}
+AFLAGS+=	${AFLAGS.${.TARGET:T}}
 ACFLAGS+=	${ACFLAGS.${.IMPSRC:T}}
+ACFLAGS+=	${ACFLAGS.${.TARGET:T}}
 CFLAGS+=	${CFLAGS.${.IMPSRC:T}}
 CXXFLAGS+=	${CXXFLAGS.${.IMPSRC:T}}
 
 LDFLAGS+=	${LDFLAGS.${LINKER_TYPE}}
 
-.if empty(_NO_INCLUDE_COMPILERMK)
-# TODO: should check there is no -fuse-ld in $LDFLAGS before setting it here
-.if ${LD} != "ld" && (${CC:[1]:H} != ${LD:[1]:H} || ${LD:[1]:T} != "ld")
-# Add -fuse-ld=${LD} if LD is in a different directory or not called "ld".
-.if ${COMPILER_TYPE} == "clang"
-LDFLAGS+=	-fuse-ld=${LD:[1]}
-.else
-# GCC does not support an absolute path for -fuse-ld so we just print this
-# warning instead and let the user add the required symlinks
-.warning LD (${LD}) is not the default linker for ${CC} but -fuse-ld= is not supported
+# Only allow .TARGET when not using PROGS as it has the same syntax
+# per PROG which is ambiguous with this syntax. This is only needed
+# for PROG_VARS vars.
+.if !defined(_RECURSING_PROGS)
+.if ${MK_WARNS} != "no"
+CFLAGS+=	${CWARNFLAGS.${.TARGET:T}}
 .endif
-.endif
+CFLAGS+=	${CFLAGS.${.TARGET:T}}
+CXXFLAGS+=	${CXXFLAGS.${.TARGET:T}}
+LDFLAGS+=	${LDFLAGS.${.TARGET:T}}
+LDADD+=		${LDADD.${.TARGET:T}}
+LIBADD+=	${LIBADD.${.TARGET:T}}
 .endif
 
 .if defined(SRCTOP)
@@ -292,7 +303,7 @@ PHONY_NOTMAIN = analyze afterdepend afterinstall all beforedepend beforeinstall 
 .NOTMAIN: ${PHONY_NOTMAIN:Nall}
 
 .if ${MK_STAGING} != "no"
-.if defined(_SKIP_BUILD) || (!make(all) && !make(clean*))
+.if defined(_SKIP_BUILD) || (!make(all) && !make(clean*) && !make(*clean))
 _SKIP_STAGING?= yes
 .endif
 .if ${_SKIP_STAGING:Uno} == "yes"

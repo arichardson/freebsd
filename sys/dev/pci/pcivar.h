@@ -1,8 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
- * Copyright (c) 1997, Stefan Esser <se@freebsd.org>
- * All rights reserved.
+ * Copyright 1997, Stefan Esser <se@freebsd.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,7 +32,7 @@
 #define	_PCIVAR_H_
 
 #include <sys/queue.h>
-#include <sys/eventhandler.h>
+#include <sys/_eventhandler.h>
 
 /* some PCI bus constants */
 #define	PCI_MAXMAPS_0	6	/* max. no. of memory/port maps */

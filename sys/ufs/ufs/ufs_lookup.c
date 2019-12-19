@@ -728,7 +728,7 @@ found:
 			 * Relock for the "." case may left us with
 			 * reclaimed vnode.
 			 */
-			if (vdp->v_iflag & VI_DOOMED) {
+			if (VN_IS_DOOMED(vdp)) {
 				vrele(vdp);
 				return (ENOENT);
 			}
@@ -825,14 +825,21 @@ ufs_makedirentry(ip, cnp, newdirp)
 	struct componentname *cnp;
 	struct direct *newdirp;
 {
+	u_int namelen;
 
-#ifdef INVARIANTS
-	if ((cnp->cn_flags & SAVENAME) == 0)
-		panic("ufs_makedirentry: missing name");
-#endif
+	namelen = (unsigned)cnp->cn_namelen;
+	KASSERT((cnp->cn_flags & SAVENAME) != 0,
+		("ufs_makedirentry: missing name"));
+	KASSERT(namelen <= UFS_MAXNAMLEN,
+		("ufs_makedirentry: name too long"));
 	newdirp->d_ino = ip->i_number;
-	newdirp->d_namlen = cnp->cn_namelen;
-	bcopy(cnp->cn_nameptr, newdirp->d_name, (unsigned)cnp->cn_namelen + 1);
+	newdirp->d_namlen = namelen;
+
+	/* Zero out after-name padding */
+	*(u_int32_t *)(&newdirp->d_name[namelen & ~(DIR_ROUNDUP - 1)]) = 0;
+
+	bcopy(cnp->cn_nameptr, newdirp->d_name, namelen);
+
 	if (ITOV(ip)->v_mount->mnt_maxsymlinklen > 0)
 		newdirp->d_type = IFTODT(ip->i_mode);
 	else {
@@ -1171,6 +1178,7 @@ ufs_dirremove(dvp, ip, flags, isrmdir)
 	 */
 	if (ip) {
 		ip->i_effnlink--;
+		ip->i_flag |= IN_CHANGE;
 		if (DOINGSOFTDEP(dvp)) {
 			softdep_setup_unlink(dp, ip);
 		} else {
@@ -1211,16 +1219,21 @@ ufs_dirremove(dvp, ip, flags, isrmdir)
 	if (ip && rep->d_ino != ip->i_number)
 		panic("ufs_dirremove: ip %ju does not match dirent ino %ju\n",
 		    (uintmax_t)ip->i_number, (uintmax_t)rep->d_ino);
-	if (dp->i_count == 0) {
-		/*
-		 * First entry in block: set d_ino to zero.
-		 */
-		ep->d_ino = 0;
-	} else {
+	/*
+	 * Zero out the file directory entry metadata to reduce disk
+	 * scavenging disclosure.
+	 */
+	bzero(&rep->d_name[0], rep->d_namlen);
+	rep->d_namlen = 0;
+	rep->d_type = 0;
+	rep->d_ino = 0;
+
+	if (dp->i_count != 0) {
 		/*
 		 * Collapse new free space into previous entry.
 		 */
 		ep->d_reclen += rep->d_reclen;
+		rep->d_reclen = 0;
 	}
 #ifdef UFS_DIRHASH
 	if (dp->i_dirhash != NULL)
@@ -1279,6 +1292,7 @@ ufs_dirrewrite(dp, oip, newinum, newtype, isrmdir)
 	 * necessary.
 	 */
 	oip->i_effnlink--;
+	oip->i_flag |= IN_CHANGE;
 	if (DOINGSOFTDEP(vdp)) {
 		softdep_setup_unlink(dp, oip);
 	} else {
@@ -1394,6 +1408,7 @@ ufs_dir_dd_ino(struct vnode *vp, struct ucred *cred, ino_t *dd_ino,
 	int error, namlen;
 
 	ASSERT_VOP_LOCKED(vp, "ufs_dir_dd_ino");
+	*dd_vp = NULL;
 	if (vp->v_type != VDIR)
 		return (ENOTDIR);
 	/*
@@ -1426,7 +1441,6 @@ ufs_dir_dd_ino(struct vnode *vp, struct ucred *cred, ino_t *dd_ino,
 	    dirbuf.dotdot_name[1] != '.')
 		return (ENOTDIR);
 	*dd_ino = dirbuf.dotdot_ino;
-	*dd_vp = NULL;
 	return (0);
 }
 

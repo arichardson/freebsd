@@ -330,50 +330,71 @@ ipopts_match(struct ip *ip, ipfw_insn *cmd)
 	return (flags_match(cmd, bits));
 }
 
+/*
+ * Parse TCP options. The logic copied from tcp_dooptions().
+ */
 static int
-tcpopts_match(struct tcphdr *tcp, ipfw_insn *cmd)
+tcpopts_parse(const struct tcphdr *tcp, uint16_t *mss)
 {
+	const u_char *cp = (const u_char *)(tcp + 1);
 	int optlen, bits = 0;
-	u_char *cp = (u_char *)(tcp + 1);
-	int x = (tcp->th_off << 2) - sizeof(struct tcphdr);
+	int cnt = (tcp->th_off << 2) - sizeof(struct tcphdr);
 
-	for (; x > 0; x -= optlen, cp += optlen) {
+	for (; cnt > 0; cnt -= optlen, cp += optlen) {
 		int opt = cp[0];
 		if (opt == TCPOPT_EOL)
 			break;
 		if (opt == TCPOPT_NOP)
 			optlen = 1;
 		else {
+			if (cnt < 2)
+				break;
 			optlen = cp[1];
-			if (optlen <= 0)
+			if (optlen < 2 || optlen > cnt)
 				break;
 		}
 
 		switch (opt) {
-
 		default:
 			break;
 
 		case TCPOPT_MAXSEG:
+			if (optlen != TCPOLEN_MAXSEG)
+				break;
 			bits |= IP_FW_TCPOPT_MSS;
+			if (mss != NULL)
+				*mss = be16dec(cp + 2);
 			break;
 
 		case TCPOPT_WINDOW:
-			bits |= IP_FW_TCPOPT_WINDOW;
+			if (optlen == TCPOLEN_WINDOW)
+				bits |= IP_FW_TCPOPT_WINDOW;
 			break;
 
 		case TCPOPT_SACK_PERMITTED:
+			if (optlen == TCPOLEN_SACK_PERMITTED)
+				bits |= IP_FW_TCPOPT_SACK;
+			break;
+
 		case TCPOPT_SACK:
-			bits |= IP_FW_TCPOPT_SACK;
+			if (optlen > 2 && (optlen - 2) % TCPOLEN_SACK == 0)
+				bits |= IP_FW_TCPOPT_SACK;
 			break;
 
 		case TCPOPT_TIMESTAMP:
-			bits |= IP_FW_TCPOPT_TS;
+			if (optlen == TCPOLEN_TIMESTAMP)
+				bits |= IP_FW_TCPOPT_TS;
 			break;
-
 		}
 	}
-	return (flags_match(cmd, bits));
+	return (bits);
+}
+
+static int
+tcpopts_match(struct tcphdr *tcp, ipfw_insn *cmd)
+{
+
+	return (flags_match(cmd, tcpopts_parse(tcp, NULL)));
 }
 
 static int
@@ -401,17 +422,15 @@ iface_match(struct ifnet *ifp, ipfw_insn_if *cmd, struct ip_fw_chain *chain,
 #if !defined(USERSPACE) && defined(__FreeBSD__)	/* and OSX too ? */
 		struct ifaddr *ia;
 
-		if_addr_rlock(ifp);
+		NET_EPOCH_ASSERT();
+
 		CK_STAILQ_FOREACH(ia, &ifp->if_addrhead, ifa_link) {
 			if (ia->ifa_addr->sa_family != AF_INET)
 				continue;
 			if (cmd->p.ip.s_addr == ((struct sockaddr_in *)
-			    (ia->ifa_addr))->sin_addr.s_addr) {
-				if_addr_runlock(ifp);
-				return(1);	/* match */
-			}
+			    (ia->ifa_addr))->sin_addr.s_addr)
+				return (1);	/* match */
 		}
-		if_addr_runlock(ifp);
 #endif /* __FreeBSD__ */
 	}
 	return(0);	/* no match, fail ... */
@@ -1435,23 +1454,33 @@ ipfw_chk(struct ip_fw_args *args)
  * pointer might become stale after other pullups (but we never use it
  * this way).
  */
-#define PULLUP_TO(_len, p, T)	PULLUP_LEN(_len, p, sizeof(T))
+#define	PULLUP_TO(_len, p, T)	PULLUP_LEN(_len, p, sizeof(T))
 #define	EHLEN	(eh != NULL ? ((char *)ip - (char *)eh) : 0)
-#define PULLUP_LEN(_len, p, T)					\
+#define	_PULLUP_LOCKED(_len, p, T, unlock)			\
 do {								\
 	int x = (_len) + T + EHLEN;				\
 	if (mem) {						\
-		MPASS(pktlen >= x);				\
+		if (__predict_false(pktlen < x)) {		\
+			unlock;					\
+			goto pullup_failed;			\
+		}						\
 		p = (char *)args->mem + (_len) + EHLEN;		\
 	} else {						\
 		if (__predict_false((m)->m_len < x)) {		\
 			args->m = m = m_pullup(m, x);		\
-			if (m == NULL)				\
+			if (m == NULL) {			\
+				unlock;				\
 				goto pullup_failed;		\
+			}					\
 		}						\
 		p = mtod(m, char *) + (_len) + EHLEN;		\
 	}							\
 } while (0)
+
+#define	PULLUP_LEN(_len, p, T)	_PULLUP_LOCKED(_len, p, T, )
+#define	PULLUP_LEN_LOCKED(_len, p, T)	\
+    _PULLUP_LOCKED(_len, p, T, IPFW_PF_RUNLOCK(chain));	\
+    UPDATE_POINTERS()
 /*
  * In case pointers got stale after pullups, update them.
  */
@@ -1712,6 +1741,11 @@ do {								\
 			default:
 				break;
 			}
+		} else {
+			if (offset == 1 && proto == IPPROTO_TCP) {
+				/* RFC 3128 */
+				goto pullup_failed;
+			}
 		}
 
 		UPDATE_POINTERS();
@@ -1758,7 +1792,7 @@ do {								\
 		oif = NULL;
 	} else {
 		MPASS(args->flags & IPFW_ARGS_OUT);
-		iif = mem ? NULL : m->m_pkthdr.rcvif;
+		iif = mem ? NULL : m_rcvif(m);
 		oif = args->ifp;
 	}
 
@@ -2298,7 +2332,7 @@ do {								\
 
 			case O_TCPOPTS:
 				if (proto == IPPROTO_TCP && offset == 0 && ulp){
-					PULLUP_LEN(hlen, ulp,
+					PULLUP_LEN_LOCKED(hlen, ulp,
 					    (TCP(ulp)->th_off << 2));
 					match = tcpopts_match(TCP(ulp), cmd);
 				}
@@ -2314,6 +2348,31 @@ do {								\
 				match = (proto == IPPROTO_TCP && offset == 0 &&
 				    ((ipfw_insn_u32 *)cmd)->d[0] ==
 					TCP(ulp)->th_ack);
+				break;
+
+			case O_TCPMSS:
+				if (proto == IPPROTO_TCP &&
+				    (args->f_id._flags & TH_SYN) != 0 &&
+				    ulp != NULL) {
+					uint16_t mss, *p;
+					int i;
+
+					PULLUP_LEN_LOCKED(hlen, ulp,
+					    (TCP(ulp)->th_off << 2));
+					if ((tcpopts_parse(TCP(ulp), &mss) &
+					    IP_FW_TCPOPT_MSS) == 0)
+						break;
+					if (cmdlen == 1) {
+						match = (cmd->arg1 == mss);
+						break;
+					}
+					/* Otherwise we have ranges. */
+					p = ((ipfw_insn_u16 *)cmd)->ports;
+					i = cmdlen - 1;
+					for (; !match && i > 0; i--, p += 2)
+						match = (mss >= p[0] &&
+						    mss <= p[1]);
+				}
 				break;
 
 			case O_TCPWIN:
@@ -3145,6 +3204,7 @@ do {								\
 
 		}	/* end of inner loop, scan opcodes */
 #undef PULLUP_LEN
+#undef PULLUP_LEN_LOCKED
 
 		if (done)
 			break;
@@ -3332,6 +3392,7 @@ vnet_ipfw_init(const void *unused)
 
 	/* fill and insert the default rule */
 	rule = ipfw_alloc_rule(chain, sizeof(struct ip_fw));
+	rule->flags |= IPFW_RULE_NOOPT;
 	rule->cmd_len = 1;
 	rule->cmd[0].len = 1;
 	rule->cmd[0].opcode = default_to_accept ? O_ACCEPT : O_DENY;

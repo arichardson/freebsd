@@ -241,7 +241,9 @@ struct lock_prof_cpu {
 	struct lock_prof_type	lpc_types[2]; /* One for spin one for other. */
 };
 
-struct lock_prof_cpu *lp_cpu[MAXCPU];
+DPCPU_DEFINE_STATIC(struct lock_prof_cpu, lp);
+#define	LP_CPU_SELF	(DPCPU_PTR(lp))
+#define	LP_CPU(cpu)	(DPCPU_ID_PTR((cpu), lp))
 
 volatile int __read_mostly lock_prof_enable;
 static volatile int lock_prof_resetting;
@@ -287,11 +289,9 @@ lock_prof_init(void *arg)
 {
 	int cpu;
 
-	for (cpu = 0; cpu <= mp_maxid; cpu++) {
-		lp_cpu[cpu] = malloc(sizeof(*lp_cpu[cpu]), M_DEVBUF,
-		    M_WAITOK | M_ZERO);
-		lock_prof_init_type(&lp_cpu[cpu]->lpc_types[0]);
-		lock_prof_init_type(&lp_cpu[cpu]->lpc_types[1]);
+	CPU_FOREACH(cpu) {
+		lock_prof_init_type(&LP_CPU(cpu)->lpc_types[0]);
+		lock_prof_init_type(&LP_CPU(cpu)->lpc_types[1]);
 	}
 }
 SYSINIT(lockprof, SI_SUB_SMP, SI_ORDER_ANY, lock_prof_init, NULL);
@@ -324,25 +324,34 @@ lock_prof_reset(void)
 	atomic_store_rel_int(&lock_prof_resetting, 1);
 	enabled = lock_prof_enable;
 	lock_prof_enable = 0;
-	quiesce_all_cpus("profreset", 0);
+	/*
+	 * This both publishes lock_prof_enable as disabled and makes sure
+	 * everyone else reads it if they are not far enough. We wait for the
+	 * rest down below.
+	 */
+	cpus_fence_seq_cst();
+	quiesce_all_critical();
 	/*
 	 * Some objects may have migrated between CPUs.  Clear all links
 	 * before we zero the structures.  Some items may still be linked
 	 * into per-thread lists as well.
 	 */
-	for (cpu = 0; cpu <= mp_maxid; cpu++) {
-		lpc = lp_cpu[cpu];
+	CPU_FOREACH(cpu) {
+		lpc = LP_CPU(cpu);
 		for (i = 0; i < LPROF_CACHE_SIZE; i++) {
 			LIST_REMOVE(&lpc->lpc_types[0].lpt_objs[i], lpo_link);
 			LIST_REMOVE(&lpc->lpc_types[1].lpt_objs[i], lpo_link);
 		}
 	}
-	for (cpu = 0; cpu <= mp_maxid; cpu++) {
-		lpc = lp_cpu[cpu];
+	CPU_FOREACH(cpu) {
+		lpc = LP_CPU(cpu);
 		bzero(lpc, sizeof(*lpc));
 		lock_prof_init_type(&lpc->lpc_types[0]);
 		lock_prof_init_type(&lpc->lpc_types[1]);
 	}
+	/*
+	 * Paired with the fence from cpus_fence_seq_cst()
+	 */
 	atomic_store_rel_int(&lock_prof_resetting, 0);
 	lock_prof_enable = enabled;
 }
@@ -378,10 +387,8 @@ lock_prof_sum(struct lock_prof *match, struct lock_prof *dst, int hash,
 	dst->class = match->class;
 	dst->name = match->name;
 
-	for (cpu = 0; cpu <= mp_maxid; cpu++) {
-		if (lp_cpu[cpu] == NULL)
-			continue;
-		type = &lp_cpu[cpu]->lpc_types[spin];
+	CPU_FOREACH(cpu) {
+		type = &LP_CPU(cpu)->lpc_types[spin];
 		SLIST_FOREACH(l, &type->lpt_hash[hash], link) {
 			if (l->ticks == t)
 				continue;
@@ -399,7 +406,6 @@ lock_prof_sum(struct lock_prof *match, struct lock_prof *dst, int hash,
 			dst->cnt_contest_locking += l->cnt_contest_locking;
 		}
 	}
-	
 }
 
 static void
@@ -436,14 +442,17 @@ dump_lock_prof_stats(SYSCTL_HANDLER_ARGS)
 	    "max", "wait_max", "total", "wait_total", "count", "avg", "wait_avg", "cnt_hold", "cnt_lock", "name");
 	enabled = lock_prof_enable;
 	lock_prof_enable = 0;
-	quiesce_all_cpus("profstat", 0);
+	/*
+	 * See the comment in lock_prof_reset
+	 */
+	cpus_fence_seq_cst();
+	quiesce_all_critical();
 	t = ticks;
-	for (cpu = 0; cpu <= mp_maxid; cpu++) {
-		if (lp_cpu[cpu] == NULL)
-			continue;
-		lock_prof_type_stats(&lp_cpu[cpu]->lpc_types[0], sb, 0, t);
-		lock_prof_type_stats(&lp_cpu[cpu]->lpc_types[1], sb, 1, t);
+	CPU_FOREACH(cpu) {
+		lock_prof_type_stats(&LP_CPU(cpu)->lpc_types[0], sb, 0, t);
+		lock_prof_type_stats(&LP_CPU(cpu)->lpc_types[1], sb, 1, t);
 	}
+	atomic_thread_fence_rel();
 	lock_prof_enable = enabled;
 
 	error = sbuf_finish(sb);
@@ -508,7 +517,7 @@ lock_profile_lookup(struct lock_object *lo, int spin, const char *file,
 		p = unknown;
 	hash = (uintptr_t)lo->lo_name * 31 + (uintptr_t)p * 31 + line;
 	hash &= LPROF_HASH_MASK;
-	type = &lp_cpu[PCPU_GET(cpuid)]->lpc_types[spin];
+	type = &LP_CPU_SELF->lpc_types[spin];
 	head = &type->lpt_hash[hash];
 	SLIST_FOREACH(lp, head, link) {
 		if (lp->line == line && lp->file == p &&
@@ -543,7 +552,7 @@ lock_profile_object_lookup(struct lock_object *lo, int spin, const char *file,
 		if (l->lpo_obj == lo && l->lpo_file == file &&
 		    l->lpo_line == line)
 			return (l);
-	type = &lp_cpu[PCPU_GET(cpuid)]->lpc_types[spin];
+	type = &LP_CPU_SELF->lpc_types[spin];
 	l = LIST_FIRST(&type->lpt_lpoalloc);
 	if (l == NULL) {
 		lock_prof_rejected++;
@@ -596,6 +605,10 @@ lock_profile_obtain_lock_success(struct lock_object *lo, int contested,
 	else
 		l->lpo_waittime = 0;
 out:
+	/*
+	 * Paired with cpus_fence_seq_cst().
+	 */
+	atomic_thread_fence_rel();
 	critical_exit();
 }
 
@@ -679,9 +692,13 @@ lock_profile_release_lock(struct lock_object *lo)
 	lp->cnt_cur += l->lpo_cnt;
 release:
 	LIST_REMOVE(l, lpo_link);
-	type = &lp_cpu[PCPU_GET(cpuid)]->lpc_types[spin];
+	type = &LP_CPU_SELF->lpc_types[spin];
 	LIST_INSERT_HEAD(&type->lpt_lpoalloc, l, lpo_link);
 out:
+	/*
+	 * Paired with cpus_fence_seq_cst().
+	 */
+	atomic_thread_fence_rel();
 	critical_exit();
 }
 

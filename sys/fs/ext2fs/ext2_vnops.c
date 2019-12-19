@@ -51,6 +51,7 @@
 #include <sys/kernel.h>
 #include <sys/fcntl.h>
 #include <sys/filio.h>
+#include <sys/limits.h>
 #include <sys/sdt.h>
 #include <sys/stat.h>
 #include <sys/bio.h>
@@ -181,6 +182,7 @@ struct vop_vector ext2_vnodeops = {
 #endif /* UFS_ACL */
 	.vop_vptofh =		ext2_vptofh,
 };
+VFS_VOP_VECTOR_REGISTER(ext2_vnodeops);
 
 struct vop_vector ext2_fifoops = {
 	.vop_default =		&fifo_specops,
@@ -198,6 +200,7 @@ struct vop_vector ext2_fifoops = {
 	.vop_write =		VOP_PANIC,
 	.vop_vptofh =		ext2_vptofh,
 };
+VFS_VOP_VECTOR_REGISTER(ext2_fifoops);
 
 /*
  * A virgin directory (no blushing please).

@@ -114,17 +114,8 @@ static int kern_readlink_vp(struct vnode *vp, char *buf, enum uio_seg bufseg,
 static int kern_linkat_vp(struct thread *td, struct vnode *vp, int fd,
     const char *path, enum uio_seg segflag);
 
-/*
- * Sync each mounted filesystem.
- */
-#ifndef _SYS_SYSPROTO_H_
-struct sync_args {
-	int     dummy;
-};
-#endif
-/* ARGSUSED */
 int
-sys_sync(struct thread *td, struct sync_args *uap)
+kern_sync(struct thread *td)
 {
 	struct mount *mp, *nmp;
 	int save;
@@ -149,6 +140,22 @@ sys_sync(struct thread *td, struct sync_args *uap)
 	}
 	mtx_unlock(&mountlist_mtx);
 	return (0);
+}
+
+/*
+ * Sync each mounted filesystem.
+ */
+#ifndef _SYS_SYSPROTO_H_
+struct sync_args {
+	int     dummy;
+};
+#endif
+/* ARGSUSED */
+int
+sys_sync(struct thread *td, struct sync_args *uap)
+{
+
+	return (kern_sync(td));
 }
 
 /*
@@ -248,7 +255,6 @@ statfs_scale_blocks(struct statfs *sf, long max_size)
 static int
 kern_do_statfs(struct thread *td, struct mount *mp, struct statfs *buf)
 {
-	struct statfs *sp;
 	int error;
 
 	if (mp == NULL)
@@ -262,17 +268,9 @@ kern_do_statfs(struct thread *td, struct mount *mp, struct statfs *buf)
 	if (error != 0)
 		goto out;
 #endif
-	/*
-	 * Set these in case the underlying filesystem fails to do so.
-	 */
-	sp = &mp->mnt_stat;
-	sp->f_version = STATFS_VERSION;
-	sp->f_namemax = NAME_MAX;
-	sp->f_flags = mp->mnt_flag & MNT_VISFLAGMASK;
-	error = VFS_STATFS(mp, sp);
+	error = VFS_STATFS(mp, buf);
 	if (error != 0)
 		goto out;
-	*buf = *sp;
 	if (priv_check(td, PRIV_VFS_GENERATION)) {
 		buf->f_fsid.val[0] = buf->f_fsid.val[1] = 0;
 		prison_enforce_statfs(td->td_ucred, mp, buf);
@@ -475,13 +473,6 @@ restart:
 		}
 		if (sfsp != NULL && count < maxcount) {
 			sp = &mp->mnt_stat;
-			/*
-			 * Set these in case the underlying filesystem
-			 * fails to do so.
-			 */
-			sp->f_version = STATFS_VERSION;
-			sp->f_namemax = NAME_MAX;
-			sp->f_flags = mp->mnt_flag & MNT_VISFLAGMASK;
 			/*
 			 * If MNT_NOWAIT is specified, do not refresh
 			 * the fsstat cache.
@@ -1836,7 +1827,7 @@ restart:
 		  sb.st_ino != oldinum) {
 		error = EIDRM;	/* Identifier removed */
 	} else if (fp != NULL && fp->f_vnode != vp) {
-		if ((fp->f_vnode->v_iflag & VI_DOOMED) != 0)
+		if (VN_IS_DOOMED(fp->f_vnode))
 			error = EBADF;
 		else
 			error = EDEADLK;
@@ -3795,7 +3786,7 @@ restart:
 	}
 
 	if (fp != NULL && fp->f_vnode != vp) {
-		if ((fp->f_vnode->v_iflag & VI_DOOMED) != 0)
+		if (VN_IS_DOOMED(fp->f_vnode))
 			error = EBADF;
 		else
 			error = EDEADLK;
@@ -4164,7 +4155,7 @@ sys_revoke(struct thread *td, struct revoke_args *uap)
 		if (error != 0)
 			goto out;
 	}
-	if (vcount(vp) > 1)
+	if (vp->v_usecount > 1 || vcount(vp) > 1)
 		VOP_REVOKE(vp, REVOKEALL);
 out:
 	vput(vp);
@@ -4545,7 +4536,6 @@ sys_fhstatfs(struct thread *td, struct fhstatfs_args *uap)
 int
 kern_fhstatfs(struct thread *td, fhandle_t fh, struct statfs *buf)
 {
-	struct statfs *sp;
 	struct mount *mp;
 	struct vnode *vp;
 	int error;
@@ -4569,16 +4559,7 @@ kern_fhstatfs(struct thread *td, fhandle_t fh, struct statfs *buf)
 	if (error != 0)
 		goto out;
 #endif
-	/*
-	 * Set these in case the underlying filesystem fails to do so.
-	 */
-	sp = &mp->mnt_stat;
-	sp->f_version = STATFS_VERSION;
-	sp->f_namemax = NAME_MAX;
-	sp->f_flags = mp->mnt_flag & MNT_VISFLAGMASK;
-	error = VFS_STATFS(mp, sp);
-	if (error == 0)
-		*buf = *sp;
+	error = VFS_STATFS(mp, buf);
 out:
 	vfs_unbusy(mp);
 	return (error);
@@ -4813,4 +4794,134 @@ sys_posix_fadvise(struct thread *td, struct posix_fadvise_args *uap)
 	error = kern_posix_fadvise(td, uap->fd, uap->offset, uap->len,
 	    uap->advice);
 	return (kern_posix_error(td, error));
+}
+
+int
+kern_copy_file_range(struct thread *td, int infd, off_t *inoffp, int outfd,
+    off_t *outoffp, size_t len, unsigned int flags)
+{
+	struct file *infp, *outfp;
+	struct vnode *invp, *outvp;
+	int error;
+	size_t retlen;
+	void *rl_rcookie, *rl_wcookie;
+	off_t savinoff, savoutoff;
+
+	infp = outfp = NULL;
+	rl_rcookie = rl_wcookie = NULL;
+	savinoff = -1;
+	error = 0;
+	retlen = 0;
+
+	if (flags != 0) {
+		error = EINVAL;
+		goto out;
+	}
+	if (len > SSIZE_MAX)
+		/*
+		 * Although the len argument is size_t, the return argument
+		 * is ssize_t (which is signed).  Therefore a size that won't
+		 * fit in ssize_t can't be returned.
+		 */
+		len = SSIZE_MAX;
+
+	/* Get the file structures for the file descriptors. */
+	error = fget_read(td, infd, &cap_read_rights, &infp);
+	if (error != 0)
+		goto out;
+	error = fget_write(td, outfd, &cap_write_rights, &outfp);
+	if (error != 0)
+		goto out;
+
+	/* Set the offset pointers to the correct place. */
+	if (inoffp == NULL)
+		inoffp = &infp->f_offset;
+	if (outoffp == NULL)
+		outoffp = &outfp->f_offset;
+	savinoff = *inoffp;
+	savoutoff = *outoffp;
+
+	invp = infp->f_vnode;
+	outvp = outfp->f_vnode;
+	/* Sanity check the f_flag bits. */
+	if ((outfp->f_flag & (FWRITE | FAPPEND)) != FWRITE ||
+	    (infp->f_flag & FREAD) == 0) {
+		error = EBADF;
+		goto out;
+	}
+
+	/* If len == 0, just return 0. */
+	if (len == 0)
+		goto out;
+
+	/*
+	 * If infp and outfp refer to the same file, the byte ranges cannot
+	 * overlap.
+	 */
+	if (invp == outvp && ((savinoff <= savoutoff && savinoff + len >
+	    savoutoff) || (savinoff > savoutoff && savoutoff + len >
+	    savinoff))) {
+		error = EINVAL;
+		goto out;
+	}
+
+	/* Range lock the byte ranges for both invp and outvp. */
+	for (;;) {
+		rl_wcookie = vn_rangelock_wlock(outvp, *outoffp, *outoffp +
+		    len);
+		rl_rcookie = vn_rangelock_tryrlock(invp, *inoffp, *inoffp +
+		    len);
+		if (rl_rcookie != NULL)
+			break;
+		vn_rangelock_unlock(outvp, rl_wcookie);
+		rl_rcookie = vn_rangelock_rlock(invp, *inoffp, *inoffp + len);
+		vn_rangelock_unlock(invp, rl_rcookie);
+	}
+
+	retlen = len;
+	error = vn_copy_file_range(invp, inoffp, outvp, outoffp, &retlen,
+	    flags, infp->f_cred, outfp->f_cred, td);
+out:
+	if (rl_rcookie != NULL)
+		vn_rangelock_unlock(invp, rl_rcookie);
+	if (rl_wcookie != NULL)
+		vn_rangelock_unlock(outvp, rl_wcookie);
+	if (savinoff != -1 && (error == EINTR || error == ERESTART)) {
+		*inoffp = savinoff;
+		*outoffp = savoutoff;
+	}
+	if (outfp != NULL)
+		fdrop(outfp, td);
+	if (infp != NULL)
+		fdrop(infp, td);
+	td->td_retval[0] = retlen;
+	return (error);
+}
+
+int
+sys_copy_file_range(struct thread *td, struct copy_file_range_args *uap)
+{
+	off_t inoff, outoff, *inoffp, *outoffp;
+	int error;
+
+	inoffp = outoffp = NULL;
+	if (uap->inoffp != NULL) {
+		error = copyin(uap->inoffp, &inoff, sizeof(off_t));
+		if (error != 0)
+			return (error);
+		inoffp = &inoff;
+	}
+	if (uap->outoffp != NULL) {
+		error = copyin(uap->outoffp, &outoff, sizeof(off_t));
+		if (error != 0)
+			return (error);
+		outoffp = &outoff;
+	}
+	error = kern_copy_file_range(td, uap->infd, inoffp, uap->outfd,
+	    outoffp, uap->len, uap->flags);
+	if (error == 0 && uap->inoffp != NULL)
+		error = copyout(inoffp, uap->inoffp, sizeof(off_t));
+	if (error == 0 && uap->outoffp != NULL)
+		error = copyout(outoffp, uap->outoffp, sizeof(off_t));
+	return (error);
 }

@@ -69,6 +69,7 @@ __FBSDID("$FreeBSD$");
 #include "rtld_malloc.h"
 #include "rtld_utrace.h"
 #include "notes.h"
+#include "rtld_libc.h"
 
 /* Types. */
 typedef void (*func_ptr_type)(void);
@@ -78,7 +79,6 @@ typedef void * (*path_enum_proc) (const char *path, size_t len, void *arg);
 /* Variables that cannot be static: */
 extern struct r_debug r_debug; /* For GDB */
 extern int _thread_autoinit_dummy_decl;
-extern char* __progname;
 extern void (*__cleanup)(void);
 
 
@@ -250,7 +250,6 @@ void _rtld_error(const char *, ...) __exported;
 
 /* Only here to fix -Wmissing-prototypes warnings */
 int __getosreldate(void);
-void __pthread_cxa_finalize(struct dl_phdr_info *a);
 func_ptr_type _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp);
 Elf_Addr _rtld_bind(Obj_Entry *obj, Elf_Size reloff);
 
@@ -458,7 +457,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 		 * others x bit is enabled.
 		 * mmap(2) does not allow to mmap with PROT_EXEC if
 		 * binary' file comes from noexec mount.  We cannot
-		 * set VV_TEXT on the binary.
+		 * set a text reference on the binary.
 		 */
 		dir_enable = false;
 		if (st.st_uid == geteuid()) {
@@ -499,6 +498,13 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 		    *auxp = *auxpf;
 		    if (auxp->a_type == AT_NULL)
 			    break;
+		}
+		/* Since the auxiliary vector has moved, redigest it. */
+		for (i = 0;  i < AT_COUNT;  i++)
+		    aux_info[i] = NULL;
+		for (auxp = aux;  auxp->a_type != AT_NULL;  auxp++) {
+		    if (auxp->a_type < AT_COUNT)
+			aux_info[auxp->a_type] = auxp;
 		}
 	    } else {
 		_rtld_error("No binary");
@@ -1286,10 +1292,16 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 		
 #endif
 
+#ifdef __powerpc__
 #ifdef __powerpc64__
 	case DT_PPC64_GLINK:
 		obj->glink = (Elf_Addr)(obj->relocbase + dynp->d_un.d_ptr);
 		break;
+#else
+	case DT_PPC_GOT:
+		obj->gotptr = (Elf_Addr *)(obj->relocbase + dynp->d_un.d_ptr);
+		break;
+#endif
 #endif
 
 	case DT_FLAGS_1:
@@ -5641,26 +5653,6 @@ __getosreldate(void)
 		osreldate = osrel;
 	return (osreldate);
 }
-
-void
-exit(int status)
-{
-
-	_exit(status);
-}
-
-void (*__cleanup)(void);
-int __isthreaded = 0;
-int _thread_autoinit_dummy_decl = 1;
-
-/*
- * No unresolved symbols for rtld.
- */
-void
-__pthread_cxa_finalize(struct dl_phdr_info *a __unused)
-{
-}
-
 const char *
 rtld_strerror(int errnum)
 {

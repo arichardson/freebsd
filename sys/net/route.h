@@ -210,6 +210,7 @@ struct rtentry {
 #define	NHF_DEFAULT		0x0080	/* Default route */
 #define	NHF_BROADCAST		0x0100	/* RTF_BROADCAST */
 #define	NHF_GATEWAY		0x0200	/* RTF_GATEWAY */
+#define	NHF_HOST		0x0400	/* RTF_HOST */
 
 /* Nexthop request flags */
 #define	NHR_IFAIF		0x01	/* Return ifa_ifp interface */
@@ -236,13 +237,14 @@ rt_update_ro_flags(struct route *ro)
 /*
  * Routing statistics.
  */
-struct	rtstat {
-	short	rts_badredirect;	/* bogus redirect calls */
-	short	rts_dynamic;		/* routes created by redirects */
-	short	rts_newgateway;		/* routes modified by redirects */
-	short	rts_unreach;		/* lookups which failed */
-	short	rts_wildcard;		/* lookups satisfied by a wildcard */
+struct rtstat {
+	uint64_t rts_badredirect;	/* bogus redirect calls */
+	uint64_t rts_dynamic;		/* routes created by redirects */
+	uint64_t rts_newgateway;	/* routes modified by redirects */
+	uint64_t rts_unreach;		/* lookups which failed */
+	uint64_t rts_wildcard;		/* lookups satisfied by a wildcard */
 };
+
 /*
  * Structures for routing messages.
  */
@@ -487,7 +489,6 @@ int	 rtinit(struct ifaddr *, int, int);
  * For now the protocol indepedent versions are the same as the AF_INET ones
  * but this will change.. 
  */
-int	 rt_getifa_fib(struct rt_addrinfo *, u_int fibnum);
 void	 rtalloc_ign_fib(struct route *ro, u_long ignflags, u_int fibnum);
 struct rtentry *rtalloc1_fib(struct sockaddr *, int, u_long, u_int);
 int	 rtioctl_fib(u_long, caddr_t, u_int);

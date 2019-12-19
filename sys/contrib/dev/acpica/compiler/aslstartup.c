@@ -457,16 +457,13 @@ AslDoOneFile (
     }
 
     FileNode = FlGetCurrentFileNode();
-    if (!FileNode)
-    {
-        return (AE_ERROR);
-    }
 
     FileNode->OriginalInputFileSize = FlGetFileSize (ASL_FILE_INPUT);
 
     /* Determine input file type */
 
     AslGbl_FileType = AslDetectSourceFileType (&AslGbl_Files[ASL_FILE_INPUT]);
+    FileNode->FileType = AslGbl_FileType;
     if (AslGbl_FileType == ASL_INPUT_TYPE_BINARY)
     {
         return (AE_ERROR);
@@ -550,13 +547,9 @@ AslDoOneFile (
         Status = CmDoCompile ();
         if (ACPI_FAILURE (Status))
         {
+            PrTerminatePreprocessor ();
             return (Status);
         }
-
-        /* Cleanup (for next source file) and exit */
-
-        AeClearErrorLog ();
-        PrTerminatePreprocessor ();
 
         /*
          * At this point, we know how many lines are in the input file. Save it

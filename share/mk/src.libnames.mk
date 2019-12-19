@@ -82,7 +82,6 @@ _LIBRARIES=	\
 		cap_fileargs \
 		cap_grp \
 		cap_pwd \
-		cap_random \
 		cap_sysctl \
 		cap_syslog \
 		com_err \
@@ -135,7 +134,6 @@ _LIBRARIES=	\
 		memstat \
 		mp \
 		mt \
-		nandfs \
 		ncurses \
 		ncursesw \
 		netgraph \
@@ -167,6 +165,7 @@ _LIBRARIES=	\
 		smb \
 		ssl \
 		ssp_nonshared \
+		stats \
 		stdthreads \
 		supcplusplus \
 		sysdecode \
@@ -232,7 +231,7 @@ LIBVERIEXEC?=	${LIBVERIEXECDIR}/libveriexec${PIE_SUFFIX}.a
 # Each library's LIBADD needs to be duplicated here for static linkage of
 # 2nd+ order consumers.  Auto-generating this would be better.
 _DP_80211=	sbuf bsdxml
-_DP_archive=	z bz2 lzma bsdxml
+_DP_archive=	z bz2 lzma bsdxml zstd
 _DP_zstd=	pthread
 .if ${MK_BLACKLIST} != "no"
 _DP_blacklist+=	pthread
@@ -261,7 +260,6 @@ _DP_cap_dns=	nv
 _DP_cap_fileargs=	nv
 _DP_cap_grp=	nv
 _DP_cap_pwd=	nv
-_DP_cap_random=	nv
 _DP_cap_sysctl=	nv
 _DP_cap_syslog=	nv
 .if ${MK_OFED} != "no"
@@ -349,6 +347,7 @@ _DP_c=		compiler_rt
 .if ${MK_SSP} != "no"
 _DP_c+=		ssp_nonshared
 .endif
+_DP_stats=	sbuf pthread
 _DP_stdthreads=	pthread
 _DP_tacplus=	md
 _DP_panel=	ncurses
@@ -463,76 +462,77 @@ DPADD+=		${DPADD_${_l}}
 LDADD+=		${LDADD_${_l}}
 .endfor
 
+_LIB_OBJTOP?=	${OBJTOP}
 # INTERNALLIB definitions.
-LIBELFTCDIR=	${OBJTOP}/lib/libelftc
+LIBELFTCDIR=	${_LIB_OBJTOP}/lib/libelftc
 LIBELFTC?=	${LIBELFTCDIR}/libelftc${PIE_SUFFIX}.a
 
-LIBPEDIR=	${OBJTOP}/lib/libpe
+LIBPEDIR=	${_LIB_OBJTOP}/lib/libpe
 LIBPE?=		${LIBPEDIR}/libpe${PIE_SUFFIX}.a
 
-LIBOPENBSDDIR=	${OBJTOP}/lib/libopenbsd
+LIBOPENBSDDIR=	${_LIB_OBJTOP}/lib/libopenbsd
 LIBOPENBSD?=	${LIBOPENBSDDIR}/libopenbsd${PIE_SUFFIX}.a
 
-LIBSMDIR=	${OBJTOP}/lib/libsm
+LIBSMDIR=	${_LIB_OBJTOP}/lib/libsm
 LIBSM?=		${LIBSMDIR}/libsm${PIE_SUFFIX}.a
 
-LIBSMDBDIR=	${OBJTOP}/lib/libsmdb
+LIBSMDBDIR=	${_LIB_OBJTOP}/lib/libsmdb
 LIBSMDB?=	${LIBSMDBDIR}/libsmdb${PIE_SUFFIX}.a
 
-LIBSMUTILDIR=	${OBJTOP}/lib/libsmutil
+LIBSMUTILDIR=	${_LIB_OBJTOP}/lib/libsmutil
 LIBSMUTIL?=	${LIBSMUTILDIR}/libsmutil${PIE_SUFFIX}.a
 
-LIBNETBSDDIR?=	${OBJTOP}/lib/libnetbsd
+LIBNETBSDDIR?=	${_LIB_OBJTOP}/lib/libnetbsd
 LIBNETBSD?=	${LIBNETBSDDIR}/libnetbsd${PIE_SUFFIX}.a
 
-LIBVERSDIR?=	${OBJTOP}/kerberos5/lib/libvers
+LIBVERSDIR?=	${_LIB_OBJTOP}/kerberos5/lib/libvers
 LIBVERS?=	${LIBVERSDIR}/libvers${PIE_SUFFIX}.a
 
-LIBSLDIR=	${OBJTOP}/kerberos5/lib/libsl
+LIBSLDIR=	${_LIB_OBJTOP}/kerberos5/lib/libsl
 LIBSL?=		${LIBSLDIR}/libsl${PIE_SUFFIX}.a
 
-LIBIFCONFIGDIR=	${OBJTOP}/lib/libifconfig
+LIBIFCONFIGDIR=	${_LIB_OBJTOP}/lib/libifconfig
 LIBIFCONFIG?=	${LIBIFCONFIGDIR}/libifconfig${PIE_SUFFIX}.a
 
-LIBIPFDIR=	${OBJTOP}/sbin/ipf/libipf
+LIBIPFDIR=	${_LIB_OBJTOP}/sbin/ipf/libipf
 LIBIPF?=	${LIBIPFDIR}/libipf${PIE_SUFFIX}.a
 
-LIBTELNETDIR=	${OBJTOP}/lib/libtelnet
+LIBTELNETDIR=	${_LIB_OBJTOP}/lib/libtelnet
 LIBTELNET?=	${LIBTELNETDIR}/libtelnet${PIE_SUFFIX}.a
 
-LIBCRONDIR=	${OBJTOP}/usr.sbin/cron/lib
+LIBCRONDIR=	${_LIB_OBJTOP}/usr.sbin/cron/lib
 LIBCRON?=	${LIBCRONDIR}/libcron${PIE_SUFFIX}.a
 
-LIBNTPDIR=	${OBJTOP}/usr.sbin/ntp/libntp
+LIBNTPDIR=	${_LIB_OBJTOP}/usr.sbin/ntp/libntp
 LIBNTP?=	${LIBNTPDIR}/libntp${PIE_SUFFIX}.a
 
-LIBNTPEVENTDIR=	${OBJTOP}/usr.sbin/ntp/libntpevent
+LIBNTPEVENTDIR=	${_LIB_OBJTOP}/usr.sbin/ntp/libntpevent
 LIBNTPEVENT?=	${LIBNTPEVENTDIR}/libntpevent${PIE_SUFFIX}.a
 
-LIBOPTSDIR=	${OBJTOP}/usr.sbin/ntp/libopts
+LIBOPTSDIR=	${_LIB_OBJTOP}/usr.sbin/ntp/libopts
 LIBOPTS?=	${LIBOPTSDIR}/libopts${PIE_SUFFIX}.a
 
-LIBPARSEDIR=	${OBJTOP}/usr.sbin/ntp/libparse
+LIBPARSEDIR=	${_LIB_OBJTOP}/usr.sbin/ntp/libparse
 LIBPARSE?=	${LIBPARSEDIR}/libparse${PIE_SUFFIX}.a
 
-LIBLPRDIR=	${OBJTOP}/usr.sbin/lpr/common_source
+LIBLPRDIR=	${_LIB_OBJTOP}/usr.sbin/lpr/common_source
 LIBLPR?=	${LIBLPRDIR}/liblpr${PIE_SUFFIX}.a
 
-LIBFIFOLOGDIR=	${OBJTOP}/usr.sbin/fifolog/lib
+LIBFIFOLOGDIR=	${_LIB_OBJTOP}/usr.sbin/fifolog/lib
 LIBFIFOLOG?=	${LIBFIFOLOGDIR}/libfifolog${PIE_SUFFIX}.a
 
-LIBBSNMPTOOLSDIR=	${OBJTOP}/usr.sbin/bsnmpd/tools/libbsnmptools
+LIBBSNMPTOOLSDIR=	${_LIB_OBJTOP}/usr.sbin/bsnmpd/tools/libbsnmptools
 LIBBSNMPTOOLS?=	${LIBBSNMPTOOLSDIR}/libbsnmptools${PIE_SUFFIX}.a
 
-LIBAMUDIR=	${OBJTOP}/usr.sbin/amd/libamu
+LIBAMUDIR=	${_LIB_OBJTOP}/usr.sbin/amd/libamu
 LIBAMU?=	${LIBAMUDIR}/libamu${PIE_SUFFIX}.a
 
 LIBBE?=		${LIBBEDIR}/libbe${PIE_SUFFIX}.a
 
-LIBPMCSTATDIR=	${OBJTOP}/lib/libpmcstat
+LIBPMCSTATDIR=	${_LIB_OBJTOP}/lib/libpmcstat
 LIBPMCSTAT?=	${LIBPMCSTATDIR}/libpmcstat${PIE_SUFFIX}.a
 
-LIBC_NOSSP_PICDIR=	${OBJTOP}/lib/libc
+LIBC_NOSSP_PICDIR=	${_LIB_OBJTOP}/lib/libc
 LIBC_NOSSP_PIC?=	${LIBC_NOSSP_PICDIR}/libc_nossp_pic.a
 
 # Define a directory for each library.  This is useful for adding -L in when
@@ -600,7 +600,6 @@ LIBCASPERDIR=	${OBJTOP}/lib/libcasper/libcasper
 LIBCAP_DNSDIR=	${OBJTOP}/lib/libcasper/services/cap_dns
 LIBCAP_GRPDIR=	${OBJTOP}/lib/libcasper/services/cap_grp
 LIBCAP_PWDDIR=	${OBJTOP}/lib/libcasper/services/cap_pwd
-LIBCAP_RANDOMDIR=	${OBJTOP}/lib/libcasper/services/cap_random
 LIBCAP_SYSCTLDIR=	${OBJTOP}/lib/libcasper/services/cap_sysctl
 LIBCAP_SYSLOGDIR=	${OBJTOP}/lib/libcasper/services/cap_syslog
 LIBBSDXMLDIR=	${OBJTOP}/lib/libexpat

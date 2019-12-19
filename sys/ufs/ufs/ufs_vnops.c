@@ -811,8 +811,8 @@ ufs_chown(vp, uid, gid, cred, td)
 		ip->i_dquot[GRPQUOTA] = NODQUOT;
 	}
 	change = DIP(ip, i_blocks);
-	(void) chkdq(ip, -change, cred, CHOWN);
-	(void) chkiq(ip, -1, cred, CHOWN);
+	(void) chkdq(ip, -change, cred, CHOWN|FORCE);
+	(void) chkiq(ip, -1, cred, CHOWN|FORCE);
 	for (i = 0; i < MAXQUOTAS; i++) {
 		dqrele(vp, ip->i_dquot[i]);
 		ip->i_dquot[i] = NODQUOT;
@@ -2702,11 +2702,18 @@ static int
 ufs_ioctl(struct vop_ioctl_args *ap)
 {
 	struct vnode *vp;
+	int error;
 
 	vp = ap->a_vp;
 	switch (ap->a_command) {
 	case FIOSEEKDATA:
-		return (ufs_bmap_seekdata(vp, (off_t *)ap->a_data));
+		error = vn_lock(vp, LK_SHARED);
+		if (error == 0) {
+			error = ufs_bmap_seekdata(vp, (off_t *)ap->a_data);
+			VOP_UNLOCK(vp, 0);
+		} else
+			error = EBADF;
+		return (error);
 	case FIOSEEKHOLE:
 		return (vn_bmap_seekhole(vp, ap->a_command, (off_t *)ap->a_data,
 		    ap->a_cred));
@@ -2735,6 +2742,7 @@ struct vop_vector ufs_vnodeops = {
 	.vop_markatime =	ufs_markatime,
 	.vop_mkdir =		ufs_mkdir,
 	.vop_mknod =		ufs_mknod,
+	.vop_need_inactive =	ufs_need_inactive,
 	.vop_open =		ufs_open,
 	.vop_pathconf =		ufs_pathconf,
 	.vop_poll =		vop_stdpoll,
@@ -2763,6 +2771,7 @@ struct vop_vector ufs_vnodeops = {
 	.vop_aclcheck =		ufs_aclcheck,
 #endif
 };
+VFS_VOP_VECTOR_REGISTER(ufs_vnodeops);
 
 struct vop_vector ufs_fifoops = {
 	.vop_default =		&fifo_specops,
@@ -2793,3 +2802,4 @@ struct vop_vector ufs_fifoops = {
 	.vop_aclcheck =		ufs_aclcheck,
 #endif
 };
+VFS_VOP_VECTOR_REGISTER(ufs_fifoops);

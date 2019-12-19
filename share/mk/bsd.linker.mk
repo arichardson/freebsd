@@ -68,8 +68,8 @@ _can_export=	no
 .endfor
 .if ${_can_export} == yes
 .for var in ${_exported_vars}
-.if defined(${var}.${${X_}_ld_hash})
-${var}=	${${var}.${${X_}_ld_hash}}
+.if defined(${var}__${${X_}_ld_hash})
+${var}=	${${var}__${${X_}_ld_hash}}
 .endif
 .endfor
 .endif
@@ -126,6 +126,9 @@ ${X_}LINKER_FEATURES=
 ${X_}LINKER_FEATURES+=	build-id
 ${X_}LINKER_FEATURES+=	ifunc
 .endif
+.if ${${X_}LINKER_TYPE} == "bfd" && ${${X_}LINKER_VERSION} > 21750
+${X_}LINKER_FEATURES+=	riscv-relaxations
+.endif
 .if ${${X_}LINKER_TYPE} == "lld" && ${${X_}LINKER_VERSION} >= 60000
 ${X_}LINKER_FEATURES+=	retpoline
 .endif
@@ -147,9 +150,9 @@ X_LINKER_FREEBSD_VERSION= ${LINKER_FREEBSD_VERSION}
 # Export the values so sub-makes don't have to look them up again, using the
 # hash key computed above.
 .for var in ${_exported_vars}
-${var}.${${X_}_ld_hash}:=	${${var}}
-.export-env ${var}.${${X_}_ld_hash}
-.undef ${var}.${${X_}_ld_hash}
+${var}__${${X_}_ld_hash}:=	${${var}}
+.export-env ${var}__${${X_}_ld_hash}
+.undef ${var}__${${X_}_ld_hash}
 .endfor
 
 .endif	# ${ld} == "LD" || !empty(XLD)

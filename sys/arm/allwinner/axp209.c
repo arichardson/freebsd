@@ -1,7 +1,6 @@
 /*-
  * Copyright (c) 2015-2016 Emmanuel Vadot <manu@freebsd.org>
  * Copyright (c) 2016 Jared McNeill <jmcneill@invisible.ca>
- * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -753,6 +752,7 @@ static regnode_method_t axp2xx_regnode_methods[] = {
 	REGNODEMETHOD(regnode_enable,		axp2xx_regnode_enable),
 	REGNODEMETHOD(regnode_set_voltage,	axp2xx_regnode_set_voltage),
 	REGNODEMETHOD(regnode_get_voltage,	axp2xx_regnode_get_voltage),
+	REGNODEMETHOD(regnode_check_voltage,	regnode_method_check_voltage),
 	REGNODEMETHOD_END
 };
 DEFINE_CLASS_1(axp2xx_regnode, axp2xx_regnode_class, axp2xx_regnode_methods,

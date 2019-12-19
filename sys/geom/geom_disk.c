@@ -108,7 +108,7 @@ g_disk_access(struct g_provider *pp, int r, int w, int e)
 	    pp->name, r, w, e);
 	g_topology_assert();
 	sc = pp->private;
-	if (sc == NULL || (dp = sc->dp) == NULL || dp->d_destroyed) {
+	if ((dp = sc->dp) == NULL || dp->d_destroyed) {
 		/*
 		 * Allow decreasing access count even if disk is not
 		 * available anymore.
@@ -274,6 +274,8 @@ g_disk_ioctl(struct g_provider *pp, u_long cmd, void * data, int fflag, struct t
 
 	sc = pp->private;
 	dp = sc->dp;
+	KASSERT(dp != NULL && !dp->d_destroyed,
+	    ("g_disk_ioctl(%lx) on destroyed disk %s", cmd, pp->name));
 
 	if (dp->d_ioctl == NULL)
 		return (ENOIOCTL);
@@ -432,10 +434,9 @@ g_disk_start(struct bio *bp)
 	biotrack(bp, __func__);
 
 	sc = bp->bio_to->private;
-	if (sc == NULL || (dp = sc->dp) == NULL || dp->d_destroyed) {
-		g_io_deliver(bp, ENXIO);
-		return;
-	}
+	dp = sc->dp;
+	KASSERT(dp != NULL && !dp->d_destroyed,
+	    ("g_disk_start(%p) on destroyed disk %s", bp, bp->bio_to->name));
 	error = EJUSTRETURN;
 	switch(bp->bio_cmd) {
 	case BIO_DELETE:
@@ -528,7 +529,10 @@ g_disk_start(struct bio *bp)
 		else if (g_handleattr_uint16_t(bp, "GEOM::rotation_rate",
 		    dp->d_rotation_rate))
 			break;
-		else 
+		else if (g_handleattr_str(bp, "GEOM::attachment",
+		    dp->d_attachment))
+			break;
+		else
 			error = ENOIOCTL;
 		break;
 	case BIO_FLUSH:
@@ -599,15 +603,15 @@ g_disk_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp, struct g
 		 */
 		sbuf_printf(sb, "%s<rotationrate>", indent);
 		if (dp->d_rotation_rate == DISK_RR_UNKNOWN) /* Old drives */
-			sbuf_printf(sb, "unknown");	/* don't report RPM. */
+			sbuf_cat(sb, "unknown");	/* don't report RPM. */
 		else if (dp->d_rotation_rate == DISK_RR_NON_ROTATING)
-			sbuf_printf(sb, "0");
+			sbuf_cat(sb, "0");
 		else if ((dp->d_rotation_rate >= DISK_RR_MIN) &&
 		    (dp->d_rotation_rate <= DISK_RR_MAX))
 			sbuf_printf(sb, "%u", dp->d_rotation_rate);
 		else
-			sbuf_printf(sb, "invalid");
-		sbuf_printf(sb, "</rotationrate>\n");
+			sbuf_cat(sb, "invalid");
+		sbuf_cat(sb, "</rotationrate>\n");
 		if (dp->d_getattr != NULL) {
 			buf = g_malloc(DISK_IDENT_SIZE, M_WAITOK);
 			bp = g_alloc_bio();
@@ -617,35 +621,34 @@ g_disk_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp, struct g
 			bp->bio_data = buf;
 			res = dp->d_getattr(bp);
 			sbuf_printf(sb, "%s<ident>", indent);
-			g_conf_printf_escaped(sb, "%s",
-			    res == 0 ? buf: dp->d_ident);
-			sbuf_printf(sb, "</ident>\n");
+			g_conf_cat_escaped(sb, res == 0 ? buf : dp->d_ident);
+			sbuf_cat(sb, "</ident>\n");
 			bp->bio_attribute = "GEOM::lunid";
 			bp->bio_length = DISK_IDENT_SIZE;
 			bp->bio_data = buf;
 			if (dp->d_getattr(bp) == 0) {
 				sbuf_printf(sb, "%s<lunid>", indent);
-				g_conf_printf_escaped(sb, "%s", buf);
-				sbuf_printf(sb, "</lunid>\n");
+				g_conf_cat_escaped(sb, buf);
+				sbuf_cat(sb, "</lunid>\n");
 			}
 			bp->bio_attribute = "GEOM::lunname";
 			bp->bio_length = DISK_IDENT_SIZE;
 			bp->bio_data = buf;
 			if (dp->d_getattr(bp) == 0) {
 				sbuf_printf(sb, "%s<lunname>", indent);
-				g_conf_printf_escaped(sb, "%s", buf);
-				sbuf_printf(sb, "</lunname>\n");
+				g_conf_cat_escaped(sb, buf);
+				sbuf_cat(sb, "</lunname>\n");
 			}
 			g_destroy_bio(bp);
 			g_free(buf);
 		} else {
 			sbuf_printf(sb, "%s<ident>", indent);
-			g_conf_printf_escaped(sb, "%s", dp->d_ident);
-			sbuf_printf(sb, "</ident>\n");
+			g_conf_cat_escaped(sb, dp->d_ident);
+			sbuf_cat(sb, "</ident>\n");
 		}
 		sbuf_printf(sb, "%s<descr>", indent);
-		g_conf_printf_escaped(sb, "%s", dp->d_descr);
-		sbuf_printf(sb, "</descr>\n");
+		g_conf_cat_escaped(sb, dp->d_descr);
+		sbuf_cat(sb, "</descr>\n");
 	}
 }
 
@@ -894,8 +897,9 @@ void
 disk_destroy(struct disk *dp)
 {
 
-	g_cancel_event(dp);
+	disk_gone(dp);
 	dp->d_destroyed = 1;
+	g_cancel_event(dp);
 	if (dp->d_devstat != NULL)
 		devstat_remove_entry(dp->d_devstat);
 	g_post_event(g_disk_destroy, dp, M_WAITOK, NULL);
@@ -920,6 +924,16 @@ disk_gone(struct disk *dp)
 	struct g_provider *pp;
 
 	mtx_pool_lock(mtxpool_sleep, dp);
+
+	/*
+	 * Second wither call makes no sense, plus we can not access the list
+	 * of providers without topology lock after calling wither once.
+	 */
+	if (dp->d_goneflag != 0) {
+		mtx_pool_unlock(mtxpool_sleep, dp);
+		return;
+	}
+
 	dp->d_goneflag = 1;
 
 	/*
@@ -944,13 +958,11 @@ disk_gone(struct disk *dp)
 	mtx_pool_unlock(mtxpool_sleep, dp);
 
 	gp = dp->d_geom;
-	if (gp != NULL) {
-		pp = LIST_FIRST(&gp->provider);
-		if (pp != NULL) {
-			KASSERT(LIST_NEXT(pp, provider) == NULL,
-			    ("geom %p has more than one provider", gp));
-			g_wither_provider(pp, ENXIO);
-		}
+	pp = LIST_FIRST(&gp->provider);
+	if (pp != NULL) {
+		KASSERT(LIST_NEXT(pp, provider) == NULL,
+		    ("geom %p has more than one provider", gp));
+		g_wither_provider(pp, ENXIO);
 	}
 }
 

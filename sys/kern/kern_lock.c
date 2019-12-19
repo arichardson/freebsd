@@ -40,6 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/lock_profile.h>
 #include <sys/lockmgr.h>
+#include <sys/lockstat.h>
 #include <sys/mutex.h>
 #include <sys/proc.h>
 #include <sys/sleepqueue.h>
@@ -60,8 +61,6 @@ __FBSDID("$FreeBSD$");
 PMC_SOFT_DECLARE( , , lock, failed);
 #endif
 
-CTASSERT(((LK_ADAPTIVE | LK_NOSHARE) & LO_CLASSFLAGS) ==
-    (LK_ADAPTIVE | LK_NOSHARE));
 CTASSERT(LK_UNLOCKED == (LK_UNLOCKED &
     ~(LK_ALL_WAITERS | LK_EXCLUSIVE_SPINNERS)));
 
@@ -135,10 +134,6 @@ LK_CAN_SHARE(uintptr_t x, int flags, bool fp)
 #define	LK_TRYWIT(x)							\
 	(LK_TRYOP(x) ? LOP_TRYLOCK : 0)
 
-#define	LK_CAN_ADAPT(lk, f)						\
-	(((lk)->lock_object.lo_flags & LK_ADAPTIVE) != 0 &&		\
-	((f) & LK_SLEEPFAIL) == 0)
-
 #define	lockmgr_disowned(lk)						\
 	(((lk)->lk_lock & ~(LK_FLAGMASK & ~LK_SHARE)) == LK_KERNPROC)
 
@@ -201,8 +196,8 @@ lockmgr_note_shared_acquire(struct lock *lk, int contested,
     uint64_t waittime, const char *file, int line, int flags)
 {
 
-	lock_profile_obtain_lock_success(&lk->lock_object, contested, waittime,
-	    file, line);
+	LOCKSTAT_PROFILE_OBTAIN_RWLOCK_SUCCESS(lockmgr__acquire, lk, contested,
+	    waittime, file, line, LOCKSTAT_READER);
 	LOCK_LOG_LOCK("SLOCK", &lk->lock_object, 0, 0, file, line);
 	WITNESS_LOCK(&lk->lock_object, LK_TRYWIT(flags), file, line);
 	TD_LOCKS_INC(curthread);
@@ -214,7 +209,7 @@ static void
 lockmgr_note_shared_release(struct lock *lk, const char *file, int line)
 {
 
-	lock_profile_release_lock(&lk->lock_object);
+	LOCKSTAT_PROFILE_RELEASE_RWLOCK(lockmgr__release, lk, LOCKSTAT_READER);
 	WITNESS_UNLOCK(&lk->lock_object, 0, file, line);
 	LOCK_LOG_LOCK("SUNLOCK", &lk->lock_object, 0, 0, file, line);
 	TD_LOCKS_DEC(curthread);
@@ -226,8 +221,8 @@ lockmgr_note_exclusive_acquire(struct lock *lk, int contested,
     uint64_t waittime, const char *file, int line, int flags)
 {
 
-	lock_profile_obtain_lock_success(&lk->lock_object, contested, waittime,
-	    file, line);
+	LOCKSTAT_PROFILE_OBTAIN_RWLOCK_SUCCESS(lockmgr__acquire, lk, contested,
+	    waittime, file, line, LOCKSTAT_WRITER);
 	LOCK_LOG_LOCK("XLOCK", &lk->lock_object, 0, lk->lk_recurse, file, line);
 	WITNESS_LOCK(&lk->lock_object, LOP_EXCLUSIVE | LK_TRYWIT(flags), file,
 	    line);
@@ -239,7 +234,7 @@ static void
 lockmgr_note_exclusive_release(struct lock *lk, const char *file, int line)
 {
 
-	lock_profile_release_lock(&lk->lock_object);
+	LOCKSTAT_PROFILE_RELEASE_RWLOCK(lockmgr__release, lk, LOCKSTAT_WRITER);
 	LOCK_LOG_LOCK("XUNLOCK", &lk->lock_object, 0, lk->lk_recurse, file,
 	    line);
 	WITNESS_UNLOCK(&lk->lock_object, LOP_EXCLUSIVE, file, line);
@@ -452,7 +447,7 @@ lockinit(struct lock *lk, int pri, const char *wmesg, int timo, int flags)
 		iflags |= LO_IS_VNODE;
 	if (flags & LK_NEW)
 		iflags |= LO_NEW;
-	iflags |= flags & (LK_ADAPTIVE | LK_NOSHARE);
+	iflags |= flags & LK_NOSHARE;
 
 	lock_init(&lk->lock_object, &lock_class_lockmgr, wmesg, NULL, iflags);
 	lk->lk_lock = LK_UNLOCKED;
@@ -555,6 +550,9 @@ lockmgr_slock_hard(struct lock *lk, u_int flags, struct lock_object *ilk,
 	const char *iwmesg;
 	int ipri, itimo;
 
+#ifdef KDTRACE_HOOKS
+	uint64_t sleep_time = 0;
+#endif
 #ifdef LOCK_PROFILING
 	uint64_t waittime = 0;
 	int contested = 0;
@@ -645,8 +643,14 @@ retry_sleepq:
 		 * shared lock and the shared waiters flag is set,
 		 * we will sleep.
 		 */
+#ifdef KDTRACE_HOOKS
+		sleep_time -= lockstat_nsecs(&lk->lock_object);
+#endif
 		error = sleeplk(lk, flags, ilk, iwmesg, ipri, itimo,
 		    SQ_SHARED_QUEUE);
+#ifdef KDTRACE_HOOKS
+		sleep_time += lockstat_nsecs(&lk->lock_object);
+#endif
 		flags &= ~LK_INTERLOCK;
 		if (error) {
 			LOCK_LOG3(lk,
@@ -658,6 +662,12 @@ retry_sleepq:
 		    __func__, lk);
 	}
 	if (error == 0) {
+#ifdef KDTRACE_HOOKS
+		if (sleep_time != 0)
+			LOCKSTAT_RECORD4(lockmgr__block, lk, sleep_time,
+			    LOCKSTAT_READER, (x & LK_SHARE) == 0,
+			    (x & LK_SHARE) == 0 ? 0 : LK_SHARERS(x));
+#endif
 #ifdef LOCK_PROFILING
 		lockmgr_note_shared_acquire(lk, contested, waittime,
 		    file, line, flags);
@@ -682,6 +692,9 @@ lockmgr_xlock_hard(struct lock *lk, u_int flags, struct lock_object *ilk,
 	const char *iwmesg;
 	int ipri, itimo;
 
+#ifdef KDTRACE_HOOKS
+	uint64_t sleep_time = 0;
+#endif
 #ifdef LOCK_PROFILING
 	uint64_t waittime = 0;
 	int contested = 0;
@@ -821,8 +834,14 @@ retry_sleepq:
 		 * exclusive lock and the exclusive waiters flag
 		 * is set, we will sleep.
 		 */
+#ifdef KDTRACE_HOOKS
+		sleep_time -= lockstat_nsecs(&lk->lock_object);
+#endif
 		error = sleeplk(lk, flags, ilk, iwmesg, ipri, itimo,
 		    SQ_EXCLUSIVE_QUEUE);
+#ifdef KDTRACE_HOOKS
+		sleep_time += lockstat_nsecs(&lk->lock_object);
+#endif
 		flags &= ~LK_INTERLOCK;
 		if (error) {
 			LOCK_LOG3(lk,
@@ -834,6 +853,12 @@ retry_sleepq:
 		    __func__, lk);
 	}
 	if (error == 0) {
+#ifdef KDTRACE_HOOKS
+		if (sleep_time != 0)
+			LOCKSTAT_RECORD4(lockmgr__block, lk, sleep_time,
+			    LOCKSTAT_WRITER, (x & LK_SHARE) == 0,
+			    (x & LK_SHARE) == 0 ? 0 : LK_SHARERS(x));
+#endif
 #ifdef LOCK_PROFILING
 		lockmgr_note_exclusive_acquire(lk, contested, waittime,
 		    file, line, flags);
@@ -877,6 +902,7 @@ lockmgr_upgrade(struct lock *lk, u_int flags, struct lock_object *ilk,
 		    line);
 		WITNESS_UPGRADE(&lk->lock_object, LOP_EXCLUSIVE |
 		    LK_TRYWIT(flags), file, line);
+		LOCKSTAT_RECORD0(lockmgr__upgrade, lk);
 		TD_SLOCKS_DEC(curthread);
 		goto out;
 	}
@@ -1024,7 +1050,8 @@ lockmgr_xunlock_hard(struct lock *lk, uintptr_t x, u_int flags, struct lock_obje
 		goto out;
 	}
 	if (tid != LK_KERNPROC)
-		lock_profile_release_lock(&lk->lock_object);
+		LOCKSTAT_PROFILE_RELEASE_RWLOCK(lockmgr__release, lk,
+		    LOCKSTAT_WRITER);
 
 	if (x == tid && atomic_cmpset_rel_ptr(&lk->lk_lock, tid, LK_UNLOCKED))
 		goto out;
@@ -1129,6 +1156,88 @@ lockmgr_unlock_fast_path(struct lock *lk, u_int flags, struct lock_object *ilk)
 	return (0);
 }
 
+/*
+ * Lightweight entry points for common operations.
+ *
+ * Functionality is similar to sx locks, in that none of the additional lockmgr
+ * features are supported. To be clear, these are NOT supported:
+ * 1. shared locking disablement
+ * 2. returning with an error after sleep
+ * 3. unlocking the interlock
+ *
+ * If in doubt, use lockmgr_*_fast_path.
+ */
+int
+lockmgr_slock(struct lock *lk, u_int flags, const char *file, int line)
+{
+	uintptr_t x;
+
+	MPASS((flags & LK_TYPE_MASK) == LK_SHARED);
+	MPASS((flags & LK_INTERLOCK) == 0);
+	MPASS((lk->lock_object.lo_flags & LK_NOSHARE) == 0);
+
+	if (LK_CAN_WITNESS(flags))
+		WITNESS_CHECKORDER(&lk->lock_object, LOP_NEWORDER,
+		    file, line, NULL);
+	if (__predict_true(lockmgr_slock_try(lk, &x, flags, true))) {
+		lockmgr_note_shared_acquire(lk, 0, 0, file, line, flags);
+		return (0);
+	}
+
+	return (lockmgr_slock_hard(lk, flags, NULL, file, line, NULL));
+}
+
+int
+lockmgr_xlock(struct lock *lk, u_int flags, const char *file, int line)
+{
+	uintptr_t tid;
+
+	MPASS((flags & LK_TYPE_MASK) == LK_EXCLUSIVE);
+	MPASS((flags & LK_INTERLOCK) == 0);
+
+	if (LK_CAN_WITNESS(flags))
+		WITNESS_CHECKORDER(&lk->lock_object, LOP_NEWORDER |
+		    LOP_EXCLUSIVE, file, line, NULL);
+	tid = (uintptr_t)curthread;
+	if (atomic_cmpset_acq_ptr(&lk->lk_lock, LK_UNLOCKED, tid)) {
+		lockmgr_note_exclusive_acquire(lk, 0, 0, file, line,
+		    flags);
+		return (0);
+	}
+
+	return (lockmgr_xlock_hard(lk, flags, NULL, file, line, NULL));
+}
+
+int
+lockmgr_unlock(struct lock *lk)
+{
+	uintptr_t x, tid;
+	const char *file;
+	int line;
+
+	file = __FILE__;
+	line = __LINE__;
+
+	_lockmgr_assert(lk, KA_LOCKED, file, line);
+	x = lk->lk_lock;
+	if (__predict_true(x & LK_SHARE) != 0) {
+		if (lockmgr_sunlock_try(lk, &x)) {
+			lockmgr_note_shared_release(lk, file, line);
+		} else {
+			return (lockmgr_sunlock_hard(lk, x, LK_RELEASE, NULL, file, line));
+		}
+	} else {
+		tid = (uintptr_t)curthread;
+		if (!lockmgr_recursed(lk) &&
+		    atomic_cmpset_rel_ptr(&lk->lk_lock, tid, LK_UNLOCKED)) {
+			lockmgr_note_exclusive_release(lk, file, line);
+		} else {
+			return (lockmgr_xunlock_hard(lk, x, LK_RELEASE, NULL, file, line));
+		}
+	}
+	return (0);
+}
+
 int
 __lockmgr_args(struct lock *lk, u_int flags, struct lock_object *ilk,
     const char *wmesg, int pri, int timo, const char *file, int line)
@@ -1205,7 +1314,6 @@ __lockmgr_args(struct lock *lk, u_int flags, struct lock_object *ilk,
 		break;
 	case LK_DOWNGRADE:
 		_lockmgr_assert(lk, KA_XLOCKED, file, line);
-		LOCK_LOG_LOCK("XDOWNGRADE", &lk->lock_object, 0, 0, file, line);
 		WITNESS_DOWNGRADE(&lk->lock_object, 0, file, line);
 
 		/*
@@ -1231,6 +1339,8 @@ __lockmgr_args(struct lock *lk, u_int flags, struct lock_object *ilk,
 				break;
 			cpu_spinwait();
 		}
+		LOCK_LOG_LOCK("XDOWNGRADE", &lk->lock_object, 0, 0, file, line);
+		LOCKSTAT_RECORD0(lockmgr__downgrade, lk);
 		break;
 	case LK_RELEASE:
 		_lockmgr_assert(lk, KA_LOCKED, file, line);
@@ -1462,6 +1572,7 @@ _lockmgr_disown(struct lock *lk, const char *file, int line)
 	if (LK_HOLDER(lk->lk_lock) != tid)
 		return;
 	lock_profile_release_lock(&lk->lock_object);
+	LOCKSTAT_RECORD1(lockmgr__disown, lk, LOCKSTAT_WRITER);
 	LOCK_LOG_LOCK("XDISOWN", &lk->lock_object, 0, 0, file, line);
 	WITNESS_UNLOCK(&lk->lock_object, LOP_EXCLUSIVE, file, line);
 	TD_LOCKS_DEC(curthread);

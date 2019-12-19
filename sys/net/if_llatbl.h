@@ -32,6 +32,7 @@ __FBSDID("$FreeBSD$");
 #ifndef	_NET_IF_LLATBL_H_
 #define	_NET_IF_LLATBL_H_
 
+#include <sys/_eventhandler.h>
 #include <sys/_rwlock.h>
 #include <netinet/in.h>
 #include <sys/epoch.h>
@@ -210,14 +211,9 @@ void		lltable_free(struct lltable *);
 void		lltable_link(struct lltable *llt);
 void		lltable_prefix_free(int, struct sockaddr *,
 		    struct sockaddr *, u_int);
-#if 0
-void		lltable_drain(int);
-#endif
 int		lltable_sysctl_dumparp(int, struct sysctl_req *);
 
 size_t		llentry_free(struct llentry *);
-struct llentry  *llentry_alloc(struct ifnet *, struct lltable *,
-		    struct sockaddr_storage *);
 
 /* helper functions */
 size_t lltable_drop_entry_queue(struct llentry *);
@@ -267,7 +263,6 @@ llentry_mark_used(struct llentry *lle)
 
 int		lla_rt_output(struct rt_msghdr *, struct rt_addrinfo *);
 
-#include <sys/eventhandler.h>
 enum {
 	LLENTRY_RESOLVED,
 	LLENTRY_TIMEDOUT,

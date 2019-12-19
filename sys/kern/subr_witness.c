@@ -131,9 +131,7 @@ __FBSDID("$FreeBSD$");
 #define	LI_RECURSEMASK	0x0000ffff	/* Recursion depth of lock instance. */
 #define	LI_EXCLUSIVE	0x00010000	/* Exclusive lock instance. */
 #define	LI_NORELEASE	0x00020000	/* Lock not allowed to be released. */
-
-/* Define this to check for blessed mutexes */
-#undef BLESSING
+#define	LI_SLEEPABLE	0x00040000	/* Lock may be held while sleeping. */
 
 #ifndef WITNESS_COUNT
 #define	WITNESS_COUNT 		1536
@@ -278,12 +276,10 @@ struct witness_lock_order_hash {
 	u_int	wloh_count;
 };
 
-#ifdef BLESSING
 struct witness_blessed {
 	const char	*b_lock1;
 	const char	*b_lock2;
 };
-#endif
 
 struct witness_pendhelp {
 	const char		*wh_type;
@@ -318,9 +314,7 @@ witness_lock_order_key_equal(const struct witness_lock_order_key *a,
 static int	_isitmyx(struct witness *w1, struct witness *w2, int rmask,
 		    const char *fname);
 static void	adopt(struct witness *parent, struct witness *child);
-#ifdef BLESSING
 static int	blessed(struct witness *, struct witness *);
-#endif
 static void	depart(struct witness *w);
 static struct witness	*enroll(const char *description,
 			    struct lock_class *lock_class);
@@ -576,7 +570,6 @@ static struct witness_order_list_entry order_lists[] = {
 	 * BPF
 	 */
 	{ "bpf global lock", &lock_class_sx },
-	{ "bpf interface lock", &lock_class_rw },
 	{ "bpf cdev lock", &lock_class_mtx_sleep },
 	{ NULL, NULL },
 	/*
@@ -609,6 +602,7 @@ static struct witness_order_list_entry order_lists[] = {
 	{ "vm map (system)", &lock_class_mtx_sleep },
 	{ "vnode interlock", &lock_class_mtx_sleep },
 	{ "cdev", &lock_class_mtx_sleep },
+	{ "devthrd", &lock_class_mtx_sleep },
 	{ NULL, NULL },
 	/*
 	 * VM
@@ -727,14 +721,25 @@ static struct witness_order_list_entry order_lists[] = {
 	{ NULL, NULL }
 };
 
-#ifdef BLESSING
 /*
- * Pairs of locks which have been blessed
- * Don't complain about order problems with blessed locks
+ * Pairs of locks which have been blessed.  Witness does not complain about
+ * order problems with blessed lock pairs.  Please do not add an entry to the
+ * table without an explanatory comment.
  */
 static struct witness_blessed blessed_list[] = {
+	/*
+	 * See the comment in ufs_dirhash.c.  Basically, a vnode lock serializes
+	 * both lock orders, so a deadlock cannot happen as a result of this
+	 * LOR.
+	 */
+	{ "dirhash",	"bufwait" },
+
+	/*
+	 * A UFS vnode may be locked in vget() while a buffer belonging to the
+	 * parent directory vnode is locked.
+	 */
+	{ "ufs",	"bufwait" },
 };
-#endif
 
 /*
  * This global is set to 0 once it becomes safe to use the witness code.
@@ -1299,7 +1304,7 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 			 * If we are locking Giant and this is a sleepable
 			 * lock, then skip it.
 			 */
-			if ((lock1->li_lock->lo_flags & LO_SLEEPABLE) != 0 &&
+			if ((lock1->li_flags & LI_SLEEPABLE) != 0 &&
 			    lock == &Giant.lock_object)
 				continue;
 
@@ -1308,6 +1313,7 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 			 * is Giant, then skip it.
 			 */
 			if ((lock->lo_flags & LO_SLEEPABLE) != 0 &&
+			    (flags & LOP_NOSLEEP) == 0 &&
 			    lock1->li_lock == &Giant.lock_object)
 				continue;
 
@@ -1317,15 +1323,16 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 			 * order violation to enfore a general lock order of
 			 * sleepable locks before non-sleepable locks.
 			 */
-			if (((lock->lo_flags & LO_SLEEPABLE) != 0 &&
-			    (lock1->li_lock->lo_flags & LO_SLEEPABLE) == 0))
+			if ((lock->lo_flags & LO_SLEEPABLE) != 0 &&
+			    (flags & LOP_NOSLEEP) == 0 &&
+			    (lock1->li_flags & LI_SLEEPABLE) == 0)
 				goto reversal;
 
 			/*
 			 * If we are locking Giant and this is a non-sleepable
 			 * lock, then treat it as a reversal.
 			 */
-			if ((lock1->li_lock->lo_flags & LO_SLEEPABLE) == 0 &&
+			if ((lock1->li_flags & LI_SLEEPABLE) == 0 &&
 			    lock == &Giant.lock_object)
 				goto reversal;
 
@@ -1340,16 +1347,6 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 			 * We have a lock order violation, check to see if it
 			 * is allowed or has already been yelled about.
 			 */
-#ifdef BLESSING
-
-			/*
-			 * If the lock order is blessed, just bail.  We don't
-			 * look for other lock order violations though, which
-			 * may be a bug.
-			 */
-			if (blessed(w, w1))
-				goto out;
-#endif
 
 			/* Bail if this violation is known */
 			if (w_rmatrix[w1->w_index][w->w_index] & WITNESS_REVERSAL)
@@ -1360,6 +1357,14 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 			w_rmatrix[w->w_index][w1->w_index] |= WITNESS_REVERSAL;
 			w->w_reversed = w1->w_reversed = 1;
 			witness_increment_graph_generation();
+
+			/*
+			 * If the lock order is blessed, bail before logging
+			 * anything.  We don't look for other lock order
+			 * violations though, which may be a bug.
+			 */
+			if (blessed(w, w1))
+				goto out;
 			mtx_unlock_spin(&w_mtx);
 
 #ifdef WITNESS_NO_VNODE
@@ -1377,11 +1382,12 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 			/*
 			 * Ok, yell about it.
 			 */
-			if (((lock->lo_flags & LO_SLEEPABLE) != 0 &&
-			    (lock1->li_lock->lo_flags & LO_SLEEPABLE) == 0))
+			if ((lock->lo_flags & LO_SLEEPABLE) != 0 &&
+			    (flags & LOP_NOSLEEP) == 0 &&
+			    (lock1->li_flags & LI_SLEEPABLE) == 0)
 				witness_output(
 		"lock order reversal: (sleepable after non-sleepable)\n");
-			else if ((lock1->li_lock->lo_flags & LO_SLEEPABLE) == 0
+			else if ((lock1->li_flags & LI_SLEEPABLE) == 0
 			    && lock == &Giant.lock_object)
 				witness_output(
 		"lock order reversal: (Giant after non-sleepable)\n");
@@ -1439,7 +1445,8 @@ witness_checkorder(struct lock_object *lock, int flags, const char *file,
 	 */
 	if (flags & LOP_NEWORDER &&
 	    !(plock->li_lock == &Giant.lock_object &&
-	    (lock->lo_flags & LO_SLEEPABLE) != 0)) {
+	    (lock->lo_flags & LO_SLEEPABLE) != 0 &&
+	    (flags & LOP_NOSLEEP) == 0)) {
 		CTR3(KTR_WITNESS, "%s: adding %s as a child of %s", __func__,
 		    w->w_name, plock->li_lock->lo_witness->w_name);
 		itismychild(plock->li_lock->lo_witness, w);
@@ -1499,10 +1506,11 @@ witness_lock(struct lock_object *lock, int flags, const char *file, int line)
 	instance->li_lock = lock;
 	instance->li_line = line;
 	instance->li_file = file;
+	instance->li_flags = 0;
 	if ((flags & LOP_EXCLUSIVE) != 0)
-		instance->li_flags = LI_EXCLUSIVE;
-	else
-		instance->li_flags = 0;
+		instance->li_flags |= LI_EXCLUSIVE;
+	if ((lock->lo_flags & LO_SLEEPABLE) != 0 && (flags & LOP_NOSLEEP) == 0)
+		instance->li_flags |= LI_SLEEPABLE;
 	CTR4(KTR_WITNESS, "%s: pid %d added %s as lle[%d]", __func__,
 	    td->td_proc->p_pid, lock->lo_name, lle->ll_count - 1);
 }
@@ -1762,7 +1770,7 @@ witness_warn(int flags, struct lock_object *lock, const char *fmt, ...)
 			    lock1->li_lock == &Giant.lock_object)
 				continue;
 			if (flags & WARN_SLEEPOK &&
-			    (lock1->li_lock->lo_flags & LO_SLEEPABLE) != 0)
+			    (lock1->li_flags & LI_SLEEPABLE) != 0)
 				continue;
 			if (n == 0) {
 				va_start(ap, fmt);
@@ -2085,7 +2093,6 @@ isitmydescendant(struct witness *ancestor, struct witness *descendant)
 	    __func__));
 }
 
-#ifdef BLESSING
 static int
 blessed(struct witness *w1, struct witness *w2)
 {
@@ -2105,7 +2112,6 @@ blessed(struct witness *w1, struct witness *w2)
 	}
 	return (0);
 }
-#endif
 
 static struct witness *
 witness_get(void)
@@ -2651,6 +2657,9 @@ restart:
 				    &tmp_data2->wlod_stack);
 			}
 			mtx_unlock_spin(&w_mtx);
+
+			if (blessed(tmp_w1, tmp_w2))
+				continue;
 
 			sbuf_printf(sb,
 	    "\nLock order reversal between \"%s\"(%s) and \"%s\"(%s)!\n",
