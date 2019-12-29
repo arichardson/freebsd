@@ -81,8 +81,6 @@ _v=	${_ld_version:[2]}
 ${X_}LINKER_FREEBSD_VERSION!= \
 	${${ld}} -v | \
 	awk '$$3 ~ /FreeBSD/ {print substr($$4, 1, length($$4)-1)}'
-.elif ${_ld_version:[1]} == "@(#)PROGRAM:ld"
-${X_}LINKER_TYPE=	mac
 .elif ${_ld_version:[1]} == "@(\#)PROGRAM:ld"
 # bootstrap linker on MacOS
 ${X_}LINKER_TYPE=        mac
