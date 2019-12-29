@@ -23,7 +23,8 @@ CFLAGS+=	-I. -I${.CURDIR}
 .if defined(BOOTSTRAPPING)
 CFLAGS+=	-D__BUILDING_LOCALEDEF_BOOTSTRAP=1
 CFLAGS+=	-I${.CURDIR}/bootstrap
-CFLAGS+=	-I${.CURDIR}/../../lib/libc/locale
 .endif
+CFLAGS+=	-I${SRCTOP}/lib/libc/locale
+CFLAGS+=	-I${SRCTOP}/lib/libc/stdtime
 
 .include <bsd.prog.mk>

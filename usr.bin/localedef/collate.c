@@ -47,8 +47,7 @@ __FBSDID("$FreeBSD$");
 #include <limits.h>
 #include "localedef.h"
 #include "parser.h"
-
-#include "../../lib/libc/locale/collate.h"
+#include "collate.h"
 
 _Static_assert(COLL_WEIGHTS_MAX == 10, "This code assumes a value of 10");
 // _Static_assert(MB_LEN_MAX == 6, "This code assumes a value of 6");
