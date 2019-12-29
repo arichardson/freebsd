@@ -409,6 +409,28 @@ BROKEN_OPTIONS+=HYPERV
 BROKEN_OPTIONS+=NVME
 .endif
 
+.if ${.MAKE.OS} != "FreeBSD"
+# Building the target compiler requires builtin tablegen on the host
+# which is (currently) not possible on non-FreeBSD
+BROKEN_OPTIONS+=CLANG LLD LLDB
+# The cddl bootstrap tools still need some changes in order to compile
+BROKEN_OPTIONS+=CDDL ZFS
+
+# Boot cannot be built with clang yet. Will need to bootstrap GNU as..
+BROKEN_OPTIONS+=BOOT
+# libsnmp use ls -D which is not supported on MacOS (and possibly linux)
+BROKEN_OPTIONS+=BSNMP
+.if ${.MAKE.OS} == "Linux"
+# crunchgen fails for some reason on Linux (but it works on MacOS):
+# + cd /local/scratch/alr48/cheri/freebsd-mips/rescue/rescue/../../bin/cat
+# + make -f /tmp//crunchgen_rescue9yuKRG -DRESCUE CRUNCH_CFLAGS=-DRESCUE MK_AUTO_OBJ=yes DIRPRFX=cat/ loop
+# + echo OBJS= cat.o
+# /tmp//crunchgen_rescue9yuKRG: Invalid argument
+BROKEN_OPTIONS+=RESCUE
+.endif
+.endif
+
+
 .if ${__T:Msparc64}
 # Sparc64 need extra crt*.o files - PR 239851
 BROKEN_OPTIONS+=BSD_CRTBEGIN
@@ -432,14 +454,6 @@ MK_BINUTILS_BOOTSTRAP:=no
 MK_CLANG_BOOTSTRAP:=no
 MK_LLD_BOOTSTRAP:=no
 MK_GCC_BOOTSTRAP:=no
-# Building the target compiler requires builtin tablegen on the host
-# which is (currently) not possible on non-FreeBSD
-MK_CLANG:=no
-MK_LLD:=no
-MK_LLDB:=o
-# The CDDL bootstrap tools need a few more changes before they can be used on
-# Linux/macOS
-MK_CDDL:=no
 .endif
 
 #
