@@ -1,6 +1,5 @@
 /*
- * In this header we don't want to pull in the host xlocale.h (which may not
- * exists as in recent GLibc) but instead just include the basic host
- * locale functions so that xlocale_private.h can function.
+ * This header only exists to avoid pulling in the host xlocale.h from
+ * the libc-internal headers. This is required since newer Linux GLibc no
+ * longer includes xlocale.h and older versions include and incompatible header.
  */
-#include <locale.h>
