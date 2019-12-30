@@ -8,6 +8,10 @@
 #include <endian.h>
 #endif
 
+/* Linux uses a double underscore, FreeBSD a single one */
+#define _LITTLE_ENDIAN __LITTLE_ENDIAN
+#define _BIG_ENDIAN __BIG_ENDIAN
+#define _BYTE_ORDER __BYTE_ORDER
 
 /* Ensure all these are constant expressions (which is not the case for some
  * of the glibc versions depending on compiler optimization level) */
