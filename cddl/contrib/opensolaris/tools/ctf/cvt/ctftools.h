@@ -38,6 +38,7 @@
 #include <pthread.h>
 
 #include <sys/ccompile.h>
+#include <sys/endian.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,6 +64,10 @@ extern "C" {
 
 #ifndef MIN
 #define	MIN(a, b) 		((a) > (b) ? (b) : (a))
+#endif
+
+#if !defined(BYTE_ORDER) || !defined(_LITTLE_ENDIAN) || !defined(_BIG_ENDIAN)
+#error "Missing endianess defines"
 #endif
 
 #define	TRUE	1

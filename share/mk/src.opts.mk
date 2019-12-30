@@ -413,8 +413,6 @@ BROKEN_OPTIONS+=NVME
 # Building the target compiler requires builtin tablegen on the host
 # which is (currently) not possible on non-FreeBSD
 BROKEN_OPTIONS+=CLANG LLD LLDB
-# The cddl bootstrap tools still need some changes in order to compile
-BROKEN_OPTIONS+=CDDL ZFS
 
 # Boot cannot be built with clang yet. Will need to bootstrap GNU as..
 BROKEN_OPTIONS+=BOOT

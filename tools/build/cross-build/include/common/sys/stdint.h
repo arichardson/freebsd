@@ -4,9 +4,3 @@
 #else
 #include <stdint.h>
 #endif
-
-
-/* opensolaris weirdness: */
-typedef long long longlong_t;
-typedef unsigned long ulong_t;
-typedef uint64_t u_int64_t;
