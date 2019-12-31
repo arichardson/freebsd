@@ -1,12 +1,10 @@
-FROM alpine:3.8
+FROM alpine:latest
 LABEL maintainer="arichardson@FreeBSD.org"
 
-# clang 5.0 is too old (but let's try anyway)
-RUN apk add clang git python3 binutils autoconf automake
-RUN apk add lld libtool make
+# Note: even though we build with clang, gcc and musl-dev
+# are needed to build any host binary
+RUN apk add gcc musl-dev linux-headers git python3 binutils autoconf automake lld libtool make clang
 
-# we need gcc and musl-dev to build any host binary
-RUN apk add gcc musl-dev linux-headers
 
 VOLUME ["/source", "/build", "/output"]
 CMD /bin/bash
