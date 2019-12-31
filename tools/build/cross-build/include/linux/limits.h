@@ -17,10 +17,6 @@
 
 #else /* Not C89 */
 /* Not C89 -> check that all macros that we expect are defined */
-#ifndef __USE_XOPEN
-#warning __USE_XOPEN should be defined (did you forget to set _GNU_SOURCE?)
-#endif
-
 #ifndef IOV_MAX
 #error IOV_MAX should be defined
 #endif
@@ -51,6 +47,10 @@
 #ifdef __GLIBC__
 #ifndef _LIBC_LIMITS_H_
 #error "DIDN't include correct limits?"
+#endif
+
+#ifndef __USE_XOPEN
+#warning __USE_XOPEN should be defined (did you forget to set _GNU_SOURCE?)
 #endif
 
 #include <sys/types.h>

@@ -5,6 +5,7 @@
 #define __USE_POSIX2
 #endif
 #include_next <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
@@ -42,12 +43,8 @@ strtofflags(char **stringp, u_long *setp, u_long *clrp) {
 	return 0; /* success */
 }
 
-#ifndef __GLIBC_PREREQ
-#define __GLIBC_PREREQ(min, maj) 0
-#endif
-
 /* getentropy was added in glibc 2.25. Declare it for !glibc or older versions */
-#if !__GLIBC_PREREQ(2, 25)
+#if defined(__GLIBC__) && !__GLIBC_PREREQ(2, 25)
 static inline int
 getentropy(void *buf, size_t buflen) {
 

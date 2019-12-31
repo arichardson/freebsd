@@ -1,5 +1,10 @@
 #pragma once
+#include <sys/cdefs.h>
 #include_next <stdlib.h>
+
+#ifndef __GLIBC_PREREQ
+#define __GLIBC_PREREQ(min, maj) 0
+#endif
 
 __BEGIN_DECLS
 /* Add the getcap functions */
@@ -22,9 +27,9 @@ void	*reallocarray(void *, size_t, size_t) __result_use_check
 	    __alloc_size2(2, 3);
 void	*reallocf(void *, size_t) __result_use_check __alloc_size(2);
 
-__uint32_t	arc4random(void);
+unsigned	arc4random(void);
 void	 arc4random_buf(void *, size_t);
-__uint32_t	arc4random_uniform(__uint32_t);
+unsigned	arc4random_uniform(unsigned);
 
 long long
 	strtonum(const char *, long long, long long, const char **);

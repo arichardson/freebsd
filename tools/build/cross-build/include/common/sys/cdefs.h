@@ -1,5 +1,18 @@
 #pragma once
+/* musl libc does not provide a sys/cdefs.h header */
+#if __has_include_next(<sys/cdefs.h>)
 #include_next <sys/cdefs.h>
+#else
+/* No sys/cdefs.h header exists so we have to provide some basic macros */
+#ifdef  __cplusplus
+#define __BEGIN_DECLS extern "C" {
+#define __END_DECLS }
+#else
+#define __BEGIN_DECLS
+#define __END_DECLS
+#endif
+
+#endif
 
 #ifndef __FBSDID
 #define __FBSDID(id)
@@ -16,11 +29,6 @@
 #define	roundup(x, y)	((((x)+((y)-1))/(y))*(y))  /* to any y */
 #define	roundup2(x, y)	(((x)+((y)-1))&(~((y)-1))) /* if y is powers of two */
 #define powerof2(x)	((((x)-1)&(x))==0)
-#endif
-
-#ifndef __va_list
-#include <stdarg.h>
-#define __va_list va_list
 #endif
 
 #ifndef __pure

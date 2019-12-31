@@ -1,6 +1,7 @@
 #pragma once
 
-/* one some version of glibc including string.h before stdlib.h won't work.
+/*
+ * On some version of glibc including string.h before stdlib.h won't work.
  * This happens when building anything that uses the libnetbsd stdlib.h override.
  * This is because string.h will include stdlib.h with a flag set to define
  * only a subset of the functions (which will then not set the _STDLIB_H
@@ -10,8 +11,7 @@
 
 /* Don't pull in the conflicting libbsd definition of strmode */
 #define LIBBSD_STRING_H
-
-
+#include <sys/cdefs.h>
 __BEGIN_DECLS
 size_t strlcpy(char *dst, const char *src, size_t siz);
 size_t strlcat(char *dst, const char *src, size_t siz);
