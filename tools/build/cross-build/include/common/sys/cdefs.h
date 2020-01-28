@@ -186,13 +186,6 @@ typedef	unsigned long	u_long;
 #define	__XSTRING(x)	__STRING(x)	/* expand x, then stringify */
 #endif
 
-#ifndef __STRING
-#define	__STRING(x)	#x		/* stringify without expanding x */
-#endif
-#ifndef __XSTRING
-#define	__XSTRING(x)	__STRING(x)	/* expand x, then stringify */
-#endif
-
 
 #ifndef __has_feature
 #define __has_feature(...) 0

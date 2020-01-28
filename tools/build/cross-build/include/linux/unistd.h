@@ -82,7 +82,6 @@ strtofflags(char **stringp, u_long *setp, u_long *clrp) {
 #if defined(__GLIBC__) && !__GLIBC_PREREQ(2, 25)
 static inline int
 getentropy(void *buf, size_t buflen) {
-
 	return syscall(__NR_getrandom, buf, buflen, 0);
 }
 #endif
