@@ -11,10 +11,10 @@ env:
 task:
   timeout_in: 120m
   install_script:
-  - pkg install -y qemu-devel uefi-edk2-qemu-x86_64
+  - pkg install -y qemu-devel uefi-edk2-qemu-x86_64 llvm10
   script:
-  - make -j$(sysctl -n hw.ncpu) WITHOUT_TOOLCHAIN=yes buildworld buildkernel
+  - make -j$(sysctl -n hw.ncpu) CROSS_TOOLCHAIN=llvm10 WITHOUT_TOOLCHAIN=yes buildworld buildkernel
   package_script:
-  - make WITHOUT_TOOLCHAIN=yes PKG_FORMAT=tar packages
+  - make CROSS_TOOLCHAIN=llvm10 WITHOUT_TOOLCHAIN=yes PKG_FORMAT=tar packages
   test_script:
   - sh tools/boot/ci-qemu-test.sh
