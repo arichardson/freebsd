@@ -53,7 +53,7 @@ NM=${NM:-nm}
 trap "rm -f $R $S $T; exit 1" 1 2 3 13 15
 
 # make sure all the files get into the output
-for i in $*; do
+for i in "$@"; do
 	echo $i $i
 done
 
@@ -62,7 +62,7 @@ done
 #
 # if the line has " U " it's a globally undefined symbol, put it into
 # the reference file.
-${NM} ${NMFLAGS} -go $* | sed "
+${NM} ${NMFLAGS} -go "$@" | sed "
 	/ [TDW] / {
 		s/:.* [TDW] / /
 		w $S
@@ -77,7 +77,7 @@ ${NM} ${NMFLAGS} -go $* | sed "
 
 export LC_ALL=C
 # eliminate references that can be resolved by the same library.
-if [ $(expr "$*" : '.*\.a[[:>:]]') -ne 0 ]; then
+if [ "$(expr "$*" : '.*\.a[[:>:]]' || echo 0)" -ne 0 ]; then
 	sort -u -o $S $S
 	sort -u -o $R $R
 	T=$(mktemp -t _temp_)
