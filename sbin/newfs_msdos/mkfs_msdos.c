@@ -870,7 +870,7 @@ getchunksize(void)
 	 * sectors by asserting that both are power of two numbers and the
 	 * chunksize is greater than MAXBPS.
 	 */
-	static_assert(powerof2(MAXBPS), "MAXBPS is not power of 2");
+	_Static_assert(powerof2(MAXBPS), "MAXBPS is not power of 2");
 	assert(powerof2(chunksize));
 	assert(chunksize > MAXBPS);
 
