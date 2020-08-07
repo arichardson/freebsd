@@ -1,0 +1,33 @@
+name: Check cross-build from macOS/Linux
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    name: Test bootstrap tools and buildkernel on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, macOS-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: install LLVM+libarchive (Ubuntu)
+        run: |
+          sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+          sudo apt install -y libarchive-dev
+          echo "::set-env name=EXTRA_MAKE_ARGS::--cross-bindir=/usr/lib/llvm-10/bin"
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      - name: install LLVM+libarchive (macOS)
+        run: brew install llvm coreutils libarchive xz
+        if: ${{ startsWith(matrix.os, 'macOS') }}
+      - name: create build dir
+        run: rm -rf ../build && mkdir -p ../build
+      - name: make kernel-toolchain
+        run: env MAKEOBJDIRPREFIX=`realpath ../build` ./tools/build/make.py $EXTRA_MAKE_ARGS TARGET=amd64 TARGET_ARCH=amd64 kernel-toolchain -s -j$(nproc)
+      - name: make buildkernel
+        run: env MAKEOBJDIRPREFIX=`realpath ../build` ./tools/build/make.py $EXTRA_MAKE_ARGS TARGET=amd64 TARGET_ARCH=amd64 KERNCONF=GENERIC NO_MODULES=yes buildkernel -s -j$(nproc)
