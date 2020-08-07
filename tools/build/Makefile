@@ -125,7 +125,7 @@ _host_abs_tools_to_symlink=	${_make_abs}:make ${_make_abs}:bmake
 host-symlinks:
 	@echo "Linking host tools into ${DESTDIR}/bin"
 .for _tool in ${_host_tools_to_symlink}
-	@source_path=`which ${_tool}`; \
+	@export PATH=$${PATH}:/usr/local/bin; source_path=`which ${_tool}`; \
 	if [ ! -e "$${source_path}" ] ; then \
 		echo "Cannot find host tool '${_tool}'"; false; \
 	fi; \
@@ -170,7 +170,7 @@ installdirs:
 
 .for _dir in sbin usr/sbin usr/bin
 # delete existing directories from before r340157
-	@if [ ! -L ${DESTDIR}/${_dir} ]; then \
+	@if [ -e ${DESTDIR}/${_dir} ] && [ ! -L ${DESTDIR}/${_dir} ]; then \
 	    echo "removing old non-symlink ${DESTDIR}/${_dir}"; \
 	    rm -rf "${DESTDIR}/${_dir}"; \
 	fi
