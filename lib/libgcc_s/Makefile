@@ -52,4 +52,7 @@ SRCS+=		s_logbl.c
 SRCS+=		s_scalbnl.c
 .endif
 
+# Remove all duplicate sources
+SRCS:=	${SRCS:O:u}
+
 .include <bsd.lib.mk>
