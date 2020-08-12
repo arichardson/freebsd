@@ -237,10 +237,17 @@ OBJS+=		${SRCS:N*.h:${OBJS_SRCS_FILTER:ts:}:S/$/.o/}
 BCOBJS+=	${SRCS:N*.[hsS]:N*.asm:${OBJS_SRCS_FILTER:ts:}:S/$/.bco/g}
 LLOBJS+=	${SRCS:N*.[hsS]:N*.asm:${OBJS_SRCS_FILTER:ts:}:S/$/.llo/g}
 CLEANFILES+=	${OBJS} ${BCOBJS} ${LLOBJS} ${STATICOBJS}
+.if "${SRCS:O:u}" != "${SRCS:O}"
+.error "Found duplicates in SRCS: ${SRCS:O}"
+.endif
 .endif
 
 .if defined(LIB) && !empty(LIB)
 _LIBS=		lib${LIB_PRIVATE}${LIB}.a
+
+.if "${OBJS:O:u}" != "${OBJS:O}"
+.error "Found duplicate files in OBJS: ${OBJS:O}"
+.endif
 
 lib${LIB_PRIVATE}${LIB}.a: ${OBJS} ${STATICOBJS}
 	@${ECHO} building static ${LIB} library
@@ -257,6 +264,9 @@ _LIBS+=		lib${LIB_PRIVATE}${LIB}_p.a
 POBJS+=		${OBJS:.o=.po} ${STATICOBJS:.o=.po}
 DEPENDOBJS+=	${POBJS}
 CLEANFILES+=	${POBJS}
+.if "${POBJS:O:u}" != "${POBJS:O}"
+.error "Found duplicate files in POBJS: ${POBJS:O}"
+.endif
 
 lib${LIB_PRIVATE}${LIB}_p.a: ${POBJS}
 	@${ECHO} building profiled ${LIB} library
@@ -310,6 +320,10 @@ ${SHLIB_NAME_FULL}: ${SHLIB_LINK:R}.ld
 CLEANFILES+=	${SHLIB_LINK:R}.ld
 .endif
 CLEANFILES+=	${SHLIB_LINK}
+.endif
+
+.if "${SOBJS:O:u}" != "${SOBJS:O}"
+.error "Found duplicate files in SOBJS: ${SOBJS:O}"
 .endif
 
 ${SHLIB_NAME_FULL}: ${SOBJS}
