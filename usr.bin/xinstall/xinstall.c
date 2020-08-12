@@ -148,7 +148,7 @@ static void	metadata_log(const char *, const char *, struct timespec *,
 		    const char *, const char *, off_t);
 static int	parseid(const char *, id_t *);
 static int	strip(const char *, int, const char *, char **);
-static int	trymmap(int);
+static int	trymmap(int, size_t);
 static void	usage(void);
 
 int
@@ -1087,7 +1087,7 @@ compare(int from_fd, const char *from_name __unused, size_t from_len,
 		if (do_digest)
 			digest_init(&ctx);
 		done_compare = 0;
-		if (trymmap(from_fd) && trymmap(to_fd)) {
+		if (trymmap(from_fd, from_len) && trymmap(to_fd, to_len)) {
 			p = mmap(NULL, from_len, PROT_READ, MAP_SHARED,
 			    from_fd, (off_t)0);
 			if (p == MAP_FAILED)
@@ -1254,7 +1254,7 @@ copy(int from_fd, const char *from_name, int to_fd, const char *to_name,
 	 * wins some CPU back.
 	 */
 	done_copy = 0;
-	if (size <= 8 * 1048576 && trymmap(from_fd) &&
+	if (size <= 8 * 1048576 && trymmap(from_fd, (size_t)size) &&
 	    (p = mmap(NULL, (size_t)size, PROT_READ, MAP_SHARED,
 		    from_fd, (off_t)0)) != MAP_FAILED) {
 		nw = write(to_fd, p, size);
@@ -1523,20 +1523,13 @@ usage(void)
  *	return true (1) if mmap should be tried, false (0) if not.
  */
 static int
-trymmap(int fd)
+trymmap(int fd __unused, size_t filesize)
 {
-/*
- * The ifdef is for bootstrapping - f_fstypename doesn't exist in
- * pre-Lite2-merge systems.
- */
-#ifdef MFSNAMELEN
-	struct statfs stfs;
-
-	if (fstatfs(fd, &stfs) != 0)
-		return (0);
-	if (strcmp(stfs.f_fstypename, "ufs") == 0 ||
-	    strcmp(stfs.f_fstypename, "cd9660") == 0)
-		return (1);
-#endif
-	return (0);
+	/*
+	 * This function existed to skip mmap() for NFS file systems. However,
+	 * nowadays mmap() should be perfectly safe. Nevertheless, using mmap()
+	 * only reduces the number of system calls if we need multiple read()
+	 * syscalls, i.e. if the file size is > MAXBSIZE.
+	 */
+	return (filesize > MAXBSIZE);
 }
