@@ -31,3 +31,5 @@ jobs:
         run: env MAKEOBJDIRPREFIX=`realpath ../build` ./tools/build/make.py $EXTRA_MAKE_ARGS TARGET=amd64 TARGET_ARCH=amd64 kernel-toolchain -s -j$(nproc)
       - name: make buildkernel
         run: env MAKEOBJDIRPREFIX=`realpath ../build` ./tools/build/make.py $EXTRA_MAKE_ARGS TARGET=amd64 TARGET_ARCH=amd64 KERNCONF=GENERIC NO_MODULES=yes buildkernel -s -j$(nproc)
+      - name: make buildworld
+        run: env MAKEOBJDIRPREFIX=`realpath ../build` ./tools/build/make.py $EXTRA_MAKE_ARGS TARGET=amd64 TARGET_ARCH=amd64 buildworld -DWITHOUT_TOOLCHAIN -DWITHOUT_TESTS -s -j$(nproc)
