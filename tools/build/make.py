@@ -175,9 +175,9 @@ if __name__ == "__main__":
     new_env_vars = {}
     if not sys.platform.startswith("freebsd"):
         if not is_make_var_set("TARGET") or not is_make_var_set("TARGET_ARCH"):
-            sys.exit(
-                "You must set explicit TARGET= and TARGET_ARCH= when building"
-                " on non-FreeBSD")
+            if "universe" not in sys.argv and "tinderbox" not in sys.argv:
+                sys.exit("TARGET= and TARGET_ARCH= must be set explicitly "
+                         "when building on non-FreeBSD")
         # infer values for CC/CXX/CPP
 
         if sys.platform.startswith(
