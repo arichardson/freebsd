@@ -193,7 +193,6 @@ _rtld_bind_start:
 	move	t9, v0
 	jr	t9
 	nop
-	.cfi_endproc
 END(_rtld_bind_start)
 
 
@@ -285,5 +284,4 @@ _rtld_pltbind_start:
 	move	t9, v0
 	jr	t9
 	nop
-	.cfi_endproc
 END(_rtld_pltbind_start)

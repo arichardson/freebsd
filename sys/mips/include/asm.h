@@ -136,10 +136,14 @@
 	.globl sym; sym:
 
 #define	ENTRY(sym)						\
-	.text; .globl sym; .ent sym; sym:
+	.text; .globl sym; .ent sym; sym: .cfi_startproc;
 
 #define	ASM_ENTRY(sym)						\
 	.text; .globl sym; .type sym,@function; sym:
+
+
+#define _FRAME_STACK_REG	sp
+#define _FRAME_RETURN_REG	ra
 
 /*
  * LEAF
@@ -152,7 +156,8 @@
 	.globl	_C_LABEL(x);	\
 	.ent	_C_LABEL(x), 0;	\
 _C_LABEL(x): ;			\
-	.frame sp, 0, ra;	\
+	.frame _FRAME_STACK_REG, 0, _FRAME_RETURN_REG; \
+	.cfi_startproc; \
 	MCOUNT
 
 /*
@@ -163,7 +168,8 @@ _C_LABEL(x): ;			\
 	.globl	_C_LABEL(x);	\
 	.ent	_C_LABEL(x), 0;	\
 _C_LABEL(x): ;			\
-	.frame	sp, 0, ra
+	.frame	_FRAME_STACK_REG, 0, _FRAME_RETURN_REG; \
+	.cfi_startproc
 
 /*
  * XLEAF
@@ -183,7 +189,8 @@ _C_LABEL(x):
 	.globl	_C_LABEL(x);		\
 	.ent	_C_LABEL(x), 0;		\
 _C_LABEL(x): ;				\
-	.frame	sp, fsize, retpc;	\
+	.frame	_FRAME_STACK_REG, fsize, retpc;	\
+	.cfi_startproc;	\
 	MCOUNT
 
 /*
@@ -194,7 +201,8 @@ _C_LABEL(x): ;				\
 	.globl	_C_LABEL(x);			\
 	.ent	_C_LABEL(x), 0;			\
 _C_LABEL(x): ;					\
-	.frame	sp, fsize, retpc
+	.frame	_FRAME_STACK_REG, fsize, retpc;	\
+	.cfi_startproc
 
 /*
  * XNESTED
@@ -209,7 +217,8 @@ _C_LABEL(x):
  * END
  *	Mark end of a procedure.
  */
-#define	END(x)			\
+#define	END(x) \
+	.cfi_endproc; \
 	.end _C_LABEL(x)
 
 /*
@@ -233,6 +242,7 @@ _C_LABEL(x):
 #define	VECTOR(x, regmask)	\
 	.ent	_C_LABEL(x),0;	\
 	EXPORT(x);		\
+	.cfi_startproc
 
 #define	VECTOR_END(x)		\
 	EXPORT(x ## End);	\
@@ -256,9 +266,9 @@ _C_LABEL(x):
 	MSG(msg)
 
 #define	MSG(msg)			\
-	.rdata;				\
+	.pushsection .rodata;		\
 9:	.asciiz	msg;			\
-	.text
+	.popsection
 
 #define	ASMSTR(str)			\
 	.asciiz str;			\
