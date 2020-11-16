@@ -2,7 +2,8 @@
 #
 # Tests for using a korn shell for running the commands.
 
-.SHELL: name="ksh" path="ksh"
+_ksh!=command -v ksh || echo /bin/sh
+.SHELL: name="ksh" path="${_ksh}"
 
 all:
 	: normal

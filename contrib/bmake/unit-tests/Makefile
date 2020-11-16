@@ -138,7 +138,8 @@ TESTS+=		directive-endif
 TESTS+=		directive-error
 TESTS+=		directive-export
 TESTS+=		directive-export-env
-TESTS+=		directive-export-gmake
+# Breaks Linux bootstrap:
+# TESTS+=		directive-export-gmake
 TESTS+=		directive-export-literal
 TESTS+=		directive-for
 TESTS+=		directive-for-generating-endif
