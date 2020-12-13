@@ -433,6 +433,7 @@ sleepq_sleepcnt(const void *wchan, int queue)
 	return (sq->sq_blockedcnt[queue]);
 }
 
+#include <sys/stack.h>
 static int
 sleepq_check_ast_sc_locked(struct thread *td, struct sleepqueue_chain *sc)
 {
@@ -442,6 +443,10 @@ sleepq_check_ast_sc_locked(struct thread *td, struct sleepqueue_chain *sc)
 	mtx_assert(&sc->sc_lock, MA_OWNED);
 
 	if ((td->td_pflags & TDP_WAKEUP) != 0) {
+struct stack st;
+stack_save(&st);
+printf("TDP_WAKEUP cleanup: tid %d pid %d comm td->td_proc->p_comm %s\n", td->td_tid, td->td_proc->p_pid, td->td_proc->p_comm);
+stack_print_ddb(&st);
 		td->td_pflags &= ~TDP_WAKEUP;
 		thread_lock(td);
 		return (EINTR);
