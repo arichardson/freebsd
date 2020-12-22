@@ -206,6 +206,12 @@ if __name__ == "__main__":
         check_required_make_env_var("CPP", default_cpp,
                                     parsed_args.host_bindir)
         # Using the default value for LD is fine (but not for XLD!)
+        if (parsed_args.host_compiler_type == "clang"
+                and not sys.platform.startswith("darwin")):
+            # On macOS systems we have to use /usr/bin/strip.
+            strip_binary = "llvm-strip"
+        else:
+            strip_binary = "strip"
 
         use_cross_gcc = parsed_args.cross_compiler_type == "gcc"
         # On non-FreeBSD we need to explicitly pass XCC/XLD/X_COMPILER_TYPE
@@ -219,9 +225,11 @@ if __name__ == "__main__":
                                     parsed_args.cross_bindir)
         check_required_make_env_var("XLD", "ld" if use_cross_gcc else "ld.lld",
                                     parsed_args.cross_bindir)
-        check_required_make_env_var("STRIPBIN",
-                                    "strip" if use_cross_gcc else "llvm-strip",
-                                    parsed_args.cross_bindir)
+        # Since we are setting STRIPBIN, we have to set XSTRIPBIN to the default
+        # if it is not set otherwise already.
+        if os.getenv("XSTRIPBIN", None) is None:
+            # Use the bootstrapped elftoolchain strip:
+            new_env_vars["XSTRIPBIN"] = "strip"
 
     bmake_binary = bootstrap_bmake(source_root, objdir_prefix)
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
