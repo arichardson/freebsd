@@ -206,15 +206,9 @@ if __name__ == "__main__":
         check_required_make_env_var("CPP", default_cpp,
                                     parsed_args.host_bindir)
         # Using the default value for LD is fine (but not for XLD!)
-        if (parsed_args.host_compiler_type == "clang"
-                and not sys.platform.startswith("darwin")):
-            # On macOS systems we have to use /usr/bin/strip.
-            strip_binary = "llvm-strip"
-        else:
-            strip_binary = "strip"
 
-        use_cross_gcc = parsed_args.cross_compiler_type == "gcc"
         # On non-FreeBSD we need to explicitly pass XCC/XLD/X_COMPILER_TYPE
+        use_cross_gcc = parsed_args.cross_compiler_type == "gcc"
         check_required_make_env_var("XCC", "gcc" if use_cross_gcc else "clang",
                                     parsed_args.cross_bindir)
         check_required_make_env_var("XCXX",
@@ -225,11 +219,26 @@ if __name__ == "__main__":
                                     parsed_args.cross_bindir)
         check_required_make_env_var("XLD", "ld" if use_cross_gcc else "ld.lld",
                                     parsed_args.cross_bindir)
-        # Since we are setting STRIPBIN, we have to set XSTRIPBIN to the default
-        # if it is not set otherwise already.
-        if os.getenv("XSTRIPBIN", None) is None:
-            # Use the bootstrapped elftoolchain strip:
-            new_env_vars["XSTRIPBIN"] = "strip"
+
+        # We also need to set STRIPBIN if there is no working strip binary
+        # in $PATH.
+        if not shutil.which("strip"):
+            if sys.platform.startswith("darwin"):
+                # On macOS systems we have to use /usr/bin/strip.
+                sys.exit("Cannot find required tool 'strip'. Please install the"
+                         " host compiler and command line tools.")
+            if parsed_args.host_compiler_type == "clang":
+                strip_binary = "llvm-strip"
+            else:
+                strip_binary = "strip"
+            check_required_make_env_var("STRIPBIN", strip_binary,
+                                        parsed_args.cross_bindir)
+        if os.getenv("STRIPBIN") or "STRIPBIN" in new_env_vars:
+            # If we are setting STRIPBIN, we have to set XSTRIPBIN to the
+            # default if it is not set otherwise already.
+            if not os.getenv("XSTRIPBIN") and not is_make_var_set("XSTRIPBIN"):
+                # Use the bootstrapped elftoolchain strip:
+                new_env_vars["XSTRIPBIN"] = "strip"
 
     bmake_binary = bootstrap_bmake(source_root, objdir_prefix)
     # at -j1 cleandir+obj is unbearably slow. AUTO_OBJ helps a lot
