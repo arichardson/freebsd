@@ -2252,11 +2252,8 @@ _flua= lib/liblua lib/libucl libexec/flua
 # r245440 mtree -N support added
 # r313404 requires sha384.h for libnetbsd, added to libmd in r292782
 .if ${BOOTSTRAPPING} < 1100093
-_nmtree=	lib/libmd \
-		lib/libnetbsd \
-		usr.sbin/nmtree
-
-${_bt}-lib/libnetbsd: ${_bt}-lib/libmd
+_nmtree=	usr.sbin/nmtree
+_libnetbsd=	lib/libmd lib/libnetbsd
 ${_bt}-usr.sbin/nmtree: ${_bt}-lib/libnetbsd
 .else
 _bootstrap_tools_links+=mtree
@@ -2302,6 +2299,16 @@ _bootstrap_tools_links+=kbdcontrol
 _mkimg=	usr.bin/mkimg
 .else
 _bootstrap_tools_links+=mkimg
+.endif
+
+# 1300116: cd9660 El Torito EFI boot image
+.if ${BOOTSTRAPPING} < 1202500 || \
+	(${BOOTSTRAPPING} > 1300000 && ${BOOTSTRAPPING} < 1300116)
+_makefs=	usr.sbin/makefs
+_libnetbsd=	lib/libmd lib/libnetbsd
+${_bt}-usr.sbin/makefs: ${_bt}-lib/libnetbsd
+.else
+_bootstrap_tools_links+=makefs
 .endif
 
 _yacc=		usr.bin/yacc
@@ -2479,7 +2486,9 @@ bootstrap-tools: ${_bt}-links .PHONY
     ${_flua} \
     ${_crunchide} \
     ${_crunchgen} \
+    ${_libnetbsd} \
     ${_mkimg} \
+    ${_makefs} \
     ${_nmtree} \
     ${_vtfontcvt} \
     ${_localedef} \
@@ -2502,6 +2511,9 @@ bootstrap-tools: ${_bt}-${_tool}
 ${_bt}-usr.bin/sort: ${_bt}-lib/libmd
 ${_bt}-usr.bin/xinstall: ${_bt}-lib/libmd
 ${_bt}-sbin/md5: ${_bt}-lib/libmd
+.if target(${_bt}-lib/libnetbsd)
+${_bt}-lib/libnetbsd: ${_bt}-lib/libmd
+.endif
 .endif
 
 
