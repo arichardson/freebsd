@@ -47,7 +47,7 @@ extern int mb_cur_max;
 extern int mb_cur_min;
 extern int last_kw;
 extern int verbose;
-#if YYDEBUG
+#if defined(YYDEBUG) && YYDEBUG
 extern int yydebug;
 #endif
 extern int lineno;

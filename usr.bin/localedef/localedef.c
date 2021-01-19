@@ -276,7 +276,7 @@ main(int argc, char **argv)
 	init_numeric();
 	init_time();
 
-#if YYDEBUG
+#if defined(YYDEBUG) && YYDEBUG
 	yydebug = 0;
 #endif
 
