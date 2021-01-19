@@ -76,6 +76,7 @@ static void	new_proc(struct trussinfo *, pid_t, lwpid_t);
 static struct procabi cloudabi32 = {
 	"CloudABI32",
 	SYSDECODE_ABI_CLOUDABI32,
+	sizeof(uint32_t),
 	STAILQ_HEAD_INITIALIZER(cloudabi32.extra_syscalls),
 	{ NULL }
 };
@@ -83,6 +84,7 @@ static struct procabi cloudabi32 = {
 static struct procabi cloudabi64 = {
 	"CloudABI64",
 	SYSDECODE_ABI_CLOUDABI64,
+	sizeof(uint64_t),
 	STAILQ_HEAD_INITIALIZER(cloudabi64.extra_syscalls),
 	{ NULL }
 };
@@ -90,14 +92,20 @@ static struct procabi cloudabi64 = {
 static struct procabi freebsd = {
 	"FreeBSD",
 	SYSDECODE_ABI_FREEBSD,
+	sizeof(void *),
 	STAILQ_HEAD_INITIALIZER(freebsd.extra_syscalls),
 	{ NULL }
 };
 
-#ifdef __LP64__
+#if !defined(__SIZEOF_POINTER__)
+#error "Use a modern compiler."
+#endif
+
+#if __SIZEOF_POINTER__ > 4
 static struct procabi freebsd32 = {
 	"FreeBSD32",
 	SYSDECODE_ABI_FREEBSD32,
+	sizeof(uint32_t),
 	STAILQ_HEAD_INITIALIZER(freebsd32.extra_syscalls),
 	{ NULL }
 };
@@ -106,14 +114,16 @@ static struct procabi freebsd32 = {
 static struct procabi linux = {
 	"Linux",
 	SYSDECODE_ABI_LINUX,
+	sizeof(void *),
 	STAILQ_HEAD_INITIALIZER(linux.extra_syscalls),
 	{ NULL }
 };
 
-#ifdef __LP64__
+#if __SIZEOF_POINTER__ > 4
 static struct procabi linux32 = {
 	"Linux32",
 	SYSDECODE_ABI_LINUX32,
+	sizeof(uint32_t),
 	STAILQ_HEAD_INITIALIZER(linux32.extra_syscalls),
 	{ NULL }
 };
@@ -122,11 +132,13 @@ static struct procabi linux32 = {
 static struct procabi_table abis[] = {
 	{ "CloudABI ELF32", &cloudabi32 },
 	{ "CloudABI ELF64", &cloudabi64 },
-#ifdef __LP64__
+#if __SIZEOF_POINTER__ == 4
+	{ "FreeBSD ELF32", &freebsd },
+#elif __SIZEOF_POINTER__ == 8
 	{ "FreeBSD ELF64", &freebsd },
 	{ "FreeBSD ELF32", &freebsd32 },
 #else
-	{ "FreeBSD ELF32", &freebsd },
+#error "Unsupported pointer size"
 #endif
 #if defined(__powerpc64__)
 	{ "FreeBSD ELF64 V2", &freebsd },
@@ -137,7 +149,7 @@ static struct procabi_table abis[] = {
 #if defined(__i386__)
 	{ "FreeBSD a.out", &freebsd },
 #endif
-#ifdef __LP64__
+#if __SIZEOF_POINTER__ >= 8
 	{ "Linux ELF64", &linux },
 	{ "Linux ELF32", &linux32 },
 #else
