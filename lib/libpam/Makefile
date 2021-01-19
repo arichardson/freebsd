@@ -30,5 +30,6 @@ SUBDIR_DEPEND_modules=	libpam
 SUBDIR+=	static_libpam
 SUBDIR_DEPEND_static_libpam= modules
 SUBDIR_PARALLEL=
+SUBDIR_WITH_INCS=	libpam
 
 .include <bsd.subdir.mk>

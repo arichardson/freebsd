@@ -7,4 +7,6 @@ SUBDIR=	BIG5 DECHanyu EUC EUCTW GBK2K HZ ISO2022 JOHAB MSKanji UES UTF1632 \
 	mapper_parallel mapper_serial mapper_std mapper_zone
 SUBDIR_PARALLEL=
 
+# Skip unncessary make includes in the subdirectories.
+SUBDIR_WITH_INCS=
 .include <bsd.subdir.mk>

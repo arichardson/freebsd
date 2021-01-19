@@ -218,5 +218,7 @@ SUBDIR.${MK_TESTS}+=	tests
 .include <bsd.arch.inc.mk>
 
 SUBDIR_PARALLEL=
+# Only bsnmpd/modules installs includes.
+SUBDIR_WITH_INCS=	bsnmpd
 
 .include <bsd.subdir.mk>
