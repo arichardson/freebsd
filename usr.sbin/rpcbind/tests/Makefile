@@ -14,4 +14,9 @@ CFLAGS+= -DINET6
 
 WARNS?=	3
 
+.if ${MK_ASAN} != "no"
+# Work around "error: duplicate symbol: getifaddrs" since ASAN also defines it.
+LDFLAGS+=-shared-libasan
+.endif
+
 .include <bsd.test.mk>

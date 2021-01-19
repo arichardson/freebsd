@@ -43,6 +43,7 @@ PROGS+=		$p
 NO_SHARED.$p=
 SRCS.$p=	mini-me.c
 .endfor
+CFLAGS.mini-me.c+=	-fno-sanitize=address -fno-sanitize=undefined
 
 BINDIR=	${TESTSDIR}
 
