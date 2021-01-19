@@ -31,12 +31,20 @@
 
 #undef _PATH_ELF_HINTS
 
+#if defined(__ILP32__)
+#define	LD_			"LD_32_"
+#elif defined(__LP64__)
+#define	LD_			"LD_64_"
+#else
+#error "Unsupported pointer size"
+#endif
+#define	LD_FALLBACK_		"LD_"
+
 #ifdef COMPAT_32BIT
 #define	_PATH_ELF_HINTS		"/var/run/ld-elf32.so.hints"
 #define	_PATH_LIBMAP_CONF	"/etc/libmap32.conf"
 #define	_BASENAME_RTLD		"ld-elf32.so.1"
 #define	STANDARD_LIBRARY_PATH	"/lib32:/usr/lib32"
-#define	LD_			"LD_32_"
 #endif
 
 #ifndef _PATH_ELF_HINTS
@@ -57,10 +65,6 @@
 
 #ifndef STANDARD_LIBRARY_PATH
 #define	STANDARD_LIBRARY_PATH	"/lib/casper:/lib:/usr/lib"
-#endif
-
-#ifndef LD_
-#define	LD_			"LD_"
 #endif
 
 #define	_PATH_SOFT_ELF_HINTS	"/var/run/ld-elf-soft.so.hints"
