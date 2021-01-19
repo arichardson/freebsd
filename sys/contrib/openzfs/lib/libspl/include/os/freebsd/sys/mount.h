@@ -57,18 +57,40 @@
 #define	MS_POSIXACL		(1<<16)
 #endif
 
+#ifndef MS_NOSUID
 #define	MS_NOSUID	MNT_NOSUID
+#endif
+#ifndef MS_NOEXEC
 #define	MS_NOEXEC	MNT_NOEXEC
+#endif
+#ifndef MS_NODEV
 #define	MS_NODEV	0
+#endif
+#ifndef S_WRITE
 #define	S_WRITE		0
+#endif
+#ifndef MS_BIND
 #define	MS_BIND		0
+#endif
+#ifndef MS_REMOUNT
 #define	MS_REMOUNT	0
+#endif
+#ifndef MS_SYNCHRONOUS
 #define	MS_SYNCHRONOUS	MNT_SYNCHRONOUS
+#endif
 
+#ifndef MS_USERS
 #define	MS_USERS	(MS_NOEXEC|MS_NOSUID|MS_NODEV)
+#endif
+#ifndef MS_OWNER
 #define	MS_OWNER	(MS_NOSUID|MS_NODEV)
+#endif
+#ifndef MS_GROUP
 #define	MS_GROUP	(MS_NOSUID|MS_NODEV)
+#endif
+#ifndef MS_COMMENT
 #define	MS_COMMENT	0
+#endif
 
 /*
  * Older glibc <sys/mount.h> headers did not define all the available
