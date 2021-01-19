@@ -193,6 +193,12 @@ uprintf(const char *fmt, ...)
 	if ((p->p_flag & P_CONTROLT) == 0) {
 		PROC_UNLOCK(p);
 		sx_sunlock(&proctree_lock);
+		if (p == initproc) {
+			/* Produce output when we fail to load /sbin/init: */
+			va_start(ap, fmt);
+			vprintf(fmt, ap);
+			va_end(ap);
+		}
 		return (0);
 	}
 	SESS_LOCK(p->p_session);
