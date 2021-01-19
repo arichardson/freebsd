@@ -131,7 +131,7 @@ CFLAGS += -mno-relax
 # .pico used for PIC object files
 # .nossppico used for NOSSP PIC object files
 # .pieo used for PIE object files
-.SUFFIXES: .out .o .bc .ll .po .pico .nossppico .pieo .S .asm .s .c .cc .cpp .cxx .C .f .y .l .ln
+.SUFFIXES: .out .o .bc .ll .po .pico .nossppico .pieo .nomsano .S .asm .s .c .cc .cpp .cxx .C .f .y .l .ln
 
 .if !defined(PICFLAG)
 PICFLAG=-fpic
@@ -156,6 +156,10 @@ PO_FLAG=-pg
 	${CC} ${PIEFLAG} -DPIC ${SHARED_CFLAGS} ${CFLAGS} -c ${.IMPSRC} -o ${.TARGET}
 	${CTFCONVERT_CMD}
 
+.c.nomsano:
+	${CC} ${CFLAGS} ${STATIC_CFLAGS} ${NO_MSAN_FLAG} -c ${.IMPSRC} -o ${.TARGET}
+	${CTFCONVERT_CMD}
+
 .cc.po .C.po .cpp.po .cxx.po:
 	${CXX} ${PO_FLAG} ${STATIC_CXXFLAGS} ${PO_CXXFLAGS} -c ${.IMPSRC} -o ${.TARGET}
 
@@ -166,7 +170,10 @@ PO_FLAG=-pg
 	${CXX} ${PICFLAG} -DPIC ${SHARED_CXXFLAGS:C/^-fstack-protector.*$//} ${CXXFLAGS:C/^-fstack-protector.*$//} -c ${.IMPSRC} -o ${.TARGET} ${NO_MSAN_FLAG}
 
 .cc.pieo .C.pieo .cpp.pieo .cxx.pieo:
-	${CXX} ${PIEFLAG} ${SHARED_CXXFLAGS} ${CXXFLAGS} -c ${.IMPSRC} -o ${.TARGET}
+	${CXX} ${PIEFLAG} ${SHARED_CXXFLAGS} ${SHARED_CXXFLAGS} ${CXXFLAGS} -c ${.IMPSRC} -o ${.TARGET}
+
+.cc.nomsano .C.nomsano .cpp.nomsano .cxx.nomsano:
+	${CXX} ${STATIC_CXXFLAGS} ${CXXFLAGS} ${NO_MSAN_FLAG} -c ${.IMPSRC} -o ${.TARGET}
 
 .f.po:
 	${FC} -pg ${FFLAGS} -o ${.TARGET} -c ${.IMPSRC}
@@ -180,7 +187,7 @@ PO_FLAG=-pg
 	${FC} ${PICFLAG} -DPIC ${FFLAGS:C/^-fstack-protector.*$//} -o ${.TARGET} -c ${.IMPSRC}
 	${CTFCONVERT_CMD}
 
-.s.po .s.pico .s.nossppico .s.pieo:
+.s.po .s.pico .s.nossppico .s.pieo .s.nomsano:
 	${AS} ${AFLAGS} -o ${.TARGET} ${.IMPSRC}
 	${CTFCONVERT_CMD}
 
@@ -197,6 +204,11 @@ PO_FLAG=-pg
 .asm.nossppico:
 	${CC:N${CCACHE_BIN}} -x assembler-with-cpp ${PICFLAG} -DPIC \
 	    ${CFLAGS:C/^-fstack-protector.*$//} ${ACFLAGS} -c ${.IMPSRC} -o ${.TARGET}
+	${CTFCONVERT_CMD}
+
+.asm.nomsano:
+	${CC:N${CCACHE_BIN}} -x assembler-with-cpp ${CFLAGS} ${NO_MSAN_FLAG} \
+	    ${ACFLAGS} -c ${.IMPSRC} -o ${.TARGET}
 	${CTFCONVERT_CMD}
 
 .asm.pieo:
@@ -216,6 +228,11 @@ PO_FLAG=-pg
 
 .S.nossppico:
 	${CC:N${CCACHE_BIN}} ${PICFLAG} -DPIC ${CFLAGS:C/^-fstack-protector.*$//} ${ACFLAGS} \
+	    -c ${.IMPSRC} -o ${.TARGET}
+	${CTFCONVERT_CMD}
+
+.S.nomsano:
+	${CC:N${CCACHE_BIN}} ${CFLAGS} ${NO_MSAN_FLAG} ${ACFLAGS} \
 	    -c ${.IMPSRC} -o ${.TARGET}
 	${CTFCONVERT_CMD}
 
@@ -395,6 +412,19 @@ lib${LIB_PRIVATE}${LIB}_pie.a: ${PIEOBJS}
 	${AR} ${ARFLAGS} ${.TARGET} ${PIEOBJS} ${ARADD}
 .endif
 
+.if defined(LIB) && !empty(LIB) && ${MK_MSAN} != "no"
+NOMSANOBJS+=	${OBJS:.o=.nomsano}
+DEPENDOBJS+=	${NOMSANOBJS}
+CLEANFILES+=	${NOMSANOBJS}
+
+_LIBS+=		lib${LIB_PRIVATE}${LIB}_nomsan.a
+
+lib${LIB_PRIVATE}${LIB}_nomsan.a: ${NOMSANOBJS}
+	@${ECHO} building non-MSAN-instrumented ${LIB} library
+	@rm -f ${.TARGET}
+	${AR} ${ARFLAGS} ${.TARGET} ${NOMSANOBJS} ${ARADD}
+.endif
+
 .if defined(_SKIP_BUILD)
 all:
 .else
@@ -462,6 +492,10 @@ _libinstall:
 .if ${MK_PROFILE} != "no" && defined(LIB) && !empty(LIB)
 	${INSTALL} ${TAG_ARGS:D${TAG_ARGS},dev} -C -o ${LIBOWN} -g ${LIBGRP} -m ${LIBMODE} \
 	    ${_INSTALLFLAGS} lib${LIB_PRIVATE}${LIB}_p.a ${DESTDIR}${_LIBDIR}/
+.endif
+.if ${MK_MSAN} != "no" && defined(LIB) && !empty(LIB)
+	${INSTALL} ${TAG_ARGS:D${TAG_ARGS},dev} -C -o ${LIBOWN} -g ${LIBGRP} -m ${LIBMODE} \
+	    ${_INSTALLFLAGS} lib${LIB_PRIVATE}${LIB}_nomsan.a ${DESTDIR}${_LIBDIR}/
 .endif
 .if defined(SHLIB_NAME)
 	${INSTALL} ${TAG_ARGS} ${STRIP} -o ${LIBOWN} -g ${LIBGRP} -m ${LIBMODE} \
@@ -563,6 +597,11 @@ OBJS_DEPEND_GUESS.${_S:${OBJS_SRCS_FILTER:ts:}}.nossppico+=	${_S}
 .if defined(BUILD_NOSSP_PIC_ARCHIVE) && defined(LIB) && !empty(LIB)
 .for _S in ${SRCS:N*.[hly]}
 OBJS_DEPEND_GUESS.${_S:${OBJS_SRCS_FILTER:ts:}}.nossppico+=	${_S}
+.endfor
+.endif
+.if defined(LIB) && !empty(LIB) && ${MK_MSAN} != "no"
+.for _S in ${SRCS:N*.[hly]}
+OBJS_DEPEND_GUESS.${_S:${OBJS_SRCS_FILTER:ts:}}.nomsano+=	${_S}
 .endfor
 .endif
 

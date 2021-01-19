@@ -1,9 +1,21 @@
 # $FreeBSD$
 
 CFLAGS+=	-I${WORLDTMP}/legacy/usr/include
-DPADD+=		${WORLDTMP}/legacy/usr/lib/libegacy.a
-LDADD+=		-legacy
+.if ${MK_MSAN} == "yes" && defined(NO_MSAN)
+NOMSAN_SUFFIX=_nomsan
+.endif
+DPADD+=		${WORLDTMP}/legacy/usr/lib/libegacy${NOMSAN_SUFFIX}.a
+LDADD+=		-legacy${NOMSAN_SUFFIX}
 LDFLAGS+=	-L${WORLDTMP}/legacy/usr/lib
+
+LIBMD:=${WORLDTMP}/legacy/usr/lib/libmd${NOMSAN_SUFFIX}.a
+LIBNV:=${WORLDTMP}/legacy/usr/lib/libnv${NOMSAN_SUFFIX}.a
+LIBSBUF:=${WORLDTMP}/legacy/usr/lib/libsbuf${NOMSAN_SUFFIX}.a
+LIBY:=${WORLDTMP}/legacy/usr/lib/liby${NOMSAN_SUFFIX}.a
+LIBL:=${WORLDTMP}/legacy/usr/lib/libl${NOMSAN_SUFFIX}.a
+LIBROKEN:=${WORLDTMP}/legacy/usr/lib/libroken${NOMSAN_SUFFIX}.a
+LIBDWARF:=${WORLDTMP}/legacy/usr/lib/libdwarf${NOMSAN_SUFFIX}.a
+LIBELF:=${WORLDTMP}/legacy/usr/lib/libelf${NOMSAN_SUFFIX}.a
 
 .if ${.MAKE.OS} != "FreeBSD"
 # On MacOS using a non-mac ar will fail the build, similarly on Linux using
@@ -22,14 +34,7 @@ LIBUTIL:=
 LIBCPLUSPLUS:=
 LIBARCHIVE:=
 LIBPTHREAD:=
-LIBMD:=${WORLDTMP}/legacy/usr/lib/libmd.a
-LIBNV:=${WORLDTMP}/legacy/usr/lib/libmd.a
-LIBSBUF:=${WORLDTMP}/legacy/usr/lib/libsbuf.a
-LIBY:=${WORLDTMP}/legacy/usr/lib/liby.a
-LIBL:=${WORLDTMP}/legacy/usr/lib/libl.a
-LIBROKEN:=${WORLDTMP}/legacy/usr/lib/libroken.a
-LIBDWARF:=${WORLDTMP}/legacy/usr/lib/libdwarf.a
-LIBELF:=${WORLDTMP}/legacy/usr/lib/libelf.a
+LIBSPL:=
 
 # Add various -Werror flags to catch missing function declarations
 CFLAGS+=	-Werror=implicit-function-declaration -Werror=implicit-int \
@@ -95,3 +100,11 @@ UPDATE_DEPENDFILE= no
 
 # GCC doesn't allow silencing warn_unused_result calls with (void) casts.
 CFLAGS.gcc+=-Wno-unused-result
+
+.if ${MK_MSAN} == "yes" && !defined(NO_MSAN)
+# Needs instrumented libc++/libstdc++
+MSAN_CXXFLAGS:=-fno-sanitize=memory
+# Work around missing interceptor for fts_open and fts_read
+LDFLAGS+=-Wl,-wrap,fts_open
+LDFLAGS+=-Wl,-wrap,fts_read
+.endif

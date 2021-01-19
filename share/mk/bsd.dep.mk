@@ -170,7 +170,7 @@ ${_D}.o: ${_DSRC} ${OBJS:S/^${_D}.o$//}
 	@rm -f ${.TARGET}
 	${DTRACE} ${DTRACEFLAGS} -G -o ${.TARGET} -s ${.ALLSRC:N*.h}
 .if defined(LIB)
-CLEANFILES+= ${_D}.pico ${_D}.pieo ${_D}.po ${_D}.nossppico
+CLEANFILES+= ${_D}.pico ${_D}.pieo ${_D}.po ${_D}.nossppico ${_D}.nomsano
 ${_D}.pico: ${_DSRC} ${SOBJS:S/^${_D}.pico$//}
 	@rm -f ${.TARGET}
 	${DTRACE} ${DTRACEFLAGS} -G -o ${.TARGET} -s ${.ALLSRC:N*.h}

@@ -1,5 +1,8 @@
 # $FreeBSD$
-
+.if defined(BOOTSTRAPPING)
+# Would need an instrumented bootstrap libarchive (must be set before bsd.init.mk)
+NO_MSAN=yes
+.endif
 .include <src.opts.mk>
 
 PROG=	ar

@@ -1,4 +1,5 @@
 # $FreeBSD$
+.include <src.opts.mk>
 
 .PATH: ${.CURDIR}/../../include
 
@@ -100,6 +101,21 @@ INCS+=		capsicum_helpers.h
 INCS+=		libcasper.h
 .endif
 
+# Also include the regexp code in libegacy. This is important for compatibility
+# when building on non-FreeBSD systems and also required when building all
+# bootstrap tools with MSAN to avoid false-positives
+LIBC_SRCTOP=	${SRCTOP}/lib/libc/
+.if 0 # breaks lex for some reason...
+.include "${LIBC_SRCTOP}/regex/Makefile.inc"
+# CFLAGS.regcomp.c+=	-DLIBREGEX=1
+INCS+=	${SRCTOP}/include/regex.h
+.endif
+
+.if ${MK_MSAN} == "yes"
+# fts_* wrappers for MSAN instrumentation
+SRCS+=wrap_fts.c
+.endif
+
 # rpcgen should build against the source tree rpc/types.h and not the host.
 # This is especially important on non-FreeBSD systems where the types may
 # not match.
@@ -147,7 +163,6 @@ SYSINCS+=	${SRCTOP}/sys/sys/nlist_aout.h
 # bootstrap the FreeBSD db code. The cross-build headers #define dbopen() to
 # __freebsd_dbopen() so that we don't ever use the host version
 INCS+=	${SRCTOP}/include/db.h
-LIBC_SRCTOP=	${SRCTOP}/lib/libc/
 .include "${LIBC_SRCTOP}/db/Makefile.inc"
 # Do the same as we did for dbopen() for getopt() on since it's not compatible
 # on Linux (and to avoid surprises also compile the FreeBSD code on macOS)
@@ -346,3 +361,4 @@ installdirs:
 .endfor
 
 .include <bsd.lib.mk>
+#.warning "_LIBS=${_LIBS} -- ${MAKEFLAGS}"

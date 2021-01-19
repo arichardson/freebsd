@@ -404,24 +404,29 @@ _DP_opensm=	pthread
 _DP_osmvendor=	ibumad pthread
 .endif
 
+# We need separate libraries for MSan since MSan requires full instrumentation
+.if ${MK_MSAN} != "no" && defined(NO_MSAN)
+NOMSAN_SUFFIX=_nomsan
+.endif
+
 # Define special cases
 LDADD_supcplusplus=	-lsupc++
-LIBATF_C=	${LIBDESTDIR}${LIBDIR_BASE}/libprivateatf-c.a
-LIBATF_CXX=	${LIBDESTDIR}${LIBDIR_BASE}/libprivateatf-c++.a
-LDADD_atf_c=	-lprivateatf-c
-LDADD_atf_cxx=	-lprivateatf-c++
+LIBATF_C=	${LIBDESTDIR}${LIBDIR_BASE}/libprivateatf-c${NOMSAN_SUFFIX}.a
+LIBATF_CXX=	${LIBDESTDIR}${LIBDIR_BASE}/libprivateatf-c++${NOMSAN_SUFFIX}.a
+LDADD_atf_c=	-lprivateatf-c${NOMSAN_SUFFIX}
+LDADD_atf_cxx=	-lprivateatf-c++${NOMSAN_SUFFIX}
 
-LIBGMOCK=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategmock.a
-LIBGMOCK_MAIN=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategmock_main.a
-LIBGTEST=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategtest.a
-LIBGTEST_MAIN=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategtest_main.a
-LDADD_gmock=	-lprivategmock
-LDADD_gtest=	-lprivategtest
-LDADD_gmock_main= -lprivategmock_main
-LDADD_gtest_main= -lprivategtest_main
+LIBGMOCK=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategmock${NOMSAN_SUFFIX}.a
+LIBGMOCK_MAIN=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategmock_main${NOMSAN_SUFFIX}.a
+LIBGTEST=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategtest${NOMSAN_SUFFIX}.a
+LIBGTEST_MAIN=	${LIBDESTDIR}${LIBDIR_BASE}/libprivategtest_main${NOMSAN_SUFFIX}.a
+LDADD_gmock=	-lprivategmock${NOMSAN_SUFFIX}
+LDADD_gtest=	-lprivategtest${NOMSAN_SUFFIX}
+LDADD_gmock_main= -lprivategmock_main${NOMSAN_SUFFIX}
+LDADD_gtest_main= -lprivategtest_main${NOMSAN_SUFFIX}
 
 .for _l in ${_PRIVATELIBS}
-LIB${_l:tu}?=	${LIBDESTDIR}${LIBDIR_BASE}/libprivate${_l}.a
+LIB${_l:tu}?=	${LIBDESTDIR}${LIBDIR_BASE}/libprivate${_l}${NOMSAN_SUFFIX}.a
 .endfor
 
 .if ${MK_PIE} != "no"
@@ -434,11 +439,16 @@ LDADD_${_l}_L+=		-L${LIB${_l:tu}DIR}
 .endif
 DPADD_${_l}?=	${LIB${_l:tu}}
 .if ${_PRIVATELIBS:M${_l}}
-LDADD_${_l}?=	-lprivate${_l}
+LDADD_${_l}?=	-lprivate${_l}${NOMSAN_SUFFIX}
 .elif ${_INTERNALLIBS:M${_l}}
-LDADD_${_l}?=	${LDADD_${_l}_L} -l${_l:S/${PIE_SUFFIX}//}${PIE_SUFFIX}
+LDADD_${_l}?=	${LDADD_${_l}_L} -l${_l:S/${PIE_SUFFIX}//}${PIE_SUFFIX}${NOMSAN_SUFFIX}
 .else
+# No MSAN suffix for certain bootstrap libs where we use the host version
+.if defined(BOOTSTRAPPING) && (${_l} == "m" || ${_l} == "z" || ${_l} == "util" || ${_l} == "archive" || ${_l} == "pthread")
 LDADD_${_l}?=	${LDADD_${_l}_L} -l${_l}
+.else
+LDADD_${_l}?=	${LDADD_${_l}_L} -l${_l}${NOMSAN_SUFFIX}
+.endif
 .endif
 # Add in all dependencies for static linkage.
 .if defined(_DP_${_l}) && (${_INTERNALLIBS:M${_l}} || \

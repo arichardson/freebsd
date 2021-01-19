@@ -23,6 +23,7 @@ __${_this}__: .NOTMAIN
 
 PICO?= .pico
 NOSSPPICO?= .nossppico
+NOMSANO?= .nomsano
 
 .if defined(SRCS)
 # it would be nice to be able to query .SUFFIXES
