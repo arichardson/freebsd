@@ -108,13 +108,17 @@ __DEFAULT_DEPENDENT_OPTIONS = \
     INSTALLLIB \
     MAN \
     PROFILE \
-    WARNS \
-    WERROR
+    WARNS
 .if defined(NO_${var})
 .error "NO_${var} is defined, but deprecated. Please use MK_${var}=no instead."
 MK_${var}:=no
 .endif
 .endfor
+
+.if defined(NO_WERROR)
+.info The WITHOUT_WERROR option can now be used instead of NO_WERROR.
+MK_WERROR:=	no
+.endif
 
 .include <bsd.cpu.mk>
 
