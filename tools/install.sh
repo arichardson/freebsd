@@ -62,6 +62,14 @@ fi
 
 # the remaining arguments are assumed to be files/dirs only.
 if [ -n "${linkmode}" ]; then
+	if test "$1" -ef "$2"; then
+		# If the source and destination are already the same file (e.g.
+		# when installing on a case-insensitive file system or when
+		# installing an existing hard-link again), we don't link the
+		# file/dir. If we did, this could result in the source being
+		# deleted since ln -f removes the target before linking.
+		exit 0
+	fi
 	if [ "${linkmode}" = "symbolic" ]; then
 		ln -fsn "$@"
 	else
