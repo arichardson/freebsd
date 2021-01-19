@@ -436,6 +436,7 @@ MK_KERBEROS:=	no
 MK_KERBEROS_SUPPORT:=	no
 MK_LDNS:=	no
 MK_PKGBOOTSTRAP:=	no
+MK_PPP:=	no
 MK_SVN:=		no
 MK_SVNLITE:=		no
 .endif
