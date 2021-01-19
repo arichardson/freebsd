@@ -204,14 +204,13 @@ static bool trust;		/* False for setuid and setgid programs */
 static bool dangerous_ld_env;	/* True if environment variables have been
 				   used to affect the libraries loaded */
 bool ld_bind_not;		/* Disable PLT update */
-static char *ld_bind_now;	/* Environment variable for immediate binding */
-static char *ld_debug;		/* Environment variable for debugging */
+static bool ld_bind_now;	/* Environment variable for immediate binding */
 static char *ld_library_path;	/* Environment variable for search path */
 static char *ld_library_dirs;	/* Environment variable for library descriptors */
 static char *ld_preload;	/* Environment variable for libraries to
 				   load first */
 static const char *ld_elf_hints_path;	/* Environment variable for alternative hints path */
-static const char *ld_tracing;	/* Called from ldd to print libs */
+static bool ld_tracing;		/* Called from ldd to print libs */
 static char *ld_utrace;		/* Use utrace() to log events. */
 static struct obj_entry_q obj_list;	/* Queue of all loaded objects */
 static Obj_Entry *obj_main;	/* The main program shared object */
@@ -365,6 +364,20 @@ _get_ld_env(const char *preferred, const char *fallback)
 	if (result == NULL && fallback != NULL)
 		result = getenv(fallback);
 	return (result);
+}
+
+/* return true if the variable is non-empty and not equal to "0" */
+#define is_ld_env_set(var) _is_ld_env_set(_LD(var), LD_FALLBACK(var))
+
+static inline bool
+_is_ld_env_set(const char *prefixed, const char *fallback)
+{
+	char *env_var;
+
+	env_var = _get_ld_env(prefixed, fallback);
+
+	return (env_var != NULL && *env_var != '\0' &&
+	    __builtin_strcmp(env_var, "0") != 0);
 }
 
 /*
@@ -576,7 +589,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	}
     }
 
-    ld_bind_now = get_ld_env("BIND_NOW");
+    ld_bind_now = is_ld_env_set("BIND_NOW");
 
     /* 
      * If the process is tainted, then we un-set the dangerous environment
@@ -594,16 +607,16 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 		rtld_die();
 	}
     }
-    ld_debug = get_ld_env("DEBUG");
-    if (ld_bind_now == NULL)
-	    ld_bind_not = get_ld_env("BIND_NOT") != NULL;
-    libmap_disable = get_ld_env("LIBMAP_DISABLE") != NULL;
+    debug = is_ld_env_set("DEBUG");
+    if (!ld_bind_now)
+	    ld_bind_not = is_ld_env_set("BIND_NOT");
+    libmap_disable = is_ld_env_set("LIBMAP_DISABLE");
     libmap_override = get_ld_env("LIBMAP");
     ld_library_path = get_ld_env("LIBRARY_PATH");
     ld_library_dirs = get_ld_env("LIBRARY_PATH_FDS");
     ld_preload = get_ld_env("PRELOAD");
     ld_elf_hints_path = get_ld_env("ELF_HINTS_PATH");
-    ld_loadfltr = get_ld_env("LOADFLTR") != NULL;
+    ld_loadfltr = is_ld_env_set("LOADFLTR");
     library_path_rpath = get_ld_env("LIBRARY_PATH_RPATH");
     if (library_path_rpath != NULL) {
 	    if (library_path_rpath[0] == 'y' ||
@@ -616,14 +629,12 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
     dangerous_ld_env = libmap_disable || (libmap_override != NULL) ||
 	(ld_library_path != NULL) || (ld_preload != NULL) ||
 	(ld_elf_hints_path != NULL) || ld_loadfltr;
-    ld_tracing = get_ld_env("TRACE_LOADED_OBJECTS");
+    ld_tracing = is_ld_env_set("TRACE_LOADED_OBJECTS");
     ld_utrace = get_ld_env("UTRACE");
 
     if ((ld_elf_hints_path == NULL) || strlen(ld_elf_hints_path) == 0)
 	ld_elf_hints_path = ld_elf_hints_default;
 
-    if (ld_debug != NULL && *ld_debug != '\0')
-	debug = 1;
     dbg("%s is initialized, base address = %p", __progname,
 	(caddr_t) aux_info[AT_BASE]->a_un.a_ptr);
     dbg("RTLD dynamic = %p", obj_rtld.dynamic);
@@ -722,8 +733,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
     preload_tail = globallist_curr(TAILQ_LAST(&obj_list, obj_entry_q));
 
     dbg("loading needed objects");
-    if (load_needed_objects(obj_main, ld_tracing != NULL ? RTLD_LO_TRACE :
-      0) == -1)
+    if (load_needed_objects(obj_main, ld_tracing ? RTLD_LO_TRACE : 0) == -1)
 	rtld_die();
 
     /* Make a list of all objects loaded at startup. */
@@ -749,7 +759,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	exit(0);
     }
 
-    if (get_ld_env("DUMP_REL_PRE") != NULL) {
+    if (is_ld_env_set("DUMP_REL_PRE")) {
        dump_relocations(obj_main);
        exit (0);
     }
@@ -768,16 +778,15 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	allocate_tls_offset(entry->obj);
     }
 
-    if (relocate_objects(obj_main,
-      ld_bind_now != NULL && *ld_bind_now != '\0',
-      &obj_rtld, SYMLOOK_EARLY, NULL) == -1)
+    if (relocate_objects(obj_main, ld_bind_now, &obj_rtld, SYMLOOK_EARLY,
+      NULL) == -1)
 	rtld_die();
 
     dbg("doing copy relocations");
     if (do_copy_relocations(obj_main) == -1)
 	rtld_die();
 
-    if (get_ld_env("DUMP_REL_POST") != NULL) {
+    if (is_ld_env_set("DUMP_REL_POST")) {
        dump_relocations(obj_main);
        exit (0);
     }
@@ -832,8 +841,8 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
     wlock_acquire(rtld_bind_lock, &lockstate);
 
     dbg("resolving ifuncs");
-    if (initlist_objects_ifunc(&initlist, ld_bind_now != NULL &&
-      *ld_bind_now != '\0', SYMLOOK_EARLY, &lockstate) == -1)
+    if (initlist_objects_ifunc(&initlist, ld_bind_now, SYMLOOK_EARLY,
+      &lockstate) == -1)
 	rtld_die();
 
     rtld_exit_ptr = rtld_exit;
@@ -3429,8 +3438,8 @@ rtld_dlopen(const char *name, int fd, int mode)
     int lo_flags;
 
     LD_UTRACE(UTRACE_DLOPEN_START, NULL, NULL, 0, mode, name);
-    ld_tracing = (mode & RTLD_TRACE) == 0 ? NULL : "1";
-    if (ld_tracing != NULL) {
+    ld_tracing = (mode & RTLD_TRACE) != 0;
+    if (ld_tracing) {
 	rlock_acquire(rtld_bind_lock, &lockstate);
 	if (sigsetjmp(lockstate.env, 0) != 0)
 	    lock_upgrade(rtld_bind_lock, &lockstate);
@@ -3444,7 +3453,7 @@ rtld_dlopen(const char *name, int fd, int mode)
 	    lo_flags |= RTLD_LO_NOLOAD;
     if (mode & RTLD_DEEPBIND)
 	    lo_flags |= RTLD_LO_DEEPBIND;
-    if (ld_tracing != NULL)
+    if (ld_tracing)
 	    lo_flags |= RTLD_LO_TRACE | RTLD_LO_IGNSTLS;
 
     return (dlopen_object(name, fd, obj_main, lo_flags,
@@ -4676,7 +4685,8 @@ symlook_obj1_gnu(SymLook *req, const Obj_Entry *obj)
 static void
 trace_loaded_objects(Obj_Entry *obj)
 {
-    const char *fmt1, *fmt2, *fmt, *main_local, *list_containers;
+    const char *fmt1, *fmt2, *fmt, *main_local;
+    bool list_containers;
     int c;
 
     if ((main_local = get_ld_env("TRACE_LOADED_OBJECTS_PROGNAME")) == NULL)
@@ -4688,7 +4698,7 @@ trace_loaded_objects(Obj_Entry *obj)
     if ((fmt2 = get_ld_env("TRACE_LOADED_OBJECTS_FMT2")) == NULL)
 	fmt2 = "\t%o (%x)\n";
 
-    list_containers = get_ld_env("TRACE_LOADED_OBJECTS_ALL");
+    list_containers = is_ld_env_set("TRACE_LOADED_OBJECTS_ALL");
 
     for (; obj != NULL; obj = TAILQ_NEXT(obj, next)) {
 	Needed_Entry *needed;
@@ -5475,11 +5485,11 @@ rtld_verify_versions(const Objlist *objlist)
 	    continue;
 	if (rtld_verify_object_versions(entry->obj) == -1) {
 	    rc = -1;
-	    if (ld_tracing == NULL)
+	    if (ld_tracing)
 		break;
 	}
     }
-    if (rc == 0 || ld_tracing != NULL)
+    if (rc == 0 || ld_tracing)
     	rc = rtld_verify_object_versions(&obj_rtld);
     return rc;
 }
