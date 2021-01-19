@@ -1,4 +1,7 @@
 # $FreeBSD$
+.include <src.opts.mk>
+
+MK_PROFILE=no
 
 # Various MK_* options need to be set before including bsd.prog.mk/bsd.lib.mk
 .if ${.MAKE.OS} != "FreeBSD"
