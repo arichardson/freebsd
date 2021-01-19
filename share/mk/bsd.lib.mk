@@ -560,6 +560,11 @@ OBJS_DEPEND_GUESS.${_S:${OBJS_SRCS_FILTER:ts:}}.pico+=	${_S}
 OBJS_DEPEND_GUESS.${_S:${OBJS_SRCS_FILTER:ts:}}.nossppico+=	${_S}
 .endfor
 .endif
+.if defined(BUILD_NOSSP_PIC_ARCHIVE) && defined(LIB) && !empty(LIB)
+.for _S in ${SRCS:N*.[hly]}
+OBJS_DEPEND_GUESS.${_S:${OBJS_SRCS_FILTER:ts:}}.nossppico+=	${_S}
+.endfor
+.endif
 
 .if defined(HAS_TESTS)
 MAKE+=			MK_MAKE_CHECK_USE_SANDBOX=yes

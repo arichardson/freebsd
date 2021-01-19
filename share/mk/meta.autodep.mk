@@ -26,7 +26,7 @@ NOSSPPICO?= .nossppico
 
 .if defined(SRCS)
 # it would be nice to be able to query .SUFFIXES
-OBJ_EXTENSIONS+= .o .po .lo ${PICO}
+OBJ_EXTENSIONS+= .o .po .lo ${PICO} ${NOSSPPICO}
 
 # explicit dependencies help short-circuit .SUFFIX searches
 SRCS_DEP_FILTER+= N*.[hly]
