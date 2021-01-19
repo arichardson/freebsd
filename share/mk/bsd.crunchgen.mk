@@ -43,6 +43,8 @@ CRUNCH_GENERATE_LINKS?= yes
 # it.
 CRUNCHARGS+= MK_AUTO_OBJ=no
 CRUNCH_BUILDOPTS+= MK_AUTO_OBJ=${MK_AUTO_OBJ}
+# Sanitizers don't work yet with crunched binaries.
+CRUNCH_BUILDOPTS+= MK_ASAN=no MK_UBSAN=no
 
 CLEANFILES+= ${CONF} *.o *.lo *.c *.mk *.cache *.a *.h
 
