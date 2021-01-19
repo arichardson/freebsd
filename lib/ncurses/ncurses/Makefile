@@ -374,7 +374,7 @@ nomacros.h: MKlib_gen.sh curses.h
 	    "${AWK}" generated < curses.h | fgrep undef > $@
 
 init_keytry.h: keys.list make_keys
-	${BTOOLSPATH:U.}/make_keys keys.list > init_keytry.h
+	${BTOOLSPATH:U${.OBJDIR}}/make_keys keys.list > init_keytry.h
 
 hashsize.h: MKhashsize.sh Caps Caps-ncurses
 	sh ${NCURSES_DIR}/include/MKhashsize.sh ${NCURSES_DIR}/include/Caps ${NCURSES_DIR}/include/Caps-ncurses > $@
