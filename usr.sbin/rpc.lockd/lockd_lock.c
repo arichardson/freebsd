@@ -373,17 +373,6 @@ copy_nlm4_lock_to_nlm4_holder(src, exclusive, dest)
 	dest->l_len = src->l_len;
 }
 
-
-size_t
-strnlen(const char *s, size_t len)
-{
-    size_t n;
-
-    for (n = 0;  s[n] != 0 && n < len; n++)
-        ;
-    return n;
-}
-
 /*
  * allocate_file_lock: Create a lock with the given parameters
  */

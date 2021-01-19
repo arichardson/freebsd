@@ -172,13 +172,16 @@ SUBDIR.${MK_LDNS}+=	libldns
 SUBDIR.${MK_STATS}+=	libstats
 
 # The libraries under libclang_rt can only be built by clang, and only make
-# sense to build when clang is enabled at all.  Furthermore, they can only be
-# built for certain architectures.
-.if ${MK_CLANG} != "no" && ${COMPILER_TYPE} == "clang" && \
+# sense to build when clang is enabled at all or if we are building world with
+# sanitizer instrumentation.  Furthermore, they can only be built for certain
+# architectures.
+.if ${MK_SANITIZER_SUPPORT} != "no" && ${COMPILER_TYPE} == "clang" && \
     (${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
     ${MACHINE_CPUARCH} == "arm" || ${MACHINE_CPUARCH} == "i386" || \
     ${MACHINE_CPUARCH} == "powerpc")
 _libclang_rt=	libclang_rt
+.elif ${MK_ASAN} != "no" || ${MK_UBSAN} != "no"
+.error "Requested build with sanitizers but cannot build runtime libraries!"
 .endif
 
 .if ${MK_CXX} != "no"

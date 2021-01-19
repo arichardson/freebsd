@@ -22,6 +22,7 @@ __${_this}__: .NOTMAIN
 .-include <local.autodep.mk>
 
 PICO?= .pico
+NOSSPPICO?= .nossppico
 
 .if defined(SRCS)
 # it would be nice to be able to query .SUFFIXES

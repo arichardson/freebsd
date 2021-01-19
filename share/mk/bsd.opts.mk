@@ -66,7 +66,10 @@ __DEFAULT_YES_OPTIONS = \
     TESTS \
     TOOLCHAIN \
     WARNS \
-    WERROR
+    WERROR \
+    ASAN \
+    UBSAN
+
 
 __DEFAULT_NO_OPTIONS = \
     BIND_NOW \
@@ -75,6 +78,7 @@ __DEFAULT_NO_OPTIONS = \
     INIT_ALL_PATTERN \
     INIT_ALL_ZERO \
     INSTALL_AS_USER \
+    MSAN \
     PIE \
     RETPOLINE \
     STALE_STAGED

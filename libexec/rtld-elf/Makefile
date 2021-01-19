@@ -11,6 +11,11 @@ PACKAGE=	clibs
 MK_PIE=		no # Always position independent using local rules
 MK_SSP=		no
 
+# Not (yet?) compatible with sanitizer instrumentation.
+MK_ASAN=	no
+MK_UBSAN=	no
+MK_MSAN=	no
+
 CONFS=		libmap.conf
 PROG?=		ld-elf.so.1
 .if (${PROG:M*ld-elf32*} != "")

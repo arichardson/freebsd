@@ -50,14 +50,16 @@ __FBSDID("$FreeBSD$");
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <langinfo.h>
 #include <limits.h>
+#include <locale.h>
 #include <stdlib.h>
 #include <regex.h>
 #include <stdbool.h>
 #include <wchar.h>
 #include <wctype.h>
 
-#ifndef LIBREGEX
+#if defined(__FreeBSD__) && !defined(LIBREGEX)
 #include "collate.h"
 #endif
 
@@ -1059,7 +1061,7 @@ p_bracket(struct parse *p)
 static int
 p_range_cmp(wchar_t c1, wchar_t c2)
 {
-#ifndef LIBREGEX
+#if defined(__FreeBSD__) && !defined(LIBREGEX)
 	return __wcollate_range_cmp(c1, c2);
 #else
 	/* Copied from libc/collate __wcollate_range_cmp */
@@ -1083,7 +1085,7 @@ p_b_term(struct parse *p, cset *cs)
 	char c;
 	wint_t start, finish;
 	wint_t i;
-#ifndef LIBREGEX
+#if defined(__FreeBSD__) && !defined(LIBREGEX)
 	struct xlocale_collate *table =
 		(struct xlocale_collate*)__get_locale()->components[XLC_COLLATE];
 #endif
@@ -1133,7 +1135,7 @@ p_b_term(struct parse *p, cset *cs)
 		if (start == finish)
 			CHadd(p, cs, start);
 		else {
-#ifndef LIBREGEX
+#if defined(__FreeBSD__) && !defined(LIBREGEX)
 			if (table->__collate_load_error || MB_CUR_MAX > 1) {
 #else
 			if (MB_CUR_MAX > 1) {
@@ -1820,6 +1822,18 @@ stripsnug(struct parse *p, struct re_guts *g)
 	}
 }
 
+static const char *
+get_current_encoding(void)
+{
+#ifndef __FreeBSD__
+	setlocale(LC_ALL, "");
+	char* locstr = setlocale(LC_CTYPE, NULL);
+	return nl_langinfo(CODESET);
+#else
+	return _CurrentRuneLocale->__encoding;
+#endif
+}
+
 /*
  - findmust - fill in must and mlen with longest mandatory literal string
  == static void findmust(struct parse *p, struct re_guts *g);
@@ -1854,7 +1868,7 @@ findmust(struct parse *p, struct re_guts *g)
 	 * UTF-8 (see RFC 3629).
 	 */
 	if (MB_CUR_MAX > 1 &&
-	    strcmp(_CurrentRuneLocale->__encoding, "UTF-8") != 0)
+	    strcmp(get_current_encoding(), "UTF-8") != 0)
 		return;
 
 	/* find the longest OCHAR sequence in strip */

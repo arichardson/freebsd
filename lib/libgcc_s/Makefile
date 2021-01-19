@@ -4,6 +4,12 @@ PACKAGE=	clibs
 SHLIB_NAME=	libgcc_s.so.1
 SHLIBDIR?=	/lib
 
+# Enabling UBSan seems to trigger "undefined reference to vtable for __cxxabiv1::__function_type_info"
+MK_UBSAN:=no
+# XXX: asan seems fine?
+#MK_ASAN:=no
+
+
 .include <bsd.opts.mk>
 
 MK_SSP=		no
