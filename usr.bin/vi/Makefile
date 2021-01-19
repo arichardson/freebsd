@@ -17,10 +17,15 @@ VIEW=	nview
 PROG=	nvi
 
 CFLAGS+=	-D__REGEX_PRIVATE
+CFLAGS+=	-Dregcomp=nvi_regcomp
+CFLAGS+=	-Dregerror=nvi_regerror
+CFLAGS+=	-Dregexec=nvi_regexec
+CFLAGS+=	-Dregfree=nvi_regfree
 
 LINKS=	${BINDIR}/${VI} ${BINDIR}/${EX} ${BINDIR}/${VI} ${BINDIR}/${VIEW}
 LINKS+= ${BINDIR}/${VI} ${BINDIR}/vi ${BINDIR}/${EX} ${BINDIR}/ex
 LINKS+= ${BINDIR}/${VI} ${BINDIR}/view
+
 
 MAN=	${SRCDIR}/man/vi.1
 MLINKS+=vi.1 ex.1 vi.1 view.1
