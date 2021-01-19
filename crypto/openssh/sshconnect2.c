@@ -86,8 +86,8 @@ extern Options options;
  * SSH2 key exchange
  */
 
-u_char *session_id2 = NULL;
-u_int session_id2_len = 0;
+extern u_char *session_id2;
+extern u_int session_id2_len;
 
 char *xxx_host;
 struct sockaddr *xxx_hostaddr;

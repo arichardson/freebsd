@@ -233,8 +233,8 @@ static volatile sig_atomic_t received_sigterm = 0;
 u_char session_id[16];
 
 /* same for ssh2 */
-u_char *session_id2 = NULL;
-u_int session_id2_len = 0;
+extern u_char *session_id2;
+extern u_int session_id2_len;
 
 /* record remote hostname or ip */
 u_int utmp_len = HOST_NAME_MAX+1;
