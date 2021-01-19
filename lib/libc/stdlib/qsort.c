@@ -92,14 +92,14 @@ __unused
 }
 
 #if defined(I_AM_QSORT_R)
-void
+void __attribute__((__visibility__("protected")))
 qsort_r(void *a, size_t n, size_t es, void *thunk, cmp_t *cmp)
 #elif defined(I_AM_QSORT_S)
-errno_t
+errno_t __attribute__((__visibility__("protected")))
 qsort_s(void *a, rsize_t n, rsize_t es, cmp_t *cmp, void *thunk)
 #else
 #define	thunk NULL
-void
+void __attribute__((__visibility__("protected")))
 qsort(void *a, size_t n, size_t es, cmp_t *cmp)
 #endif
 {
