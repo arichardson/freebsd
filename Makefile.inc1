@@ -1002,7 +1002,7 @@ _worldtmp: .PHONY
 	@echo "--------------------------------------------------------------"
 .if ${MK_CLEAN} == "yes"
 	rm -rf ${WORLDTMP}
-.else
+.elif !defined(I_REALLY_MEAN_NO_CLEAN)
 # Note: for delete-old we need to set $PATH to also include the host $PATH
 # since otherwise a partial build with missing symlinks in ${WORLDTMP}/legacy/
 # will fail to run due to missing binaries. $WMAKE sets PATH to only ${TMPPATH}
