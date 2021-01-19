@@ -24,6 +24,18 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+/*
+ * CHERI CHANGES START
+ * {
+ *   "updated": 20181114,
+ *   "target_type": "lib",
+ *   "changes": [
+ *     "unsupported"
+ *   ],
+ *   "change_comment": "aligned word reads within a page aren't always safe"
+ * }
+ * CHERI CHANGES END
+ */
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -32,6 +44,21 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <string.h>
 
+#if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
+/* Simple strlen implementation that does not read out-of-bounds. */
+size_t
+strlen(const char *str)
+{
+	const char *p;
+
+	p = str;
+
+	while (*p != '\0')
+		p++;
+
+	return (p - str);
+}
+#else
 /*
  * Portable strlen() for 32-bit and 64-bit systems.
  *
@@ -129,3 +156,4 @@ strlen(const char *str)
 	/* NOTREACHED */
 	return (0);
 }
+#endif
