@@ -90,7 +90,6 @@ TESTS_SRCS= \
 	test_entry_strmode.c			\
 	test_extattr_freebsd.c			\
 	test_filter_count.c			\
-	test_fuzz.c				\
 	test_gnutar_filename_encoding.c		\
 	test_link_resolver.c			\
 	test_open_fd.c				\
@@ -303,9 +302,17 @@ TESTS_SRCS= \
 # Fails with `test_read_disk_directory_traversals.c:1094: File at has atime 886622, 1443306049 seconds ago`
 BROKEN_TESTS+=			test_read_disk_directory_traversals
 
+.if defined(LIBARCHIVE_INCLUDE_TEST_FUZZ)
+# test_fuzz.c is not a real test, but rather a simple fuzz-test using random().
+# Since this is not a regression/unit test, we don't include it by default
+TEST_SCRCS+=	test_fuzz.c
+${PACKAGE}FILES+=	test_fuzz.cab.uu
+${PACKAGE}FILES+=	test_fuzz.lzh.uu
+${PACKAGE}FILES+=	test_fuzz_1.iso.Z.uu
 # Non-deterministic failures:
 # (Times out?) [and] crashes
 BROKEN_TESTS+=			test_fuzz_rar
+.endif
 
 # https://bugs.freebsd.org/240683
 BROKEN_TESTS+=			test_write_filter_zstd
@@ -383,9 +390,6 @@ ${PACKAGE}FILES+=	test_compat_zip_7.xps.uu
 ${PACKAGE}FILES+=	test_compat_zip_8.zip.uu
 ${PACKAGE}FILES+=	test_compat_zstd_1.tar.zst.uu
 ${PACKAGE}FILES+=	test_compat_zstd_2.tar.zst.uu
-${PACKAGE}FILES+=	test_fuzz.cab.uu
-${PACKAGE}FILES+=	test_fuzz.lzh.uu
-${PACKAGE}FILES+=	test_fuzz_1.iso.Z.uu
 ${PACKAGE}FILES+=	test_pax_filename_encoding.tar.uu
 ${PACKAGE}FILES+=	test_pax_xattr_header_all.tar.uu
 ${PACKAGE}FILES+=	test_pax_xattr_header_libarchive.tar.uu
