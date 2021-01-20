@@ -60,10 +60,9 @@ legacy: .MAKE ${META_DEPS}
 	${BSENV} ${MAKE} -C ${SRCTOP} -f Makefile.inc1 ${BSARGS} $@
 
 bootstrap-tools: legacy
-build-tools: bootstrap-tools
-cross-tools: build-tools
+cross-tools: bootstrap-tools
 
-cross-tools build-tools bootstrap-tools: .MAKE ${META_DEPS}
+cross-tools bootstrap-tools: .MAKE ${META_DEPS}
 	${BSENV} ${MAKE} -C ${SRCTOP} -f Makefile.inc1 ${BSARGS} $@
 
 # MAKELEVEL=0 so that dirdeps.mk does its thing

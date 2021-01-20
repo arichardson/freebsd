@@ -24,8 +24,6 @@
 #	    target
 #	LOCAL_BSTOOL_DIRS="list of dirs" to add additional dirs to the
 #	    bootstrap-tools target
-#	LOCAL_TOOL_DIRS="list of dirs" to add additional dirs to the build-tools
-#	    target
 #	LOCAL_XTOOL_DIRS="list of dirs" to add additional dirs to the
 #	    cross-tools target
 #	METALOG="path to metadata log" to write permission and ownership
@@ -482,7 +480,6 @@ NO_KERNELOBJ=	t
 _obj=		obj
 .endif
 
-LOCAL_TOOL_DIRS?=
 PACKAGEDIR?=	${DESTDIR}/${DISTDIR}
 
 .if empty(SHELL:M*csh*)
@@ -664,26 +661,19 @@ PACKAGE=	kernel
 # 1. legacy stage [BMAKE]
 #	This stage is responsible for creating compatibility
 #	shims that are needed by the bootstrap-tools,
-#	build-tools and cross-tools stages. These are generally
-#	APIs that tools from one of those three stages need to
+#	and cross-tools stages. These are generally
+#	APIs that tools from one of those two stages need to
 #	build that aren't present on the host.
-# 1. bootstrap-tools stage [BMAKE]
+# 2. bootstrap-tools stage [BMAKE]
 #	This stage is responsible for creating programs that
-#	are needed for backward compatibility reasons. They
+#	are needed for backward compatibility reasons (or to
+#	support building on non-FreeBSD hosts). They
 #	are not built as cross-tools.
-# 2. build-tools stage [TMAKE]
-#	This stage is responsible for creating the object
-#	tree and building any tools that are needed during
-#	the build process. Some programs are listed during
-#	this phase because they build binaries to generate
-#	files needed to build these programs. This stage also
-#	builds the 'build-tools' target rather than 'all'.
 # 3. cross-tools stage [XMAKE]
 #	This stage is responsible for creating any tools that
 #	are needed for building the system. A cross-compiler is one
-#	of them. This differs from build tools in two ways:
-#	1. the 'all' target is built rather than 'build-tools'
-#	2. these tools are installed into TMPPATH for stage 4.
+#	of them. This builds the 'all' target and installs these
+#	tools into TMPPATH for stage 4.
 # 4. world stage [WMAKE]
 #	This stage actually builds the world.
 # 5. install stage (optional) [IMAKE]
@@ -700,10 +690,6 @@ CROSSENV+=	\
 		MACHINE_ARCH=${TARGET_ARCH} \
 		MACHINE=${TARGET} \
 		CPUTYPE=${TARGET_CPUTYPE}
-.if ${MK_META_MODE} != "no"
-# Don't rebuild build-tools targets during normal build.
-CROSSENV+=	BUILD_TOOLS_META=.NOMETA
-.endif
 .if defined(TARGET_CFLAGS)
 CROSSENV+=	${TARGET_CFLAGS}
 .endif
@@ -744,21 +730,6 @@ BMAKE=		\
 BMAKE+=		MK_LLVM_TARGET_ALL=no
 .endif
 
-# build-tools stage
-TMAKE=		\
-		${BMAKEENV} ${MAKE} ${WORLD_FLAGS} -f Makefile.inc1 \
-		TARGET=${TARGET} TARGET_ARCH=${TARGET_ARCH} \
-		DESTDIR= \
-		BOOTSTRAPPING=${BOOTSTRAPPING_OSRELDATE} \
-		BWPHASE=${.TARGET:C,^_,,} \
-		SSP_CFLAGS= \
-		-DNO_LINT \
-		-DNO_CPU_CFLAGS MK_WERROR=no MK_CTF=no \
-		MK_ASAN=${BOOTSTRAP_TOOLS_ASAN:Uno} \
-		MK_UBSAN=${BOOTSTRAP_TOOLS_UBSAN:Uno} \
-		MK_CLANG_EXTRAS=no MK_CLANG_FORMAT=no MK_CLANG_FULL=no \
-		MK_LLDB=no MK_RETPOLINE=no MK_TESTS=no
-
 # cross-tools stage
 # TOOLS_PREFIX set in BMAKE
 XMAKE=		${BMAKE} \
@@ -797,7 +768,7 @@ HMAKE=		PATH=${TMPPATH} ${MAKE} LOCAL_MTREE=${LOCAL_MTREE:Q}
 HMAKE+=		PATH=${TMPPATH} METALOG=${METALOG} -DNO_ROOT
 .endif
 
-# Note: Currently BUILD_TOOLS_CC does not add -legacy since all build-tools are
+# Note: Currently BUILD_TOOLS_CC does not add -legacy since all build tools are
 # simple tools that compile without custom flags on all supported build hosts.
 # If this changes in the future we can add the required -I flags and -legacy
 CROSSENV+=	CC="${XCC} ${XCFLAGS}" CXX="${XCXX} ${XCXXFLAGS} ${XCFLAGS}" \
@@ -1093,12 +1064,6 @@ _obj:
 	@echo ">>> stage 2.2: rebuilding the object tree"
 	@echo "--------------------------------------------------------------"
 	${_+_}cd ${.CURDIR}; ${WMAKE} _NO_INCLUDE_COMPILERMK=t obj
-_build-tools:
-	@echo
-	@echo "--------------------------------------------------------------"
-	@echo ">>> stage 2.3: build tools"
-	@echo "--------------------------------------------------------------"
-	${_+_}cd ${.CURDIR}; ${TMAKE} build-tools
 _cross-tools:
 	@echo
 	@echo "--------------------------------------------------------------"
@@ -1152,7 +1117,7 @@ WMAKE_TGTS+=	_cleanobj
 .if !defined(NO_OBJWALK)
 WMAKE_TGTS+=	_obj
 .endif
-WMAKE_TGTS+=	_build-tools _cross-tools
+WMAKE_TGTS+=	_cross-tools
 WMAKE_TGTS+=	_build-metadata
 WMAKE_TGTS+=	_includes
 .endif
@@ -2140,8 +2105,8 @@ update: .PHONY
 #
 # legacy: Build compatibility shims for the next three targets. This is a
 # minimal set of tools and shims necessary to compensate for older systems
-# which don't have the APIs required by the targets built in bootstrap-tools,
-# build-tools or cross-tools.
+# which don't have the APIs required by the targets built in bootstrap-tools
+# or cross-tools.
 #
 legacy: .PHONY
 .if ${BOOTSTRAPPING} < ${MINIMUM_SUPPORTED_OSREL} && ${BOOTSTRAPPING} != 0
@@ -2531,31 +2496,6 @@ ${_bt}-sbin/md5: ${_bt}-lib/libmd
 ${_bt}-lib/libnetbsd: ${_bt}-lib/libmd
 .endif
 .endif
-
-
-#
-# build-tools: Build special purpose build tools
-#
-
-# kernel-toolchain skips _cleanobj, so handle cleaning up previous
-# build-tools directories if needed.
-.if ${MK_CLEAN} == "yes" && make(kernel-toolchain)
-_bt_clean=	${CLEANDIR}
-.endif
-
-.if !empty(LOCAL_TOOL_DIRS)
-.warning "LOCAL_TOOL_DIRS is deprecated, please use BUILD_TOOLS_CC instead"
-.endif
-
-.for _tool in ${LOCAL_TOOL_DIRS}
-build-tools_${_tool}: .PHONY
-	${_+_}@${ECHODIR} "===> ${_tool} (${_bt_clean:D${_bt_clean},}obj,build-tools)"; \
-		cd ${.CURDIR}/${_tool}; \
-		if [ -n "${_bt_clean}" ]; then ${MAKE} DIRPRFX=${_tool}/ ${_bt_clean}; fi; \
-		if [ -z "${NO_OBJWALK}" ]; then ${MAKE} DIRPRFX=${_tool}/ obj; fi; \
-		${MAKE} DIRPRFX=${_tool}/ build-tools
-build-tools: build-tools_${_tool}
-.endfor
 
 #
 # kernel-tools: Build kernel-building tools
@@ -3436,17 +3376,13 @@ CDTMP=	${OBJTOP}/${XDDIR}/tmp
 CDMAKE=${CDENV} PATH=${CDTMP}/usr/bin:${PATH} ${MAKE} ${CDMAKEARGS} ${NOFUN}
 CD2MAKE=${CD2ENV} PATH=${CDTMP}/usr/bin:${XDDESTDIR}/usr/bin:${PATH} \
 	${MAKE} ${CD2MAKEARGS} ${NOFUN}
-.if ${MK_META_MODE} != "no"
-# Don't rebuild build-tools targets during normal build.
-CD2MAKE+=	BUILD_TOOLS_META=.NOMETA
-.endif
 XDDESTDIR=${DESTDIR}${XDTP}
 
 .ORDER: xdev-build xdev-install xdev-links
 xdev: xdev-build xdev-install .PHONY
 
-.ORDER: _xb-worldtmp _xb-bootstrap-tools _xb-build-tools _xb-cross-tools
-xdev-build: _xb-worldtmp _xb-bootstrap-tools _xb-build-tools _xb-cross-tools .PHONY
+.ORDER: _xb-worldtmp _xb-bootstrap-tools _xb-cross-tools
+xdev-build: _xb-worldtmp _xb-bootstrap-tools _xb-cross-tools .PHONY
 
 _xb-worldtmp: .PHONY
 	mkdir -p ${CDTMP}/usr
@@ -3463,10 +3399,6 @@ _xb-bootstrap-tools: .PHONY
 	${CDMAKE} DIRPRFX=${_tool}/ all; \
 	${CDMAKE} DIRPRFX=${_tool}/ DESTDIR=${CDTMP} install
 .endfor
-
-_xb-build-tools: .PHONY
-	${_+_}@cd ${.CURDIR}; \
-	${CDBENV} ${MAKE} ${CDMAKEARGS} -f Makefile.inc1 ${NOFUN} build-tools
 
 XDEVDIRS= \
     ${_clang_libs} \
