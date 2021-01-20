@@ -20,8 +20,6 @@ BINDIR?=/sbin
 #  CRUNCH_LIBS:  libraries to statically link with
 #  CRUNCH_SHLIBS:  libraries to dynamically link with
 #  CRUNCH_BUILDOPTS: generic build options to be added to every program
-#  CRUNCH_BUILDTOOLS: lists programs that need build tools built in the
-#	local architecture.
 #
 # Special options can be specified for individual programs
 #  CRUNCH_SRCDIR_$(P): base source directory for program $(P)
@@ -39,10 +37,6 @@ CRUNCH_BUILDOPTS+= -DRESCUE
 
 # Don't do symlinks as part of the install
 CRUNCH_GENERATE_LINKS= no
-
-# Which sources have local-arch build tools?
-# Define as blank; othrs need to override
-CRUNCH_BUILDTOOLS=
 
 ###################################################################
 # Programs from stock /bin

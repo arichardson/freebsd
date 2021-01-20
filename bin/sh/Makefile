@@ -39,25 +39,26 @@ CFLAGS+=-DSHELL -I. -I${.CURDIR}
 CLEANFILES+= mknodes mksyntax
 CLEANFILES+= ${GENSRCS} ${GENHDRS}
 
-build-tools: mknodes mksyntax
-
 .ORDER: builtins.c builtins.h
 builtins.h: .NOMETA
 builtins.c builtins.h: mkbuiltins builtins.def
 	sh ${.CURDIR}/mkbuiltins ${.CURDIR}
 
 DEPENDOBJS+= mknodes mksyntax
-mknodes mksyntax: ${BUILD_TOOLS_META}
+mknodes: mknodes.c
+	${BUILD_TOOLS_CC} ${.IMPSRC} -o ${.TARGET}
+mksyntax: mksyntax.c
+	${BUILD_TOOLS_CC} ${.IMPSRC} -o ${.TARGET}
 
 .ORDER: nodes.c nodes.h
 nodes.h: .NOMETA
 nodes.c nodes.h: mknodes nodetypes nodes.c.pat
-	${BTOOLSPATH:U.}/mknodes ${.CURDIR}/nodetypes ${.CURDIR}/nodes.c.pat
+	./mknodes ${.CURDIR}/nodetypes ${.CURDIR}/nodes.c.pat
 
 .ORDER: syntax.c syntax.h
 syntax.h: .NOMETA
 syntax.c syntax.h: mksyntax
-	${BTOOLSPATH:U.}/mksyntax
+	./mksyntax
 
 token.h: mktokens
 	sh ${.CURDIR}/mktokens

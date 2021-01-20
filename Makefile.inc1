@@ -356,6 +356,7 @@ _TOOLCHAIN_METADATA_VARS=	COMPILER_VERSION \
 				COMPILER_FEATURES \
 				COMPILER_FREEBSD_VERSION \
 				COMPILER_RESOURCE_DIR \
+				COMPILER_ABSOLUTE_PATH \
 				LINKER_VERSION \
 				LINKER_FEATURES \
 				LINKER_TYPE \
@@ -796,8 +797,12 @@ HMAKE=		PATH=${TMPPATH} ${MAKE} LOCAL_MTREE=${LOCAL_MTREE:Q}
 HMAKE+=		PATH=${TMPPATH} METALOG=${METALOG} -DNO_ROOT
 .endif
 
+# Note: Currently BUILD_TOOLS_CC does not add -legacy since all build-tools are
+# simple tools that compile without custom flags on all supported build hosts.
+# If this changes in the future we can add the required -I flags and -legacy
 CROSSENV+=	CC="${XCC} ${XCFLAGS}" CXX="${XCXX} ${XCXXFLAGS} ${XCFLAGS}" \
 		CPP="${XCPP} ${XCFLAGS}" \
+		BUILD_TOOLS_CC="${COMPILER_ABSOLUTE_PATH} -B${COMPILER_ABSOLUTE_PATH:H} ${CFLAGS} ${LDFLAGS}" \
 		AS="${XAS}" AR="${XAR}" LD="${XLD}" LLVM_LINK="${XLLVM_LINK}" \
 		NM=${XNM} OBJCOPY="${XOBJCOPY}" \
 		RANLIB=${XRANLIB} STRINGS=${XSTRINGS} \
@@ -2531,27 +2536,6 @@ ${_bt}-lib/libnetbsd: ${_bt}-lib/libmd
 #
 # build-tools: Build special purpose build tools
 #
-.if !defined(NO_SHARE) && ${MK_SYSCONS} != "no"
-_share=	share/syscons/scrnmaps
-.endif
-
-.if ${MK_RESCUE} != "no"
-# rescue includes programs that have build-tools targets
-_rescue=rescue/rescue
-.endif
-
-.if ${MK_TCSH} != "no"
-_tcsh=bin/csh
-.endif
-.if ${MK_FILE} != "no"
-_libmagic=lib/libmagic
-.endif
-
-.if ${MK_PMC} != "no" && \
-    (${TARGET_ARCH} == "aarch64" || ${TARGET_ARCH} == "amd64" || \
-    ${TARGET_ARCH} == "i386")
-_jevents=lib/libpmc/pmu-events
-.endif
 
 # kernel-toolchain skips _cleanobj, so handle cleaning up previous
 # build-tools directories if needed.
@@ -2559,17 +2543,11 @@ _jevents=lib/libpmc/pmu-events
 _bt_clean=	${CLEANDIR}
 .endif
 
-.for _tool in \
-    ${_tcsh} \
-    bin/sh \
-    ${LOCAL_TOOL_DIRS} \
-    ${_jevents} \
-    lib/ncurses/ncurses \
-    ${_rescue} \
-    ${_share} \
-    usr.bin/awk \
-    ${_libmagic} \
-    usr.bin/vi/catalog
+.if !empty(LOCAL_TOOL_DIRS)
+.warning "LOCAL_TOOL_DIRS is deprecated, please use BUILD_TOOLS_CC instead"
+.endif
+
+.for _tool in ${LOCAL_TOOL_DIRS}
 build-tools_${_tool}: .PHONY
 	${_+_}@${ECHODIR} "===> ${_tool} (${_bt_clean:D${_bt_clean},}obj,build-tools)"; \
 		cd ${.CURDIR}/${_tool}; \

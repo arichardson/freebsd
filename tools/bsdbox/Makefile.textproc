@@ -11,7 +11,6 @@ CRUNCH_PROGS_usr.bin+=	sed
 # Awk
 # Disable - it's big! -adrian
 #CRUNCH_PROGS_usr.bin+=	awk
-#CRUNCH_BUILDTOOLS+=	usr.bin/awk
 
 # vi
 # Disable - it's big! -adrian

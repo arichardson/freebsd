@@ -18,22 +18,13 @@ EVENT_ARCH="x86"
 EVENT_ARCH="powerpc"
 .endif
 
-.if ${MK_DIRDEPS_BUILD} == "yes"
-# avoid circular dependency
-GENDIRDEPS_FILTER+= N${RELDIR:H}/libpmcstat
-JEVENTS?= ${HOST_OBJTOP}/${RELDIR}/pmu-events/jevents
-.else
-JEVENTS= ${BTOOLSPATH:U.}/pmu-events/jevents
+CLEANFILES+=jevents
+jevents: pmu-events/jevents.c pmu-events/jsmn.c pmu-events/json.c
+	${BUILD_TOOLS_CC} ${.ALLSRC:M*.c} -I${.CURDIR}/pmu-events \
+	    -Wno-cast-qual -o ${.TARGET}
 
-# This file is built in a subdirectory so never try to rebuild it here.
-${JEVENTS}: .PHONY
-.if make(*clean*)
-SUBDIR+= pmu-events
-.endif
-.endif
-
-libpmc_events.c: ${JEVENTS} .META
-	${JEVENTS} ${EVENT_ARCH} ${.CURDIR}/pmu-events/arch ${.TARGET}.tmp
+libpmc_events.c: jevents .META
+	./jevents ${EVENT_ARCH} ${.CURDIR}/pmu-events/arch ${.TARGET}.tmp
 	if [ ! -e ${.TARGET} ] || ! cmp -s ${.TARGET} ${.TARGET}.tmp; then \
 		mv -f ${.TARGET}.tmp ${.TARGET}; \
 	fi

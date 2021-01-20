@@ -11,8 +11,6 @@
 #  CRUNCH_LIBS:  libraries to statically link with
 #  CRUNCH_SHLIBS:  libraries to dynamically link with
 #  CRUNCH_BUILDOPTS: generic build options to be added to every program
-#  CRUNCH_BUILDTOOLS: lists programs that need build tools built in the
-#       local architecture.
 #
 # Special options can be specified for individual programs
 #  CRUNCH_SRCDIR_${P}: base source directory for program ${P}
@@ -141,18 +139,6 @@ ${PROG}: ${OUTPUTS} objs .NOMETA .PHONY
 objs: ${OUTMK} .META
 	${CRUNCHENV} MAKEOBJDIRPREFIX=${CRUNCHOBJS} \
 	    ${MAKE} -f ${OUTMK} ${CRUNCHARGS} BUILD_TOOLS_META=.NOMETA objs
-
-# <sigh> Someone should replace the bin/csh and bin/sh build-tools with
-# shell scripts so we can remove this nonsense.
-.for _tool in ${CRUNCH_BUILDTOOLS}
-build-tools-${_tool}:
-	${_+_}cd ${.CURDIR}/../../${_tool}; \
-	    if [ "${MK_AUTO_OBJ}" = "no" ]; then \
-	        ${CRUNCHENV} MAKEOBJDIRPREFIX=${CRUNCHOBJS} ${MAKE} obj; \
-	    fi; \
-	    ${CRUNCHENV} MAKEOBJDIRPREFIX=${CRUNCHOBJS} ${MAKE} build-tools
-build-tools: build-tools-${_tool}
-.endfor
 
 # Use a separate build tree to hold files compiled for this crunchgen binary
 # Yes, this does seem to partly duplicate bsd.subdir.mk, but I can't

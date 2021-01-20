@@ -19,7 +19,6 @@ SCAN=	${V}/cl/*.c ${V}/common/*.c ${V}/ex/*.c ${V}/vi/*.c
 
 all:		dump
 
-build-tools:	dump
 WARNS=		3
 
 # Helper since iconv is non trivial to make a build tool
@@ -99,7 +98,7 @@ ${c}.check: ${c}.base
 .endfor
 
 english.base: dump ${SCAN} #Makefile
-	${BTOOLSPATH:U.}/dump ${SCAN} |\
+	./dump ${SCAN} |\
 	sed -e '/|/!d' \
 	    -e 's/|/ "/' \
 	    -e 's/^"//' |\
@@ -107,7 +106,8 @@ english.base: dump ${SCAN} #Makefile
 
 
 DEPENDOBJS+=	dump
-dump: ${BUILD_TOOLS_META}
+dump: dump.c
+	${BUILD_TOOLS_CC} -o ${.TARGET} ${.IMPSRC}
 
 CLEANFILES+= dump ${CAT} english.base *.check __ck1 __ck2
 

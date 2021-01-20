@@ -29,7 +29,6 @@ CRUNCH_PROGS_usr.bin+=	tput
 CRUNCH_PROGS_bin+=	sh
 CRUNCH_ALIAS_sh= -sh
 CRUNCH_SUPPRESS_LINK_-sh=	1
-CRUNCH_BUILDTOOLS+=	bin/sh
 
 # chown
 CRUNCH_PROGS_usr.sbin+=	chown

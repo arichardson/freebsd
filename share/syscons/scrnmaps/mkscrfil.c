@@ -28,8 +28,8 @@
  * $FreeBSD$
  */
 
-#include <sys/ioctl.h>
-#include <sys/consio.h>
+/* Use a relative path to always use the scrmap_t definition of the target. */
+#include "../../../sys/sys/_scrmap.h"
 #include <stdio.h>
 
 #include FIL

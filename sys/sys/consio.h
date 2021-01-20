@@ -36,6 +36,7 @@
 #ifndef _KERNEL
 #include <sys/types.h>
 #endif
+#include <sys/_scrmap.h>
 #include <sys/ioccom.h>
 #include <sys/font.h>
 
@@ -68,11 +69,6 @@ typedef struct _scr_size	scr_size_t;
 #define KDRASTER	_IOW('K', 100, scr_size_t)
 
 /* get/set screen char map */
-struct _scrmap {
-	char		scrmap[256];
-};
-typedef struct _scrmap	scrmap_t;
-
 #define GIO_SCRNMAP	_IOR('k', 2, scrmap_t)
 #define PIO_SCRNMAP	_IOW('k', 3, scrmap_t)
 

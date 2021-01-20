@@ -56,7 +56,6 @@ CRUNCH_PROGS_bin= cat chflags chio chmod cp date dd df echo 	\
 	 pkill ps pwd realpath rm rmdir setfacl sh sleep stty	\
 	 sync test
 CRUNCH_LIBS+= -lcrypt -ledit -ljail -lkvm -lelf -ltermcapw -lutil -lxo
-CRUNCH_BUILDTOOLS+= bin/sh
 
 # Additional options for specific programs
 CRUNCH_ALIAS_test= [
@@ -71,7 +70,6 @@ CRUNCH_ALIAS_pkill= pgrep
 .if ${MK_TCSH} != "no"
 CRUNCH_PROGS_bin+= csh
 CRUNCH_ALIAS_csh= -csh tcsh -tcsh
-CRUNCH_BUILDTOOLS+= bin/csh
 CRUNCH_SUPPRESS_LINK_-csh= 1
 CRUNCH_SUPPRESS_LINK_-tcsh= 1
 .endif

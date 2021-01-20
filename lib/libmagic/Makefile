@@ -22,8 +22,10 @@ INCS=	magic.h
 
 MAGICPATH?=	/usr/share/misc
 
-CFLAGS+= -DMAGIC='"${MAGICPATH}/magic"' -DHAVE_CONFIG_H
-CFLAGS+= -I${.CURDIR} -I${.OBJDIR} -I${CONTRDIR}/src
+COMMON_CFLAGS+=	-DMAGIC='"${MAGICPATH}/magic"' -DHAVE_CONFIG_H
+COMMON_CFLAGS+=	-I${.CURDIR} -I${.OBJDIR} -I${CONTRDIR}/src
+CFLAGS+=	${COMMON_CFLAGS}
+MKMAGIC_CFLAGS+=${COMMON_CFLAGS}
 
 WARNS?=		3
 
@@ -53,22 +55,14 @@ magic: ${MAGFILES}
 	cat ${.ALLSRC:O} > ${.TARGET}
 
 magic.mgc: magic
-	${BTOOLSPATH:U.}/mkmagic magic
+	./mkmagic magic
 
-.if ${MACHINE} == "host" || ${MK_DIRDEPS_BUILD} == "no"
 CLEANFILES+=	mkmagic
 DEPENDOBJS+=	mkmagic
-build-tools: mkmagic
-mkmagic: apprentice.c cdf_time.c encoding.c funcs.c magic.c print.c ${INCS} ${BUILD_TOOLS_META}
-	${CC:N${CCACHE_BIN}} ${CFLAGS} -DCOMPILE_ONLY ${LDFLAGS} -o ${.TARGET} \
+mkmagic: apprentice.c cdf_time.c encoding.c funcs.c magic.c print.c ${INCS}
+	${BUILD_TOOLS_CC} ${MKMAGIC_CFLAGS} -DCOMPILE_ONLY -o ${.TARGET} \
 	    ${.ALLSRC:N*.h:O:u} ${LDADD}
-
-.endif
-.if ${MK_DIRDEPS_BUILD} == "yes"
-BTOOLSPATH= ${HOST_OBJTOP}/${RELDIR}
-.else
 magic.mgc: mkmagic
-.endif
 
 FILEVER!= awk '$$1 == "\#define" && $$2 == "VERSION" { print $$3; exit }' \
 			${.CURDIR}/config.h

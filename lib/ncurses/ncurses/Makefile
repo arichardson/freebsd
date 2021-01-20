@@ -353,7 +353,7 @@ unctrl.c: MKunctrl.awk
 	echo | ${AWK} -f ${NCURSES_DIR}/ncurses/base/MKunctrl.awk bigstrings=${USE_BIG_STRINGS} > unctrl.c
 
 comp_captab.c: MKcaptab.sh MKcaptab.awk Caps Caps-ncurses make_hash
-	env PATH=${BTOOLSPATH:U.}:${PATH} sh ${NCURSES_DIR}/ncurses/tinfo/MKcaptab.sh "${AWK}" \
+	env PATH=.:${PATH} sh ${NCURSES_DIR}/ncurses/tinfo/MKcaptab.sh "${AWK}" \
 	    ${USE_BIG_STRINGS} ${NCURSES_DIR}/ncurses/tinfo/MKcaptab.awk \
 	    ${NCURSES_DIR}/include/Caps ${NCURSES_DIR}/include/Caps-ncurses > comp_captab.c
 
@@ -365,7 +365,7 @@ fallback.c: MKfallback.sh
 	    mv -f ${.TARGET}.tmp ${.TARGET}
 
 comp_userdefs.c: MKuserdefs.sh Caps Caps-ncurses make_hash
-	env PATH=${BTOOLSPATH:U.}:${PATH} sh -x ${NCURSES_DIR}/ncurses/tinfo/MKuserdefs.sh "${AWK}" \
+	env PATH=.:${PATH} sh -x ${NCURSES_DIR}/ncurses/tinfo/MKuserdefs.sh "${AWK}" \
 	    ${USE_BIG_STRINGS} ${NCURSES_DIR}/include/Caps ${NCURSES_DIR}/include/Caps-ncurses > ${.TARGET}
 
 # Generated headers
@@ -374,7 +374,7 @@ nomacros.h: MKlib_gen.sh curses.h
 	    "${AWK}" generated < curses.h | fgrep undef > $@
 
 init_keytry.h: keys.list make_keys
-	${BTOOLSPATH:U${.OBJDIR}}/make_keys keys.list > init_keytry.h
+	${.OBJDIR}/make_keys keys.list > init_keytry.h
 
 hashsize.h: MKhashsize.sh Caps Caps-ncurses
 	sh ${NCURSES_DIR}/include/MKhashsize.sh ${NCURSES_DIR}/include/Caps ${NCURSES_DIR}/include/Caps-ncurses > $@
@@ -403,14 +403,16 @@ keys.list: MKkeys_list.sh Caps Caps-ncurses
 
 # Build tools
 DEPENDOBJS+= make_hash make_keys
-build-tools: make_hash make_keys
+BUILD_TOOLS_CFLAGS+=	-I. -I${.CURDIR}/../ncurses
+BUILD_TOOLS_CFLAGS+=	-I${NCURSES_DIR}/ncurses -I${NCURSES_DIR}/include
 
-make_keys: make_keys.c names.c ncurses_def.h ${HEADERS} ${BUILD_TOOLS_META}
-	${CC:N${CCACHE_BIN}} -o $@ ${CFLAGS} ${NCURSES_DIR}/ncurses/tinfo/make_keys.c
+make_keys: make_keys.c names.c ncurses_def.h ${HEADERS} ${SRCHDRS}
+	${BUILD_TOOLS_CC} -o ${.TARGET} ${BUILD_TOOLS_CFLAGS} \
+	    ${NCURSES_DIR}/ncurses/tinfo/make_keys.c
 
-make_hash: make_hash.c hashsize.h ncurses_def.h ${HEADERS} ${BUILD_TOOLS_META}
-	${CC:N${CCACHE_BIN}} -o $@ ${CFLAGS} -DMAIN_PROGRAM \
-		${NCURSES_DIR}/ncurses/tinfo/make_hash.c
+make_hash: make_hash.c hashsize.h ncurses_def.h ${HEADERS} ${SRCHDRS}
+	${BUILD_TOOLS_CC} -o ${.TARGET} ${BUILD_TOOLS_CFLAGS} -DMAIN_PROGRAM \
+	    ${NCURSES_DIR}/ncurses/tinfo/make_hash.c
 
 # ./configure generated
 MKterm.h.awk: MKterm.h.awk.in

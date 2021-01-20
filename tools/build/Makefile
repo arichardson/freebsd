@@ -256,8 +256,6 @@ SYSINCS+=	${SRCTOP}/sys/sys/tree.h
 
 # vtfontcvt is using sys/font.h
 SYSINCS+=	${SRCTOP}/sys/sys/font.h
-# For mkscrfil.c:
-SYSINCS+=	${SRCTOP}/sys/sys/consio.h
 # for gencat:
 INCS+=	${SRCTOP}/include/nl_types.h
 # for vtfontcvt:
