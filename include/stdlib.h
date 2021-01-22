@@ -84,7 +84,7 @@ __BEGIN_DECLS
 #include <xlocale/_stdlib.h>
 #endif
 extern int __mb_cur_max;
-extern int ___mb_cur_max(void);
+extern int ___mb_cur_max(void) __pure;
 #define	MB_CUR_MAX	((size_t)___mb_cur_max())
 
 _Noreturn void	 abort(void);
