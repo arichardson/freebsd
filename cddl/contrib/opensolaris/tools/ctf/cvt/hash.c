@@ -76,7 +76,7 @@ hash_name(int nbuckets, const char *name)
 {
 	const char *c;
 	ulong_t g;
-	int h = 0;
+	unsigned h = 0;
 
 	for (c = name; *c; c++) {
 		h = (h << 4) + *c;

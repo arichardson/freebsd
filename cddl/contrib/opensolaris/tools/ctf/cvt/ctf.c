@@ -1205,7 +1205,7 @@ resurrect_types(ctf_header_t *h, tdata_t *td, tdesc_t **tdarr, int tdsize,
 			tdp->t_fndef = xcalloc(sizeof (fndef_t));
 			tdp->t_fndef->fn_ret = tdarr[ctt->ctt_type];
 
-			v = (void *) (dptr + (sizeof (ushort_t) * (vlen - 1)));
+			v = (void *) (dptr + (ptrdiff_t)(sizeof (ushort_t) * (vlen - 1)));
 			if (vlen > 0 && *(ushort_t *)v == 0)
 				tdp->t_fndef->fn_vargs = 1;
 
