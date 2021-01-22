@@ -284,13 +284,13 @@ _dwarf_read_sleb128(uint8_t *data, uint64_t *offsetp)
 
 	do {
 		b = *src++;
-		ret |= ((b & 0x7f) << shift);
+		ret |= ((uint64_t)(b & 0x7f) << shift);
 		(*offsetp)++;
 		shift += 7;
 	} while ((b & 0x80) != 0);
 
 	if (shift < 64 && (b & 0x40) != 0)
-		ret |= (-1 << shift);
+		ret |= (UINT64_MAX << shift);
 
 	return (ret);
 }
@@ -353,7 +353,7 @@ _dwarf_read_uleb128(uint8_t *data, uint64_t *offsetp)
 
 	do {
 		b = *src++;
-		ret |= ((b & 0x7f) << shift);
+		ret |= ((uint64_t)(b & 0x7f) << shift);
 		(*offsetp)++;
 		shift += 7;
 	} while ((b & 0x80) != 0);
@@ -415,12 +415,12 @@ _dwarf_decode_sleb128(uint8_t **dp)
 
 	do {
 		b = *src++;
-		ret |= ((b & 0x7f) << shift);
+		ret |= ((uint64_t)(b & 0x7f) << shift);
 		shift += 7;
 	} while ((b & 0x80) != 0);
 
 	if (shift < 64 && (b & 0x40) != 0)
-		ret |= (-1 << shift);
+		ret |= (UINT64_MAX << shift);
 
 	*dp = src;
 
@@ -438,7 +438,7 @@ _dwarf_decode_uleb128(uint8_t **dp)
 
 	do {
 		b = *src++;
-		ret |= ((b & 0x7f) << shift);
+		ret |= ((uint64_t)(b & 0x7f) << shift);
 		shift += 7;
 	} while ((b & 0x80) != 0);
 
