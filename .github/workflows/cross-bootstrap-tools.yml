@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           # TODO: both Ubuntu and macOS have bmake packages, we should try them instead of bootstrapping our own copy.
-          - os: ubuntu-20.04
+          - os: ubuntu-16.04
             compiler: clang-9
             cross-bindir: /usr/lib/llvm-9/bin
             pkgs: bmake libarchive-dev
