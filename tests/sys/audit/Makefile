@@ -52,6 +52,9 @@ TEST_METADATA+= is_exclusive="true"
 TEST_METADATA+=	required_files="/etc/rc.d/auditd /dev/auditpipe"
 
 LDFLAGS+=	-lbsm -lutil
+OPENBSMDIR=${SRCTOP}/contrib/openbsm
+CFLAGS+=	-I${OPENBSMDIR}
+LDADD+=	${LIBAUDITD}
 
 CFLAGS.process-control.c+=	-I${SRCTOP}/tests
 
