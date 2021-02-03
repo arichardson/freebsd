@@ -142,6 +142,15 @@ PROGNAME?=	${PROG}
 .if defined(SRCS)
 
 OBJS+=  ${SRCS:N*.h:${OBJS_SRCS_FILTER:ts:}:S/$/.o/g}
+.if ${OBJS:M/*}
+# Absolute paths to OBJS should be an error inside ${SRCTOP}, but external users
+# might be relying on this feature, so make it a warning there.
+.if defined(SRCTOP) && ${OBJS:M${SRCTOP}*}
+.error "$$OBJS absolute path not allowed: ${OBJS:M${SRCTOP}*}"
+.else
+.warning "$$OBJS absolute path not allowed: ${OBJS:M/*}"
+.endif
+.endif
 
 # LLVM bitcode / textual IR representations of the program
 BCOBJS+=${SRCS:N*.[hsS]:N*.asm:${OBJS_SRCS_FILTER:ts:}:S/$/.bco/g}

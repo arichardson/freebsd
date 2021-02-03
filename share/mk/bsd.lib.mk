@@ -255,6 +255,15 @@ LDFLAGS+=	-Wl,--version-script=${VERSION_MAP}
 
 .if defined(LIB) && !empty(LIB) || defined(SHLIB_NAME)
 OBJS+=		${SRCS:N*.h:${OBJS_SRCS_FILTER:ts:}:S/$/.o/}
+.if ${OBJS:M/*}
+# Absolute paths to OBJS should be an error inside ${SRCTOP}, but external users
+# might be relying on this feature, so make it a warning there.
+.if defined(SRCTOP) && ${OBJS:M${SRCTOP}*}
+.error "$$OBJS absolute path not allowed: ${OBJS:M${SRCTOP}*}"
+.else
+.warning "$$OBJS absolute path not allowed: ${OBJS:M/*}"
+.endif
+.endif
 BCOBJS+=	${SRCS:N*.[hsS]:N*.asm:${OBJS_SRCS_FILTER:ts:}:S/$/.bco/g}
 LLOBJS+=	${SRCS:N*.[hsS]:N*.asm:${OBJS_SRCS_FILTER:ts:}:S/$/.llo/g}
 CLEANFILES+=	${OBJS} ${BCOBJS} ${LLOBJS} ${STATICOBJS}
