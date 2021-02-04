@@ -20,6 +20,10 @@ CFLAGS+=	-I${.OBJDIR}
 
 LIBADD+=	rpcsvc util
 
+# Some of the tests might start+stop rpcbind, so we can't run them in parallel
+TEST_METADATA+= is_exclusive="true"
+TEST_METADATA+= required_user="root"
+
 .include "../Makefile.netbsd-tests"
 
 .include <bsd.test.mk>

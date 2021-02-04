@@ -199,7 +199,7 @@ regtest(const char *hostname, const char *transp, const char *arg, int p)
 #endif
 	if (!svc_create(server, PROGNUM, VERSNUM, transp))
 	{
-		SKIPX(EXIT_FAILURE, "Cannot create server %d", num);
+		ERRX(EXIT_FAILURE, "Cannot create server %d", num);
 	}
 
 	switch ((pid = fork())) {
@@ -302,20 +302,49 @@ main(int argc, char *argv[])
 
 #else
 
-ATF_TC(get_svc_addr_tcp);
+static void
+maybe_start_rpcbind(void)
+{
+	ATF_REQUIRE_EQ(0, system(
+		"/etc/rc.d/rpcbind onestatus || "
+		"{ /etc/rc.d/rpcbind onestart && touch started_rpcbind ; }"));
+	if (atf_utils_file_exists("started_rpcbind"))
+		fprintf(stderr, "rpcbind(8) started for testing.\n");
+	else
+		fprintf(stderr, "rpcbind(8) already running.\n");
+}
+
+static void
+maybe_stop_rpcbind(void)
+{
+	/* If 'started_rpcbind' exists, that means we started rpcbind(8) */
+	if (atf_utils_file_exists("started_rpcbind")) {
+		fprintf(stderr, "Stopping test rpcbind(8).\n");
+		if (system("/etc/rc.d/rpcbind onestop") != 0) {
+			err(1, "Failed to stop rpcbind");
+		}
+	}
+}
+
+/* Define a test that starts/stops rpcbind(8) if required */
+#define ATF_TC_WITH_RPCBIND_CLEANUP(name)  \
+	ATF_TC_WITH_CLEANUP(name); \
+	ATF_TC_CLEANUP(name, tc) { maybe_stop_rpcbind(); }
+
+ATF_TC_WITH_RPCBIND_CLEANUP(get_svc_addr_tcp);
 ATF_TC_HEAD(get_svc_addr_tcp, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks CLGET_SVC_ADDR for tcp");
-
 }
 
 ATF_TC_BODY(get_svc_addr_tcp, tc)
 {
+	/* This tests depends on a running rpcbind(8) service. */
+	maybe_start_rpcbind();
 	onehost("localhost", "tcp");
-
 }
 
-ATF_TC(get_svc_addr_udp);
+ATF_TC_WITH_RPCBIND_CLEANUP(get_svc_addr_udp);
 ATF_TC_HEAD(get_svc_addr_udp, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks CLGET_SVC_ADDR for udp");
@@ -323,6 +352,8 @@ ATF_TC_HEAD(get_svc_addr_udp, tc)
 
 ATF_TC_BODY(get_svc_addr_udp, tc)
 {
+	/* This tests depends on a running rpcbind(8) service. */
+	maybe_start_rpcbind();
 	onehost("localhost", "udp");
 
 }
@@ -339,62 +370,58 @@ ATF_TC_BODY(raw, tc)
 
 }
 
-ATF_TC(tcp);
+ATF_TC_WITH_RPCBIND_CLEANUP(tcp);
 ATF_TC_HEAD(tcp, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks svc tcp (select)");
-#ifdef __FreeBSD__
-	atf_tc_set_md_var(tc, "require.user", "root");
-#endif
 }
 
 ATF_TC_BODY(tcp, tc)
 {
+	/* This tests depends on a running rpcbind(8) service. */
+	maybe_start_rpcbind();
 	regtest("localhost", "tcp", "1", 0);
 
 }
 
-ATF_TC(udp);
+ATF_TC_WITH_RPCBIND_CLEANUP(udp);
 ATF_TC_HEAD(udp, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks svc udp (select)");
-#ifdef __FreeBSD__
-	atf_tc_set_md_var(tc, "require.user", "root");
-#endif
 }
 
 ATF_TC_BODY(udp, tc)
 {
+	/* This tests depends on a running rpcbind(8) service. */
+	maybe_start_rpcbind();
 	regtest("localhost", "udp", "1", 0);
 
 }
 
-ATF_TC(tcp_poll);
+ATF_TC_WITH_RPCBIND_CLEANUP(tcp_poll);
 ATF_TC_HEAD(tcp_poll, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks svc tcp (poll)");
-#ifdef __FreeBSD__
-	atf_tc_set_md_var(tc, "require.user", "root");
-#endif
 }
 
 ATF_TC_BODY(tcp_poll, tc)
 {
+	/* This tests depends on a running rpcbind(8) service. */
+	maybe_start_rpcbind();
 	regtest("localhost", "tcp", "1", 1);
 
 }
 
-ATF_TC(udp_poll);
+ATF_TC_WITH_RPCBIND_CLEANUP(udp_poll);
 ATF_TC_HEAD(udp_poll, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks svc udp (poll)");
-#ifdef __FreeBSD__
-	atf_tc_set_md_var(tc, "require.user", "root");
-#endif
 }
 
 ATF_TC_BODY(udp_poll, tc)
 {
+	/* This tests depends on a running rpcbind(8) service. */
+	maybe_start_rpcbind();
 	regtest("localhost", "udp", "1", 1);
 
 }
