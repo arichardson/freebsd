@@ -65,7 +65,6 @@ static int		doconfigtimer(void);
 static void		configtimer(int start);
 static int		round_freq(struct eventtimer *et, int freq);
 
-static sbintime_t	getnextcpuevent(int idle);
 static sbintime_t	getnextevent(void);
 static int		handleevents(sbintime_t now, int fake);
 
@@ -125,6 +124,7 @@ struct pcpu_state {
 	int		ipi;		/* This CPU needs IPI. */
 	int		idle;		/* This CPU is in idle mode. */
 };
+static sbintime_t	getnextcpuevent(struct pcpu_state *state, int idle);
 
 DPCPU_DEFINE_STATIC(struct pcpu_state, timerstate);
 DPCPU_DEFINE(sbintime_t, hardclocktime);
@@ -173,6 +173,7 @@ handleevents(sbintime_t now, int fake)
 	}
 
 	state = DPCPU_PTR(timerstate);
+	ET_HW_LOCK(state);
 
 	runs = 0;
 	while (now >= state->nexthard) {
@@ -210,11 +211,11 @@ handleevents(sbintime_t now, int fake)
 		state->nextprof = state->nextstat;
 	if (now >= state->nextcallopt || now >= state->nextcall) {
 		state->nextcall = state->nextcallopt = SBT_MAX;
+		ET_HW_UNLOCK(state);
 		callout_process(now);
+		ET_HW_LOCK(state);
 	}
-
-	t = getnextcpuevent(0);
-	ET_HW_LOCK(state);
+	t = getnextcpuevent(state, 0);
 	if (!busy) {
 		state->idle = 0;
 		state->nextevent = t;
@@ -229,13 +230,10 @@ handleevents(sbintime_t now, int fake)
  * Schedule binuptime of the next event on current CPU.
  */
 static sbintime_t
-getnextcpuevent(int idle)
+getnextcpuevent(struct pcpu_state *state, int idle)
 {
 	sbintime_t event;
-	struct pcpu_state *state;
 	u_int hardfreq;
-
-	state = DPCPU_PTR(timerstate);
 	/* Handle hardclock() events, skipping some if CPU is idle. */
 	event = state->nexthard;
 	if (idle) {
@@ -777,8 +775,8 @@ cpu_idleclock(void)
 		now = sbinuptime();
 	CTR3(KTR_SPARE2, "idle at %d:    now  %d.%08x",
 	    curcpu, (int)(now >> 32), (u_int)(now & 0xffffffff));
-	t = getnextcpuevent(1);
 	ET_HW_LOCK(state);
+	t = getnextcpuevent(state, 1);
 	state->idle = 1;
 	state->nextevent = t;
 	if (!periodic)
