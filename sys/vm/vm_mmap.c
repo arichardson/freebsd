@@ -1520,34 +1520,36 @@ vm_mmap(vm_map_t map, vm_offset_t *addr, vm_size_t size, vm_prot_t prot,
 int
 kern_mmap_racct_check(struct thread *td, vm_map_t map, vm_size_t size)
 {
-	int error;
+	int error = 0;
 
 	RACCT_PROC_LOCK(td->td_proc);
+	vm_map_lock(map);
 	if (map->size + size > lim_cur(td, RLIMIT_VMEM)) {
-		RACCT_PROC_UNLOCK(td->td_proc);
-		return (ENOMEM);
+		error = ENOMEM;
+		goto out;
 	}
 	if (racct_set(td->td_proc, RACCT_VMEM, map->size + size)) {
-		RACCT_PROC_UNLOCK(td->td_proc);
-		return (ENOMEM);
+		error = ENOMEM;
+		goto out;
 	}
 	if (!old_mlock && map->flags & MAP_WIREFUTURE) {
 		if (ptoa(pmap_wired_count(map->pmap)) + size >
 		    lim_cur(td, RLIMIT_MEMLOCK)) {
 			racct_set_force(td->td_proc, RACCT_VMEM, map->size);
-			RACCT_PROC_UNLOCK(td->td_proc);
-			return (ENOMEM);
+			error = ENOMEM;
+			goto out;
 		}
 		error = racct_set(td->td_proc, RACCT_MEMLOCK,
 		    ptoa(pmap_wired_count(map->pmap)) + size);
 		if (error != 0) {
 			racct_set_force(td->td_proc, RACCT_VMEM, map->size);
-			RACCT_PROC_UNLOCK(td->td_proc);
-			return (error);
+			goto out;
 		}
 	}
+out:
+	vm_map_unlock(map);
 	RACCT_PROC_UNLOCK(td->td_proc);
-	return (0);
+	return (error);
 }
 
 /*
