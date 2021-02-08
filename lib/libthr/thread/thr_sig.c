@@ -246,6 +246,31 @@ thr_sighandler(int sig, siginfo_t *info, void *_ucp)
 	handle_signal(&act, sig, info, ucp);
 }
 
+/*
+ * If we call memcpy() during signal handling this breaks various sanitizers
+ * (especially TSan) since they intercept memcpy(). Calling that interceptor
+ * during signal handling can lead to internal state corruption/deadlocks. As a
+ * workaround, we implement a simple one uinptr_t at a time memcpy() (this is
+ * also safe for CHERI) to avoid calling this interposed function during singal
+ * handling.
+ *
+ * Note: In order to avoid memcpy() calls, we have to add noinline in addition
+ * to no_builtin, since Clang's inliner drops the no_builtin attribute when
+ * inlining this into handle_signal and therefore memcpy() pattern recognition
+ * kicks in again and the loop is transformed into a mempcy() call.
+ */
+static __attribute__((noinline, no_builtin)) void
+handle_signal_copy_ucontext(ucontext_t *dst, const ucontext_t *src)
+{
+	size_t i;
+
+	_Static_assert(_Alignof(ucontext_t) >= _Alignof(uintptr_t), "");
+	_Static_assert(sizeof(ucontext_t) % sizeof(uintptr_t) == 0, "");
+	for (i = 0; i < sizeof(*src) / sizeof(uintptr_t); i++) {
+		((uintptr_t *)dst)[i] = ((const uintptr_t *)src)[i];
+	}
+}
+
 static void
 handle_signal(struct sigaction *actp, int sig, siginfo_t *info, ucontext_t *ucp)
 {
@@ -310,7 +335,7 @@ handle_signal(struct sigaction *actp, int sig, siginfo_t *info, ucontext_t *ucp)
 	curthread->cancel_point = cancel_point;
 	curthread->cancel_enable = cancel_enable;
 
-	memcpy(&uc2, ucp, sizeof(uc2));
+	handle_signal_copy_ucontext(&uc2, ucp);
 	SIGDELSET(uc2.uc_sigmask, SIGCANCEL);
 
 	/* reschedule cancellation */
