@@ -296,6 +296,14 @@ FBSDprivate_1.0 {
 	_thread_size_key;
 	_thread_state_running;
 	_thread_state_zoombie;
+
+	/* To avoid TSan false-positives */
+	__tsan_mutex_create;
+	__tsan_mutex_destroy;
+	__tsan_mutex_pre_lock;
+	__tsan_mutex_post_lock;
+	__tsan_mutex_pre_unlock;
+	__tsan_mutex_post_unlock;
 };
 
 FBSD_1.1 {

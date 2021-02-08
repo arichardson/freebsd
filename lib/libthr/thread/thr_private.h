@@ -1099,6 +1099,15 @@ int _thr_mutex_unlock(pthread_mutex_t *);
 int __Tthr_mutex_lock(pthread_mutex_t *);
 int __Tthr_mutex_trylock(pthread_mutex_t *);
 
+/* These are required to avoid TSan false-positives for libthr-internal locks */
+#define __tsan_mutex_write_reentrant (1 << 1)
+void __tsan_mutex_create(void *, unsigned) __weak_symbol;
+void __tsan_mutex_destroy(void *, unsigned) __weak_symbol;
+void __tsan_mutex_pre_lock(void *, unsigned) __weak_symbol;
+void __tsan_mutex_post_lock(void *, unsigned, int) __weak_symbol;
+int __tsan_mutex_pre_unlock(void *, unsigned) __weak_symbol;
+void __tsan_mutex_post_unlock(void *, unsigned) __weak_symbol;
+
 __END_DECLS
 __NULLABILITY_PRAGMA_POP
 

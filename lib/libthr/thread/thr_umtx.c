@@ -374,3 +374,36 @@ _thr_rwl_unlock(struct urwlock *rwlock)
 	if (_thr_rwlock_unlock(rwlock))
 		PANIC("unlock error");
 }
+
+/*
+ * To avoid TSan false-positives we provide weak versions of the TSan
+ * callbacks that are used to annotate mutexes. Without this we get tons of
+ * false-positives each time __thr_malloc, etc. is used.
+ * See tsan_interface.h inside compiler-rt.
+ */
+void __weak_symbol
+__tsan_mutex_create(void *addr __unused, unsigned flags __unused)
+{
+}
+void __weak_symbol
+__tsan_mutex_destroy(void *addr __unused, unsigned flags __unused)
+{
+}
+void __weak_symbol
+__tsan_mutex_pre_lock(void *addr __unused, unsigned flags __unused)
+{
+}
+void __weak_symbol
+__tsan_mutex_post_lock(void *addr __unused, unsigned flags __unused,
+    int recursion __unused)
+{
+}
+int __weak_symbol
+__tsan_mutex_pre_unlock(void *addr __unused, unsigned flags __unused)
+{
+	return (0);
+}
+void __weak_symbol
+__tsan_mutex_post_unlock(void *addr __unused, unsigned flags __unused)
+{
+}

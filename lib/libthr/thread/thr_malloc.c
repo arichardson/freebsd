@@ -56,6 +56,13 @@ __thr_malloc_init(void)
 	}
 	pagesizes = pagesizes_d;
 	_thr_umutex_init(&thr_malloc_umtx);
+	/*
+	 * TODO: should probably annotate other internal locks too (maybe even
+	 * move it down to the internal API). However, annotating only the
+	 * malloc lock appears to silence (almost?) all false-positives, so
+	 * this can likely wait (and also has a lower performance overhead).
+	 */
+	__tsan_mutex_create(&thr_malloc_umtx, __tsan_mutex_write_reentrant);
 }
 
 static void
@@ -65,12 +72,14 @@ thr_malloc_lock(struct pthread *curthread)
 
 	if (curthread == NULL)
 		return;
+	__tsan_mutex_pre_lock(&thr_malloc_umtx, 0);
 	curthread->locklevel++;
 	curtid = TID(curthread);
 	if ((uint32_t)thr_malloc_umtx.m_owner == curtid)
 		thr_malloc_umtx_level++;
 	else
 		_thr_umutex_lock(&thr_malloc_umtx, curtid);
+	__tsan_mutex_post_lock(&thr_malloc_umtx, 0, 1);
 }
 
 static void
@@ -79,12 +88,14 @@ thr_malloc_unlock(struct pthread *curthread)
 
 	if (curthread == NULL)
 		return;
+	__tsan_mutex_pre_unlock(&thr_malloc_umtx, 0);
 	if (thr_malloc_umtx_level > 0)
 		thr_malloc_umtx_level--;
 	else
 		_thr_umutex_unlock(&thr_malloc_umtx, TID(curthread));
 	curthread->locklevel--;
 	_thr_ast(curthread);
+	__tsan_mutex_post_unlock(&thr_malloc_umtx, 0);
 }
 
 void *
@@ -140,13 +151,15 @@ __thr_realloc(void *cp, size_t nbytes)
 void
 __thr_malloc_prefork(struct pthread *curthread)
 {
-
+	__tsan_mutex_pre_lock(&thr_malloc_umtx, 0);
 	_thr_umutex_lock(&thr_malloc_umtx, TID(curthread));
+	__tsan_mutex_post_lock(&thr_malloc_umtx, 0, 1);
 }
 
 void
 __thr_malloc_postfork(struct pthread *curthread)
 {
-
+	__tsan_mutex_pre_unlock(&thr_malloc_umtx, 0);
 	_thr_umutex_unlock(&thr_malloc_umtx, TID(curthread));
+	__tsan_mutex_post_unlock(&thr_malloc_umtx, 0);
 }
