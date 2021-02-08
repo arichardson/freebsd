@@ -215,8 +215,8 @@ static void *HwasanThreadStartFunc(void *arg) {
   return A.callback(A.param);
 }
 
-INTERCEPTOR(int, pthread_create, void *th, void *attr, void *(*callback)(void*),
-            void * param) {
+INTERCEPTOR_PTHREAD(int, create, void *th, void *attr,
+                    void *(*callback)(void *), void *param) {
   ScopedTaggingDisabler disabler;
   ThreadStartArg *A = reinterpret_cast<ThreadStartArg *> (MmapOrDie(
       GetPageSizeCached(), "pthread_create"));

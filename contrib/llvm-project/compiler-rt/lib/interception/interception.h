@@ -17,7 +17,7 @@
 #include "sanitizer_common/sanitizer_internal_defs.h"
 
 #if !SANITIZER_LINUX && !SANITIZER_FREEBSD && !SANITIZER_MAC && \
-    !SANITIZER_NETBSD && !SANITIZER_OPENBSD && !SANITIZER_WINDOWS && \
+    !SANITIZER_NETBSD && !SANITIZER_WINDOWS && \
     !SANITIZER_FUCHSIA && !SANITIZER_RTEMS && !SANITIZER_SOLARIS
 # error "Interception doesn't work on this operating system."
 #endif
@@ -281,7 +281,7 @@ typedef unsigned long uptr;
 #define INCLUDED_FROM_INTERCEPTION_LIB
 
 #if SANITIZER_LINUX || SANITIZER_FREEBSD || SANITIZER_NETBSD || \
-    SANITIZER_OPENBSD || SANITIZER_SOLARIS
+    SANITIZER_SOLARIS
 
 # include "interception_linux.h"
 # define INTERCEPT_FUNCTION(func) INTERCEPT_FUNCTION_LINUX_OR_FREEBSD(func)
@@ -297,6 +297,23 @@ typedef unsigned long uptr;
 # define INTERCEPT_FUNCTION(func) INTERCEPT_FUNCTION_WIN(func)
 # define INTERCEPT_FUNCTION_VER(func, symver) \
     INTERCEPT_FUNCTION_VER_WIN(func, symver)
+#endif
+
+#if SANITIZER_FREEBSD
+// On FreeBSD we also have to intercept the _pthread_* aliases since those are
+// used for direct libthr calls from within libc. If we don't intercept both
+// pthread_foo and _pthread_foo we see lots of false-positives.
+#define INTERCEPTOR_PTHREAD(ret, func, ...)      \
+  INTERCEPTOR(ret, _pthread_##func, __VA_ARGS__) \
+  ALIAS(WRAPPER_NAME(pthread_##func));           \
+  INTERCEPTOR(ret, pthread_##func, __VA_ARGS__)
+#define INTERCEPT_PTHREAD_FUNCTION(name) \
+  INTERCEPT_FUNCTION(pthread_##name);    \
+  INTERCEPT_FUNCTION(_pthread_##name)
+#else
+#define INTERCEPTOR_PTHREAD(ret, func, ...) \
+  INTERCEPTOR(ret, pthread_##func, __VA_ARGS__)
+#define INTERCEPT_PTHREAD_FUNCTION(name) INTERCEPT_FUNCTION(pthread_##name)
 #endif
 
 #undef INCLUDED_FROM_INTERCEPTION_LIB

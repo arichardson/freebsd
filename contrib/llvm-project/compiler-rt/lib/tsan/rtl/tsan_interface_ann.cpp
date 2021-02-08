@@ -48,6 +48,8 @@ class ScopedAnnotation {
     if (!flags()->enable_annotations) \
       return ret; \
     ThreadState *thr = cur_thread(); \
+    if (thr->ignore_interceptors) \
+      return ret; \
     const uptr caller_pc = (uptr)__builtin_return_address(0); \
     StatInc(thr, StatAnnotation); \
     StatInc(thr, Stat##typ); \

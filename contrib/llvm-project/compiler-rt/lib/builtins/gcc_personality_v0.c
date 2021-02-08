@@ -7,25 +7,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "int_lib.h"
+#include <stddef.h>
 
 #include <unwind.h>
-/*
- * XXX On FreeBSD, this file is compiled into three libraries:
- *   - libcompiler_rt
- *   - libgcc_eh
- *   - libgcc_s
- *
- * In the former, the include path points to the contrib/libcxxrt/unwind-arm.h
- * copy of unwind.h.  In the latter, the include path points to the
- * contrib/libunwind/include/unwind.h header (LLVM libunwind).
- *
- * Neither (seemingly redundant) variant of unwind.h needs the redefinitions
- * provided in the "helpful" header below, and libcxxrt's unwind-arm.h provides
- * *no* useful distinguishing macros, so just forcibly disable the helper
- * header on FreeBSD.
- */
 #if defined(__arm__) && !defined(__ARM_DWARF_EH__) &&                          \
-    !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__FreeBSD__)
+    !defined(__USING_SJLJ_EXCEPTIONS__)
 // When building with older compilers (e.g. clang <3.9), it is possible that we
 // have a version of unwind.h which does not provide the EHABI declarations
 // which are quired for the C personality to conform to the specification.  In
@@ -58,9 +44,9 @@
 #define DW_EH_PE_indirect 0x80 // gcc extension
 
 // read a uleb128 encoded value and advance pointer
-static uintptr_t readULEB128(const uint8_t **data) {
-  uintptr_t result = 0;
-  uintptr_t shift = 0;
+static size_t readULEB128(const uint8_t **data) {
+  size_t result = 0;
+  size_t shift = 0;
   unsigned char byte;
   const uint8_t *p = *data;
   do {
@@ -226,8 +212,8 @@ COMPILER_RT_ABI _Unwind_Reason_Code __gcc_personality_v0(
   const uint8_t *p = callSiteTableStart;
   while (p < callSiteTableEnd) {
     uintptr_t start = readEncodedPointer(&p, callSiteEncoding);
-    uintptr_t length = readEncodedPointer(&p, callSiteEncoding);
-    uintptr_t landingPad = readEncodedPointer(&p, callSiteEncoding);
+    size_t length = readEncodedPointer(&p, callSiteEncoding);
+    size_t landingPad = readEncodedPointer(&p, callSiteEncoding);
     readULEB128(&p); // action value not used for C code
     if (landingPad == 0)
       continue; // no landing pad for this entry

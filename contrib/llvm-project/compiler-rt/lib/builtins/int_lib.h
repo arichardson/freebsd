@@ -21,9 +21,7 @@
 // ABI macro definitions
 
 #if __ARM_EABI__
-#if defined(COMPILER_RT_ARMHF_TARGET) || (!defined(__clang__) && \
-    defined(__GNUC__) && (__GNUC__ < 4 || __GNUC__ == 4 && __GNUC_MINOR__ < 5))
-// The pcs attribute was introduced in GCC 4.5.0
+#ifdef COMPILER_RT_ARMHF_TARGET
 #define COMPILER_RT_ABI
 #else
 #define COMPILER_RT_ABI __attribute__((__pcs__("aapcs")))
@@ -72,12 +70,17 @@
 #error Unsupported target
 #endif
 
-#if (defined(__FreeBSD__) || defined(__NetBSD__)) && (defined(_KERNEL) || defined(_STANDALONE))
+#if (defined(__FreeBSD__) || defined(__NetBSD__)) &&                           \
+    (defined(_KERNEL) || defined(_STANDALONE))
 //
 // Kernel and boot environment can't use normal headers,
 // so use the equivalent system headers.
+// NB: FreeBSD (and OpenBSD) deprecate machine/limits.h in
+// favour of sys/limits.h, so prefer the former, but fall
+// back on the latter if not available since NetBSD only has
+// the latter.
 //
-#ifdef __FreeBSD__
+#if defined(__has_include) && __has_include(<sys/limits.h>)
 #include <sys/limits.h>
 #else
 #include <machine/limits.h>
