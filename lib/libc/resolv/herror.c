@@ -80,7 +80,7 @@ const char *h_errlist[] = {
 const int h_nerr = { nitems(h_errlist) };
 
 #undef	h_errno
-int	h_errno;
+_Atomic(int) h_errno;
 
 /*%
  * herror --

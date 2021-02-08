@@ -33,7 +33,7 @@
 #include <resolv.h>
 
 #undef	h_errno
-extern int h_errno;
+extern _Atomic(int) h_errno;
 
 int *__h_errno(void);
 void __h_errno_set(res_state res, int err);
@@ -47,5 +47,10 @@ __h_errno(void)
 void
 __h_errno_set(res_state res, int err)
 {
-	h_errno = res->res_h_errno = err;
+	res->res_h_errno = err;
+	/*
+	 * Legacy code may expect a global h_errno instead of using the
+	 * macro, so provide the last error in that case.
+	 */
+	h_errno = err;
 }
