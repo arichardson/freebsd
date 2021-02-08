@@ -1,6 +1,9 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "namespace.h"
+#include "libc_private.h"
+
 #include <port_before.h>
 #ifdef DO_PTHREADS
 #include <pthread.h>
@@ -9,15 +12,14 @@ __FBSDID("$FreeBSD$");
 #endif
 #endif
 #include <errno.h>
-#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <resolv_mt.h>
-#include <port_after.h>
+#include "un-namespace.h"
 
 #ifdef DO_PTHREADS
 static pthread_key_t	key;
-static int		mt_key_initialized = 0;
+static pthread_once_t	key_once = PTHREAD_ONCE_INIT;
 
 static int		__res_init_ctx(void);
 static void		__res_destroy_ctx(void *);
@@ -37,11 +39,7 @@ static mtctxres_t	sharedctx;
  */
 static void
 _mtctxres_init(void) {
-	int pthread_keycreate_ret;
-
-	pthread_keycreate_ret = pthread_key_create(&key, __res_destroy_ctx);
-	if (pthread_keycreate_ret == 0)
-		mt_key_initialized = 1;
+	_pthread_key_create(&key, __res_destroy_ctx);
 }
 #endif
 
@@ -70,7 +68,7 @@ __res_init_ctx(void) {
 	int		ret;
 
 
-	if (pthread_getspecific(key) != 0) {
+	if (_pthread_getspecific(key) != 0) {
 		/* Already exists */
 		return (0);
 	}
@@ -82,7 +80,7 @@ __res_init_ctx(void) {
 
 	memset(mt, 0, sizeof (mtctxres_t));
 
-	if ((ret = pthread_setspecific(key, mt)) != 0) {
+	if ((ret = _pthread_setspecific(key, mt)) != 0) {
 		free(mt);
 		errno = ret;
 		return (-1);
@@ -104,34 +102,20 @@ ___mtctxres(void) {
 	mtctxres_t	*mt;
 
 #ifdef _LIBC
-	if (pthread_main_np() != 0)
+	if (_pthread_main_np() != 0)
 		return (&sharedctx);
 #endif
 
-	/*
-	 * This if clause should only be executed if we are linking
-	 * statically.  When linked dynamically _mtctxres_init() should
-	 * be called at binding time due the #pragma above.
-	 */
-	if (!mt_key_initialized) {
-		static pthread_mutex_t keylock = PTHREAD_MUTEX_INITIALIZER;
-                if (pthread_mutex_lock(&keylock) == 0) {
-			_mtctxres_init();
-			(void) pthread_mutex_unlock(&keylock);
-		}
-	}
-
+	_pthread_once(&key_once, _mtctxres_init);
 	/*
 	 * If we have already been called in this thread return the existing
 	 * context.  Otherwise recreat a new context and return it.  If
 	 * that fails return a global context.
 	 */
-	if (mt_key_initialized) {
-		if (((mt = pthread_getspecific(key)) != NULL) ||
-		    (__res_init_ctx() == 0 &&
-		     (mt = pthread_getspecific(key)) != NULL)) {
-			return (mt);
-		}
+	if (((mt = _pthread_getspecific(key)) != NULL) ||
+	    (__res_init_ctx() == 0 &&
+	     (mt = _pthread_getspecific(key)) != NULL)) {
+		return (mt);
 	}
 #endif
 	return (&sharedctx);

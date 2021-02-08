@@ -2123,6 +2123,7 @@ TSAN_INTERCEPTOR(int, gettimeofday, void *tv, void *tz) {
   return REAL(gettimeofday)(tv, tz);
 }
 
+#if SANITIZER_INTERCEPT_GETADDRINFO
 TSAN_INTERCEPTOR(int, getaddrinfo, void *node, void *service,
     void *hints, void *rv) {
   SCOPED_TSAN_INTERCEPTOR(getaddrinfo, node, service, hints, rv);
@@ -2134,6 +2135,7 @@ TSAN_INTERCEPTOR(int, getaddrinfo, void *node, void *service,
   ThreadIgnoreEnd(thr, pc);
   return res;
 }
+#endif
 
 TSAN_INTERCEPTOR(int, fork, int fake) {
   if (in_symbolizer())
@@ -2803,7 +2805,9 @@ void InitializeInterceptors() {
   TSAN_INTERCEPT(nanosleep);
   TSAN_INTERCEPT(pause);
   TSAN_INTERCEPT(gettimeofday);
+#if SANITIZER_INTERCEPT_GETADDRINFO
   TSAN_INTERCEPT(getaddrinfo);
+#endif
 
   TSAN_INTERCEPT(fork);
   TSAN_INTERCEPT(vfork);

@@ -2395,6 +2395,7 @@ _endhtent(FILE **hostf)
 static struct addrinfo *
 _gethtent(FILE **hostf, const char *name, const struct addrinfo *pai)
 {
+	// FIXME: data race accessing hostf?
 	char *p;
 	char *cp, *tname, *cname;
 	struct addrinfo hints, *res0, *res;

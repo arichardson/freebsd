@@ -38,6 +38,7 @@ __RCSID("$NetBSD: resolv.c,v 1.6 2004/05/23 16:59:11 christos Exp $");
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdatomic.h>
 #include <netdb.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -47,7 +48,7 @@ __RCSID("$NetBSD: resolv.c,v 1.6 2004/05/23 16:59:11 christos Exp $");
 #include <atf-c.h>
 
 #define NTHREADS	10
-#define NHOSTS		100
+#define NHOSTS		50
 #define WS		" \t\n\r"
 
 enum method {
@@ -57,13 +58,13 @@ enum method {
 };
 
 static StringList *hosts = NULL;
-static int *ask = NULL;
-static int *got = NULL;
+static _Atomic(int) *ask = NULL;
+static _Atomic(int) *got = NULL;
 
 static void load(const char *);
 static void resolvone(int, enum method);
 static void *resolvloop(void *);
-static void run(int *, enum method);
+static pthread_t run(int, enum method, long);
 
 static pthread_mutex_t stats = PTHREAD_MUTEX_INITIALIZER;
 
@@ -95,9 +96,9 @@ load(const char *fname)
 static int
 resolv_getaddrinfo(pthread_t self, char *host, int port)
 {
-	char portstr[6], buf[1024], hbuf[NI_MAXHOST], pbuf[NI_MAXSERV];
+	char portstr[6], hbuf[NI_MAXHOST], pbuf[NI_MAXSERV];
 	struct addrinfo hints, *res;
-	int error, len;
+	int error;
 
 	snprintf(portstr, sizeof(portstr), "%d", port);
 	memset(&hints, 0, sizeof(hints));
@@ -105,20 +106,18 @@ resolv_getaddrinfo(pthread_t self, char *host, int port)
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 	error = getaddrinfo(host, portstr, &hints, &res);
-	len = snprintf(buf, sizeof(buf), "%p: host %s %s\n",
-	    self, host, error ? "not found" : "ok");
-	(void)write(STDOUT_FILENO, buf, len);
 	if (error == 0) {
+		dprintf(STDOUT_FILENO, "%p: host %s ok\n", self, host);
 		memset(hbuf, 0, sizeof(hbuf));
 		memset(pbuf, 0, sizeof(pbuf));
 		getnameinfo(res->ai_addr, res->ai_addrlen, hbuf, sizeof(hbuf),
 			    pbuf, sizeof(pbuf), 0);
-		len = snprintf(buf, sizeof(buf),
-		    "%p: reverse %s %s\n", self, hbuf, pbuf);
-		(void)write(STDOUT_FILENO, buf, len);
-	}
-	if (error == 0)
+		dprintf(STDOUT_FILENO, "%p: reverse %s %s\n", self, hbuf, pbuf);
 		freeaddrinfo(res);
+	} else {
+		dprintf(STDOUT_FILENO, "%p: host %s not found: %s\n", self,
+		    host, gai_strerror(error));
+	}
 	return error;
 }
 
@@ -204,37 +203,44 @@ resolvone(int n, enum method method)
 		break;
 	}
 	pthread_mutex_lock(&stats);
-	ask[i]++;
-	got[i] += error == 0;
+	atomic_fetch_add_explicit(&ask[i], 1, memory_order_relaxed);
+	atomic_fetch_add_explicit(&got[i], error == 0, memory_order_relaxed);
+	if (ask[i] != got[i] && got[i] != 0) {
+		printf("Error: host %s ask %d got %d\n",
+		    hosts->sl_str[i], ask[i], got[i]);
+	}
 	pthread_mutex_unlock(&stats);
 }
 
 struct resolvloop_args {
-	int *nhosts;
+	int nhosts;
 	enum method method;
+	long threadnum;
 };
 
 static void *
 resolvloop(void *p)
 {
+	char buf[32];
 	struct resolvloop_args *args = p;
+	int nhosts = args->nhosts;
 
-	if (*args->nhosts == 0) {
+	if (nhosts == 0) {
 		free(args);
 		return NULL;
 	}
 
-	do
-		resolvone(*args->nhosts, args->method);
-	while (--(*args->nhosts));
+	do {
+		resolvone(nhosts, args->method);
+	} while (--nhosts);
 	free(args);
-	return NULL;
+	return (void *)(uintptr_t)nhosts;
 }
 
-static void
-run(int *nhosts, enum method method)
+static pthread_t
+run(int nhosts, enum method method, long i)
 {
-	pthread_t self;
+	pthread_t t;
 	int rc;
 	struct resolvloop_args *args;
 
@@ -244,18 +250,21 @@ run(int *nhosts, enum method method)
 
 	args->nhosts = nhosts;
 	args->method = method;
-	self = pthread_self();
-	rc = pthread_create(&self, NULL, resolvloop, args);
+	args->threadnum = i + 1;
+	atomic_thread_fence(memory_order_release);
+	rc = pthread_create(&t, NULL, resolvloop, args);
 	ATF_REQUIRE_MSG(rc == 0, "pthread_create failed: %s", strerror(rc));
+	return t;
 }
 
 static int
 run_tests(const char *hostlist_file, enum method method)
 {
 	size_t nthreads = NTHREADS;
+	pthread_t *threads;
 	size_t nhosts = NHOSTS;
 	size_t i;
-	int c, done, *nleft;
+	int c;
 	hosts = sl_init();
 
 	srandom(1234);
@@ -264,30 +273,28 @@ run_tests(const char *hostlist_file, enum method method)
 
 	ATF_REQUIRE_MSG(0 < hosts->sl_cur, "0 hosts in %s", hostlist_file);
 
-	nleft = malloc(nthreads * sizeof(int));
-	ATF_REQUIRE(nleft != NULL);
-
 	ask = calloc(hosts->sl_cur, sizeof(int));
 	ATF_REQUIRE(ask != NULL);
 
 	got = calloc(hosts->sl_cur, sizeof(int));
 	ATF_REQUIRE(got != NULL);
 
-	for (i = 0; i < nthreads; i++) {
-		nleft[i] = nhosts;
-		run(&nleft[i], method);
-	}
+	threads = calloc(nthreads, sizeof(pthread_t));
+	ATF_REQUIRE(threads != NULL);
 
-	for (done = 0; !done;) {
-		done = 1;
-		for (i = 0; i < nthreads; i++) {
-			if (nleft[i] != 0) {
-				done = 0;
-				break;
-			}
-		}
-		sleep(1);
+	for (i = 0; i < nthreads; i++) {
+		threads[i] = run(nhosts, method, i);
 	}
+	/* Wait for all threads to join and check that they checked all hosts */
+	for (i = 0; i < nthreads; i++) {
+		size_t remaining;
+
+		remaining = (uintptr_t)pthread_join(threads[i], NULL);
+		ATF_CHECK_EQ_MSG(0, remaining,
+		    "Thread %zd still had %zd hosts to check!", i, remaining);
+	}
+	for (i = 0; i < nthreads; i++)
+
 	c = 0;
 	for (i = 0; i < hosts->sl_cur; i++) {
 		if (ask[i] != got[i] && got[i] != 0) {
@@ -296,7 +303,7 @@ run_tests(const char *hostlist_file, enum method method)
 			c++;
 		}
 	}
-	free(nleft);
+	free(threads);
 	free(ask);
 	free(got);
 	sl_free(hosts, 1);

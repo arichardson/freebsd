@@ -104,8 +104,6 @@ typedef union {
     char ac;
 } align;
 
-int _dns_ttl_;
-
 #ifdef DEBUG
 static void
 dbg_printf(char *msg, int num, res_state res)
@@ -212,7 +210,6 @@ gethostanswer(const querybuf *answer, int anslen, const char *qname, int qtype,
 	he->h_addr_list = hed->h_addr_ptrs;
 	haveanswer = 0;
 	had_error = 0;
-	_dns_ttl_ = -1;
 	while (ancount-- > 0 && cp < eom && !had_error) {
 		n = dn_expand(answer->buf, eom, cp, bp, ep - bp);
 		if ((n < 0) || !(*name_ok)(bp)) {
@@ -226,7 +223,7 @@ gethostanswer(const querybuf *answer, int anslen, const char *qname, int qtype,
 		class = _getshort(cp);
  		cp += INT16SZ;			/* class */
 		if (qtype == T_A  && type == T_A)
-			_dns_ttl_ = _getlong(cp);
+			/* _dns_ttl_=*/(void)_getlong(cp);
 		cp += INT32SZ;			/* TTL */
 		n = _getshort(cp);
 		cp += INT16SZ;			/* len */
