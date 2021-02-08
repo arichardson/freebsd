@@ -6,7 +6,7 @@ MK_WERROR=	no
 WARNS?=	2
 
 CFLAGS.h_raw+=	-fstack-protector-all -Wstack-protector
-.if ${COMPILER_TYPE} == "clang" && ${CC} == "cc"
+.if ${COMPILER_TYPE} == "clang"
 # Only use -fsanitize=bounds when using the in-tree compiler.  Otherwise
 # we may link to a sanitizer library targeted at a newer kernel/libc.
 CFLAGS.h_raw+=	-fsanitize=bounds
@@ -33,16 +33,18 @@ PROGS+=		h_memset
 # probably needs to be fixed as it's currently hardcoded.
 #
 # sanitizer is not tested or supported for ARM right now. sbruno
-.if ${COMPILER_TYPE} == "clang" && ${CC} == "cc" && !defined(_SKIP_BUILD) && \
+.if ${COMPILER_TYPE} == "clang" && !defined(_SKIP_BUILD) && \
     (!defined(_RECURSING_PROGS) || ${PROG} == "h_raw")
-.if !defined(_CLANG_RESOURCE_DIR)
-_CLANG_RESOURCE_DIR!=	${CC:N${CCACHE_BIN}} -print-resource-dir
-.export _CLANG_RESOURCE_DIR
-.endif
+.include "${SRCTOP}/lib/libclang_rt/sanitizer-vars.mk"
 _libclang_rt_arch=	${MACHINE_ARCH:S/amd64/x86_64/:C/hf$//:S/mipsn32/mips64/}
-_libclang_rt_ubsan=	${_CLANG_RESOURCE_DIR}/lib/freebsd/libclang_rt.ubsan_standalone-${_libclang_rt_arch}.a
+_libclang_rt_ubsan=	${LIBDESTDIR}${SANITIZER_LIBDIR}/libclang_rt.ubsan_standalone-${_libclang_rt_arch}.a
+.info _libclang_rt_ubsan=${_libclang_rt_ubsan}
+.info LIBDESTDIR=${LIBDESTDIR} LIBDIR_BASE=${LIBDIR_BASE}
+.info SANITIZER_LDFLAGS=${SANITIZER_LDFLAGS}
+.info SYSROOT=${SYSROOT}
 .if exists(${_libclang_rt_ubsan})
 PROGS+=		h_raw
+LDADD.h_raw+=	${SANITIZER_LDFLAGS}
 .endif
 .endif
 PROGS+=		h_read

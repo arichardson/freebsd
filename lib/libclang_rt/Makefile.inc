@@ -14,8 +14,8 @@ CRTSRC=		${SRCTOP}/contrib/llvm-project/compiler-rt
 
 .PATH:		${CRTSRC}/lib
 
-CLANGDIR=	/usr/lib/clang/11.0.1
-LIBDIR=		${CLANGDIR}/lib/freebsd
+.include "sanitizer-vars.mk"
+LIBDIR=		${SANITIZER_LIBDIR}
 SHLIBDIR=	${LIBDIR}
 
 NO_PIC=
