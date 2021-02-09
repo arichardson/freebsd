@@ -40,9 +40,9 @@ __FBSDID("$FreeBSD$");
 static const char sccsid[] = "@(#)process.c	8.6 (Berkeley) 4/20/94";
 #endif
 
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <sys/param.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
 
 #include <ctype.h>
@@ -707,7 +707,7 @@ regsub(SPACE *sp, char *string, char *src)
 #define	NEEDSP(reqlen)							\
 	/* XXX What is the +1 for? */					\
 	if (sp->len + (reqlen) + 1 >= sp->blen) {			\
-		sp->blen += (reqlen) + 1024;				\
+		sp->blen = MAX(sp->blen + (reqlen) + 1024, sp->blen * 2);\
 		if ((sp->space = sp->back = realloc(sp->back, sp->blen)) \
 		    == NULL)						\
 			err(1, "realloc");				\
