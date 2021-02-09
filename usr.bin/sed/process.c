@@ -45,6 +45,7 @@ static const char sccsid[] = "@(#)process.c	8.6 (Berkeley) 4/20/94";
 #include <sys/stat.h>
 #include <sys/uio.h>
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -685,6 +686,8 @@ regexec_e(regex_t *preg, const char *string, int eflags, int nomatch,
 	    nomatch ? 0 : maxnsub + 1, match, eflags | REG_STARTEND);
 	switch(eval) {
 	case 0:
+		assert(match[0].rm_so >= start && "REG_STARTEND ignored?");
+		assert(match[0].rm_eo <= stop && "REG_STARTEND ignored?");
 		return (1);
 	case REG_NOMATCH:
 		return (0);
