@@ -73,8 +73,8 @@ static inline int	 applies(struct s_command *);
 static void		 do_tr(struct s_tr *);
 static void		 flush_appends(void);
 static void		 lputs(char *, size_t);
-static int		 regexec_e(regex_t *, const char *, int, int, size_t,
-			     size_t);
+static int		 regexec_e(regex_t *, const char *, int, int, regoff_t,
+			     regoff_t);
 static void		 regsub(SPACE *, char *, char *);
 static int		 substitute(struct s_command *);
 
@@ -554,7 +554,8 @@ static void
 flush_appends(void)
 {
 	FILE *f;
-	unsigned int count, idx;
+	unsigned int idx;
+	size_t count;
 	char buf[8 * 1024];
 
 	for (idx = 0; idx < appendx; idx++)
@@ -666,7 +667,7 @@ lputs(char *s, size_t len)
 
 static int
 regexec_e(regex_t *preg, const char *string, int eflags, int nomatch,
-	size_t start, size_t stop)
+	regoff_t start, regoff_t stop)
 {
 	int eval;
 
@@ -699,7 +700,8 @@ regexec_e(regex_t *preg, const char *string, int eflags, int nomatch,
 static void
 regsub(SPACE *sp, char *string, char *src)
 {
-	int len, no;
+	ssize_t no;
+	size_t len;
 	char c, *dst;
 
 #define	NEEDSP(reqlen)							\
@@ -712,29 +714,29 @@ regsub(SPACE *sp, char *string, char *src)
 		dst = sp->space + sp->len;				\
 	}
 
-	dst = sp->space + sp->len;
+	dst = sp->len ? sp->space + sp->len : sp->space;
 	while ((c = *src++) != '\0') {
 		if (c == '&')
 			no = 0;
-		else if (c == '\\' && isdigit((unsigned char)*src))
+		else if (c == '\\' && isdigit(*src))
 			no = *src++ - '0';
 		else
 			no = -1;
 		if (no < 0) {		/* Ordinary character. */
 			if (c == '\\' && (*src == '\\' || *src == '&'))
 				c = *src++;
-			NEEDSP(1);
+			NEEDSP(1)
 			*dst++ = c;
 			++sp->len;
 		} else if (match[no].rm_so != -1 && match[no].rm_eo != -1) {
 			len = match[no].rm_eo - match[no].rm_so;
-			NEEDSP(len);
+			NEEDSP(len)
 			memmove(dst, string + match[no].rm_so, len);
 			dst += len;
 			sp->len += len;
 		}
 	}
-	NEEDSP(1);
+	NEEDSP(1)
 	*dst = '\0';
 }
 
