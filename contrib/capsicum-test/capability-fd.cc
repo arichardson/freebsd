@@ -1020,6 +1020,9 @@ FORK_TEST_ON(Capability, SocketTransfer, TmpFile("cap_fd_transfer")) {
   if (child == 0) {
     // Child: enter cap mode
     EXPECT_OK(cap_enter());
+    // Child: send startup notification
+    int msg = 1234;
+    EXPECT_EQ(sizeof(int), (size_t)write(sock_fds[0], &msg, sizeof(msg)));
 
     // Child: wait to receive FD over socket
     int rc = recvmsg(sock_fds[0], &mh, 0);
@@ -1037,10 +1040,14 @@ FORK_TEST_ON(Capability, SocketTransfer, TmpFile("cap_fd_transfer")) {
     EXPECT_RIGHTS_EQ(&r_rs, &rights);
     TryReadWrite(cap_fd);
 
+    // Child: acknowledge that we have received and tested the file descriptor
+    msg = 4321;
+    EXPECT_EQ(sizeof(int), (size_t)write(sock_fds[0], &msg, sizeof(msg)));
+
     // Child: wait for a normal read
-    int val;
-    read(sock_fds[0], &val, sizeof(val));
-    exit(0);
+    EXPECT_EQ(sizeof(int), (size_t)read(sock_fds[0], &msg, sizeof(msg)));
+    EXPECT_EQ(0, msg);
+    exit(testing::Test::HasFailure());
   }
 
   int fd = open(TmpFile("cap_fd_transfer"), O_RDWR | O_CREAT, 0644);
@@ -1055,6 +1062,11 @@ FORK_TEST_ON(Capability, SocketTransfer, TmpFile("cap_fd_transfer")) {
   // Confirm we can do the right operations on the capability
   TryReadWrite(cap_fd);
 
+  // Wait for child to start up:
+  int msg;
+  EXPECT_EQ(sizeof(int), (size_t)read(sock_fds[1], &msg, sizeof(msg)));
+  EXPECT_EQ(1234, msg);
+
   // Send the file descriptor over the pipe to the sub-process
   mh.msg_controllen = CMSG_LEN(sizeof(int));
   cmptr = CMSG_FIRSTHDR(&mh);
@@ -1064,13 +1076,16 @@ FORK_TEST_ON(Capability, SocketTransfer, TmpFile("cap_fd_transfer")) {
   *(int *)CMSG_DATA(cmptr) = cap_fd;
   buffer1[0] = 0;
   iov[0].iov_len = 1;
-  sleep(3);
   int rc = sendmsg(sock_fds[1], &mh, 0);
   EXPECT_OK(rc);
 
-  sleep(1);  // Ensure subprocess runs
-  int zero = 0;
-  write(sock_fds[1], &zero, sizeof(zero));
+  // Check that the child received the message
+  EXPECT_EQ(sizeof(int), (size_t)read(sock_fds[1], &msg, sizeof(msg)));
+  EXPECT_EQ(4321, msg);
+
+  // Tell the child to exit
+  msg = 0;
+  EXPECT_EQ(sizeof(int), (size_t)write(sock_fds[1], &msg, sizeof(msg)));
 }
 
 TEST(Capability, SyscallAt) {

@@ -109,7 +109,9 @@ void CheckChildFinished(pid_t pid, bool signaled=false) {
 
 TEST(Pdfork, Simple) {
   int pd = -1;
+  int pipefds[2];
   pid_t parent = getpid_();
+  EXPECT_OK(pipe(pipefds));
   int pid = pdfork(&pd, 0);
   EXPECT_OK(pid);
   if (pid == 0) {
@@ -117,19 +119,34 @@ TEST(Pdfork, Simple) {
     EXPECT_EQ(-1, pd);
     EXPECT_NE(parent, getpid_());
     EXPECT_EQ(parent, getppid());
-    sleep(1);
-    exit(0);
+    close(pipefds[0]);
+    int msg = 1;
+    EXPECT_EQ(sizeof(msg), (size_t)write(pipefds[1], &msg, sizeof(msg)));
+    if (verbose) fprintf(stderr, "Child waiting for exit message\n");
+    // Terminate once the parent has completed the checks
+    EXPECT_EQ(sizeof(msg), (size_t)read(pipefds[1], &msg, sizeof(msg)));
+    EXPECT_EQ(0, msg);
+    exit(testing::Test::HasFailure());
   }
-  usleep(100);  // ensure the child has a chance to run
+  int msg = 0;
+  close(pipefds[1]);
+  // Ensure the child has started.
+  EXPECT_EQ(sizeof(msg), (size_t)read(pipefds[0], &msg, sizeof(msg)));
+  EXPECT_EQ(1, msg);
+
   EXPECT_NE(-1, pd);
   EXPECT_PID_ALIVE(pid);
   int pid_got;
   EXPECT_OK(pdgetpid(pd, &pid_got));
   EXPECT_EQ(pid, pid_got);
 
-  // Wait long enough for the child to exit().
-  sleep(2);
+  // Tell the child to exit and wait until it is a zombie.
+  msg = 0;
+  EXPECT_EQ(sizeof(msg), (size_t)write(pipefds[0], &msg, sizeof(msg)));
+  // EXPECT_PID_ZOMBIE waits for up to ~500ms, that should be enough time for
+  // the child to exit successfully.
   EXPECT_PID_ZOMBIE(pid);
+  close(pipefds[0]);
 
   // Wait for the the child.
   int status;
@@ -356,24 +373,38 @@ TEST_F(PipePdfork, Poll) {
 
 // Can multiple processes poll on the same descriptor?
 TEST_F(PipePdfork, PollMultiple) {
+  int pipefds[2];
+  EXPECT_EQ(0, pipe(pipefds));
   int child = fork();
   EXPECT_OK(child);
   if (child == 0) {
-    // Child: wait to give time for setup, then write to the pipe (which will
-    // induce exit of the pdfork()ed process) and exit.
-    sleep(1);
+    close(pipefds[0]);
+    int msg = 1;
+    // Child: wait for parent to acknowledge startup
+    EXPECT_EQ(sizeof(msg), (size_t)write(pipefds[1], &msg, sizeof(msg)));
+    // Child: wait for two messages from the parent and the forked process
+    // before telling the other process to terminate.
+    if (verbose) fprintf(stderr, "[%d] waiting for read 1\n", getpid_());
+    EXPECT_EQ(sizeof(msg), (size_t)read(pipefds[1], &msg, sizeof(msg)));
+    if (verbose) fprintf(stderr, "[%d] waiting for read 2\n", getpid_());
+    EXPECT_EQ(sizeof(msg), (size_t)read(pipefds[1], &msg, sizeof(msg)));
+    EXPECT_EQ(0, msg);
     TerminateChild();
-    exit(0);
+    if (verbose) fprintf(stderr, "[%d] about to exit\n", getpid_());
+    exit(testing::Test::HasFailure());
   }
-  usleep(100);  // ensure the child has a chance to run
-
+  int msg = 0;
+  close(pipefds[1]);
+  EXPECT_EQ(sizeof(msg), (size_t)read(pipefds[0], &msg, sizeof(msg)));
+  EXPECT_EQ(1, msg);
+  if (verbose) fprintf(stderr, "[%d] got child startup message\n", getpid_());
   // Fork again
   int doppel = fork();
   EXPECT_OK(doppel);
   // We now have:
   //   pid A: main process, here
   //   |--pid B: pdfork()ed process, blocked on read()
-  //   |--pid C: fork()ed process, in sleep(1) above
+  //   |--pid C: fork()ed process, in read() above
   //   +--pid D: doppel process, here
 
   // Both A and D execute the following code.
@@ -384,12 +415,19 @@ TEST_F(PipePdfork, PollMultiple) {
   fdp.revents = 0;
   EXPECT_EQ(0, poll(&fdp, 1, 0));
 
+  // Allow C to exit:
+  if (verbose) fprintf(stderr, "[%d] telling child to exit\n", getpid_());
+  msg = 0;
+  EXPECT_EQ(sizeof(msg), (size_t)write(pipefds[0], &msg, sizeof(msg)));
+  close(pipefds[0]);
+
   // Now, wait (indefinitely) for activity on the process descriptor.
   // We expect:
   //  - pid C will finish its sleep, write to the pipe and exit
   //  - pid B will unblock from read(), and exit
   //  - this will generate an event on the process descriptor...
   //  - ...in both process A and process D.
+  if (verbose) fprintf(stderr, "[%d] waiting for child to exit\n", getpid_());
   EXPECT_EQ(1, poll(&fdp, 1, 2000));
   EXPECT_TRUE(fdp.revents & POLLHUP);
 
@@ -522,6 +560,7 @@ TEST_F(PipePdfork, CloseLast) {
 FORK_TEST(Pdfork, OtherUserIfRoot) {
   GTEST_SKIP_IF_NOT_ROOT();
   int pd;
+  int status;
   pid_t pid = pdfork(&pd, 0);
   EXPECT_OK(pid);
   if (pid == 0) {
@@ -542,15 +581,25 @@ FORK_TEST(Pdfork, OtherUserIfRoot) {
   EXPECT_EQ(EPERM, errno);
   EXPECT_PID_ALIVE(pid);
 
+#ifdef __FreeBSD__
+  // Can't send a signal to a process with another UID unless we are root.
+  EXPECT_SYSCALL_FAIL(EBADF, pdkill(pid, SIGKILL));
+  EXPECT_PID_ALIVE(pid);
+  // However, the process will be killed when we close the process descriptor.
+  EXPECT_OK(close(pd));
+  EXPECT_PID_GONE(pid);
+  // Can't pdwait4() after close() since close() reparents the child to a reaper (init)
+  EXPECT_SYSCALL_FAIL(EBADF, pdwait4_(pd, &status, WNOHANG, NULL));
+#else
   // Succeed with pdkill though.
   EXPECT_OK(pdkill(pd, SIGKILL));
   EXPECT_PID_ZOMBIE(pid);
 
-  int status;
   int rc = pdwait4_(pd, &status, WNOHANG, NULL);
   EXPECT_OK(rc);
   EXPECT_EQ(pid, rc);
   EXPECT_TRUE(WIFSIGNALED(status));
+#endif
 }
 
 TEST_F(PipePdfork, WaitPidThenPd) {
@@ -624,18 +673,30 @@ TEST_F(PipePdforkDaemon, Pdkill) {
 
 TEST(Pdfork, PdkillOtherSignal) {
   int pd = -1;
+  int pipefds[2];
+  EXPECT_EQ(0, pipe(pipefds));
   int pid = pdfork(&pd, 0);
   EXPECT_OK(pid);
   if (pid == 0) {
-    // Child: watch for SIGUSR1 forever.
+    // Child: tell the parent that we have started before entering the loop,
+    // and importantly only do so once we have registerd the SIGUSR1 handler.
+    int msg = 1;
+    close(pipefds[0]);
     had_signal.clear();
     signal(SIGUSR1, handle_signal);
+    EXPECT_EQ(sizeof(msg), (size_t)write(pipefds[1], &msg, sizeof(msg)));
+    // Child: watch for SIGUSR1 forever.
     while (!had_signal[SIGUSR1]) {
       usleep(100000);
     }
     exit(123);
   }
-  sleep(1);
+  // Wait for child to start
+  int msg = 0;
+  close(pipefds[1]);
+  EXPECT_EQ(sizeof(msg), (size_t)read(pipefds[0], &msg, sizeof(msg)));
+  EXPECT_EQ(1, msg);
+  close(pipefds[0]);
 
   // Send an invalid signal.
   EXPECT_EQ(-1, pdkill(pd, 0xFFFF));
@@ -651,7 +712,7 @@ TEST(Pdfork, PdkillOtherSignal) {
   int rc = waitpid(pid, &status, __WALL);
   EXPECT_OK(rc);
   EXPECT_EQ(pid, rc);
-  EXPECT_TRUE(WIFEXITED(status)) << "0x" << std::hex << rc;
+  EXPECT_TRUE(WIFEXITED(status)) << "status: 0x" << std::hex << status;
   EXPECT_EQ(123, WEXITSTATUS(status));
 }
 
@@ -668,27 +729,48 @@ pid_t PdforkParentDeath(int pdfork_flags) {
   if (child == 0) {
     int pd;
     if (verbose) fprintf(stderr, "  [%d] child about to pdfork()...\n", getpid_());
+    int pipefds[2]; // for startup notification
+    EXPECT_OK(pipe(pipefds));
     pid_t grandchild = pdfork(&pd, pdfork_flags);
     if (grandchild == 0) {
+      close(pipefds[0]);
+      pid_t grandchildPid = getpid_();
+      EXPECT_EQ(sizeof(grandchildPid), (size_t)write(pipefds[1], &grandchildPid, sizeof(grandchildPid)));
       while (true) {
-        if (verbose) fprintf(stderr, "    [%d] grandchild: \"I aten't dead\"\n", getpid_());
+        if (verbose) fprintf(stderr, "    [%d] grandchild: \"I aten't dead\"\n", grandchildPid);
         sleep(1);
       }
     }
+    close(pipefds[1]);
     if (verbose) fprintf(stderr, "  [%d] pdfork()ed grandchild %d, sending ID to parent\n", getpid_(), grandchild);
-    // send grandchild pid to parent
-    write(sock_fds[1], &grandchild, sizeof(grandchild));
-    sleep(4);
+    // Wait for grandchild to start.
+    pid_t grandchild2;
+    EXPECT_EQ(sizeof(grandchild2), (size_t)read(pipefds[0], &grandchild2, sizeof(grandchild2)));
+    EXPECT_EQ(grandchild, grandchild2) << "received invalid grandchild pid";
+    if (verbose) fprintf(stderr, "  [%d] grandchild %d has started successfully\n", getpid_(), grandchild);
+    close(pipefds[0]);
+
+    // Send grandchild pid to parent.
+    EXPECT_EQ(sizeof(grandchild), (size_t)write(sock_fds[1], &grandchild, sizeof(grandchild)));
+    if (verbose) fprintf(stderr, "  [%d] sent grandchild pid %d to parent\n", getpid_(), grandchild);
+    // Wait for parent to acknowledge the message.
+    int shouldExit = 0;
+    EXPECT_EQ(sizeof(shouldExit), (size_t)read(sock_fds[1], &shouldExit, sizeof(shouldExit)));
+    if (verbose) fprintf(stderr, "  [%d] parent acknowledged grandchild pid %d\n", getpid_(), grandchild);
+    EXPECT_EQ(1, shouldExit);
     if (verbose) fprintf(stderr, "  [%d] child terminating\n", getpid_());
-    exit(0);
+    exit(testing::Test::HasFailure());
   }
   if (verbose) fprintf(stderr, "[%d] fork()ed child is %d\n", getpid_(), child);
   pid_t grandchild;
   read(sock_fds[0], &grandchild, sizeof(grandchild));
-  if (verbose) fprintf(stderr, "[%d] receive grandchild id %d\n", getpid_(), grandchild);
+  if (verbose) fprintf(stderr, "[%d] received grandchild id %d\n", getpid_(), grandchild);
   EXPECT_PID_ALIVE(child);
   EXPECT_PID_ALIVE(grandchild);
-  sleep(6);
+  // Tell child to exit.
+  if (verbose) fprintf(stderr, "[%d] telling child %d to exit\n", getpid_(), child);
+  int shouldExit = 1;
+  EXPECT_EQ(sizeof(shouldExit), (size_t)write(sock_fds[0], &shouldExit, sizeof(shouldExit)));
   // Child dies, closing its process descriptor for the grandchild.
   EXPECT_PID_DEAD(child);
   CheckChildFinished(child);

@@ -17,6 +17,16 @@
     close(_fd);                \
   } while (0)
 
+#define EXPECT_OPEN_SYMLINK_OK(dfd, path, flags) do { \
+    SCOPED_TRACE("openat(" #dfd ", " #path ", " #flags ")"); \
+    char dest[PATH_MAX]; \
+    dest[0] = '\0'; \
+    EXPECT_OK(readlinkat(dfd, path, dest, sizeof(dest))); \
+    int _fd = openat(dfd, path, flags); \
+    EXPECT_OK(_fd) << "\n    symlink dest='" << dest << "'"; \
+    close(_fd); \
+  } while (0)
+
 static void CreateFile(const char *filename, const char *contents) {
   int fd = open(filename, O_CREAT|O_RDWR, 0644);
   EXPECT_OK(fd);
@@ -293,8 +303,8 @@ class OpenatTest : public ::testing::Test {
     EXPECT_OPENAT_FAIL_TRAVERSAL(dir_fd_, "subdir/../../etc/passwd", O_RDONLY|oflag);
 
     // Should only be able to open symlinks that stay within the directory.
-    EXPECT_OPEN_OK(openat(dir_fd_, "symlink.samedir", O_RDONLY|oflag));
-    EXPECT_OPEN_OK(openat(dir_fd_, "symlink.down", O_RDONLY|oflag));
+    EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.samedir", O_RDONLY|oflag);
+    EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.down", O_RDONLY|oflag);
     EXPECT_OPENAT_FAIL_TRAVERSAL(dir_fd_, "symlink.absolute_out", O_RDONLY|oflag);
     EXPECT_OPENAT_FAIL_TRAVERSAL(dir_fd_, "symlink.relative_in", O_RDONLY|oflag);
     EXPECT_OPENAT_FAIL_TRAVERSAL(dir_fd_, "symlink.relative_out", O_RDONLY|oflag);
@@ -322,13 +332,13 @@ class OpenatTest : public ::testing::Test {
 
 TEST_F(OpenatTest, WithCapability) {
   // Any kind of symlink can be opened relative to an ordinary directory FD.
-  EXPECT_OPEN_OK(openat(dir_fd_, "symlink.samedir", O_RDONLY));
-  EXPECT_OPEN_OK(openat(dir_fd_, "symlink.down", O_RDONLY));
-  EXPECT_OPEN_OK(openat(dir_fd_, "symlink.absolute_out", O_RDONLY));
-  EXPECT_OPEN_OK(openat(dir_fd_, "symlink.relative_in", O_RDONLY));
-  EXPECT_OPEN_OK(openat(dir_fd_, "symlink.relative_out", O_RDONLY));
-  EXPECT_OPEN_OK(openat(sub_fd_, "symlink.absolute_in", O_RDONLY));
-  EXPECT_OPEN_OK(openat(sub_fd_, "symlink.up", O_RDONLY));
+  EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.samedir", O_RDONLY);
+  EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.down", O_RDONLY);
+  EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.absolute_out", O_RDONLY);
+  EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.relative_in", O_RDONLY);
+  EXPECT_OPEN_SYMLINK_OK(dir_fd_, "symlink.relative_out", O_RDONLY);
+  EXPECT_OPEN_SYMLINK_OK(sub_fd_, "symlink.absolute_in", O_RDONLY);
+  EXPECT_OPEN_SYMLINK_OK(sub_fd_, "symlink.up", O_RDONLY);
 
   // Now make both DFDs into Capsicum capabilities.
   cap_rights_t r_rl;
