@@ -35,6 +35,12 @@ typedef unsigned long cap_ioctl_t;
 #if __FreeBSD_version >= 1101000
 #define HAVE_OPENAT_INTERMEDIATE_DOTDOT
 #endif
+#if __FreeBSD_version >= 1300116
+// Since FreeBSD commit 6a9c72d901feeca0b0865be8954a3a29d8613b34 any sequence
+// including ".." is valid with O_BENEATH as long as we return back below the start.
+// Capsicum and the stricter O_RESOLVE_BENEATH do no allow escaping at all.
+#define HAVE_O_BENEATH_INTERMEDIATE_DOTDOT
+#endif
 
 #endif
 

@@ -11,6 +11,7 @@
 
 // Check an open call works and close the resulting fd.
 #define EXPECT_OPEN_OK(f) do { \
+    SCOPED_TRACE(#f);          \
     int _fd = f;               \
     EXPECT_OK(_fd);            \
     close(_fd);                \
@@ -257,17 +258,30 @@ class OpenatTest : public ::testing::Test {
   }
 
   // Check openat(2) policing that is common across capabilities, capability mode and O_BENEATH.
-  void CheckPolicing(int oflag) {
+  void CheckPolicing(int oflag, bool allowsIntermediateEscape) {
     // OK for normal access.
     EXPECT_OPEN_OK(openat(dir_fd_, "topfile", O_RDONLY|oflag));
     EXPECT_OPEN_OK(openat(dir_fd_, "subdir/bottomfile", O_RDONLY|oflag));
     EXPECT_OPEN_OK(openat(sub_fd_, "bottomfile", O_RDONLY|oflag));
     EXPECT_OPEN_OK(openat(sub_fd_, ".", O_RDONLY|oflag));
 
+    EXPECT_SYSCALL_FAIL(ENOENT, openat(sub_fd_, "foo/../bottomfile", O_RDONLY | oflag));
+    EXPECT_SYSCALL_FAIL(ENOENT, openat(sub_fd_, "foo/../../subdir/bottomfile", O_RDONLY | oflag));
+
     // Can't open paths with ".." in them.
     EXPECT_OPENAT_FAIL_TRAVERSAL(sub_fd_, "../topfile", O_RDONLY|oflag);
-    EXPECT_OPENAT_FAIL_TRAVERSAL(sub_fd_, "../subdir/bottomfile", O_RDONLY|oflag);
     EXPECT_OPENAT_FAIL_TRAVERSAL(sub_fd_, "..", O_RDONLY|oflag);
+    if (allowsIntermediateEscape) {
+      EXPECT_OPEN_OK(openat(sub_fd_, "../subdir/bottomfile", O_RDONLY | oflag));
+      EXPECT_OPEN_OK(openat(sub_fd_, "../../cap_topdir/subdir/bottomfile", O_RDONLY | oflag));
+      EXPECT_OPEN_OK(openat(dir_fd_, "../cap_topdir/subdir/bottomfile", O_RDONLY | oflag));
+      EXPECT_OPEN_OK(openat(dir_fd_, "subdir/../../cap_topdir/topfile", O_RDONLY | oflag));
+    } else {
+      EXPECT_OPENAT_FAIL_TRAVERSAL(sub_fd_, "../subdir/bottomfile", O_RDONLY | oflag);
+      EXPECT_OPENAT_FAIL_TRAVERSAL(sub_fd_, "../../cap_topdir/subdir/bottomfile", O_RDONLY | oflag);
+      EXPECT_OPENAT_FAIL_TRAVERSAL(dir_fd_, "../cap_topdir/subdir/bottomfile", O_RDONLY | oflag);
+      EXPECT_OPENAT_FAIL_TRAVERSAL(dir_fd_, "subdir/../../cap_topdir/topfile", O_RDONLY | oflag);
+    }
 
 #ifdef HAVE_OPENAT_INTERMEDIATE_DOTDOT
     // OK for dotdot lookups that don't escape the top directory
@@ -321,14 +335,14 @@ TEST_F(OpenatTest, WithCapability) {
   cap_rights_init(&r_rl, CAP_READ, CAP_LOOKUP, CAP_FCHDIR);
   EXPECT_OK(cap_rights_limit(dir_fd_, &r_rl));
   EXPECT_OK(cap_rights_limit(sub_fd_, &r_rl));
-  CheckPolicing(0);
+  CheckPolicing(0, /*allowsIntermediateEscape=*/false);
   // Use of AT_FDCWD is independent of use of a capability.
   // Can open paths starting with "/" against a capability dfd, because the dfd is ignored.
 }
 
 FORK_TEST_F(OpenatTest, InCapabilityMode) {
   EXPECT_OK(cap_enter());  // Enter capability mode
-  CheckPolicing(0);
+  CheckPolicing(0, /*allowsIntermediateEscape=*/false);
 
   // Use of AT_FDCWD is banned in capability mode.
   EXPECT_CAPMODE(openat(AT_FDCWD, "topfile", O_RDONLY));
@@ -341,8 +355,13 @@ FORK_TEST_F(OpenatTest, InCapabilityMode) {
 }
 
 #ifdef O_BENEATH
-TEST_F(OpenatTest, WithFlag) {
-  CheckPolicing(O_BENEATH);
+TEST_F(OpenatTest, WithFlag_O_BENEATH) {
+  bool allowsIntermediateEscape = false;
+  // FreeBSD13+ O_BENEATH allows intermediate .. as long as the final path is below the start.
+#ifdef HAVE_O_BENEATH_INTERMEDIATE_DOTDOT
+  allowsIntermediateEscape = true;
+#endif
+  CheckPolicing(O_BENEATH, allowsIntermediateEscape);
 
   // Check with AT_FDCWD.
   EXPECT_OPEN_OK(openat(AT_FDCWD, "topfile", O_RDONLY|O_BENEATH));
@@ -354,8 +373,33 @@ TEST_F(OpenatTest, WithFlag) {
   EXPECT_OPENAT_FAIL_TRAVERSAL(sub_fd_, "/etc/passwd", O_RDONLY|O_BENEATH);
 }
 
-FORK_TEST_F(OpenatTest, WithFlagInCapabilityMode) {
+FORK_TEST_F(OpenatTest, WithFlagInCapabilityMode_O_BENEATH) {
   EXPECT_OK(cap_enter());  // Enter capability mode
-  CheckPolicing(O_BENEATH);
+  CheckPolicing(O_BENEATH, /*allowsIntermediateEscape=*/false);
 }
+#endif
+
+#ifdef O_RESOLVE_BENEATH
+TEST_F(OpenatTest, WithFlag_O_RESOLVE_BENEATH) {
+  // O_RESOLVE_BENEATH is similar to O_BENEATH but prevents any (temporary)
+  // escape from the root during resolving.
+  CheckPolicing(O_RESOLVE_BENEATH, /*allowsIntermediateEscape=*/false);
+}
+
+FORK_TEST_F(OpenatTest, WithFlagInCapabilityMode_O_RESOLVE_BENEATH) {
+  EXPECT_OK(cap_enter());  // Enter capability mode
+  CheckPolicing(O_RESOLVE_BENEATH, /*allowsIntermediateEscape=*/false);
+}
+
+#ifdef O_BENEATH
+TEST_F(OpenatTest, WithFlag_O_RESOLVE_BENEATH_and_O_BENEATH) {
+  // If both O_BENEATH and O_RESOLVE_BENEATH are passed, the latter has priority.
+  CheckPolicing(O_RESOLVE_BENEATH | O_BENEATH, /*allowsIntermediateEscape=*/false);
+}
+
+FORK_TEST_F(OpenatTest, WithFlagInCapabilityMode_O_RESOLVE_BENEATH_and_O_BENEATH) {
+  EXPECT_OK(cap_enter());  // Enter capability mode
+  CheckPolicing(O_RESOLVE_BENEATH | O_BENEATH, /*allowsIntermediateEscape=*/false);
+}
+#endif
 #endif
