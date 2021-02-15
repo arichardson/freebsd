@@ -712,6 +712,7 @@ log2l(long double x)
 	_2sumF(r.hi, r.lo);
 	hi = (float)r.hi;
 	lo = r.lo + (r.hi - hi);
+	// FIXME: this sets FE_INEXACT
 	RETURN2PI(invln2_hi * hi,
 	    (invln2_lo + invln2_hi) * lo + invln2_lo * hi);
 }

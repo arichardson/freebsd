@@ -62,15 +62,8 @@ __FBSDID("$FreeBSD$");
 #define	test(func, x, result, exceptmask, excepts)	do {		\
 	volatile long double _d = x;					\
 	assert(feclearexcept(FE_ALL_EXCEPT) == 0);			\
-	assert(fpequal((func)(_d), (result)));				 \
-	assert(((void)(func), fetestexcept(exceptmask) == (excepts)));	\
-} while (0)
-
-#define	test(func, x, result, exceptmask, excepts)	do {		\
-	volatile long double _d = x;					\
-	assert(feclearexcept(FE_ALL_EXCEPT) == 0);			\
-	assert(fpequal((func)(_d), (result)));				 \
-	assert(((void)(func), fetestexcept(exceptmask) == (excepts)));	\
+	assert(fpequal((func)(_d), (result)));				\
+	assert(((void)(func), x, fetestexcept(exceptmask) == (excepts)));	\
 } while (0)
 
 #define	test_tol(func, z, result, tol)			do {		\

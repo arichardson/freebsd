@@ -241,6 +241,17 @@ MLINKS+=tanh.3 tanhf.3 tanh.3 tanhl.3
 MLINKS+=trunc.3 truncf.3 trunc.3 truncl.3
 
 .include <src.opts.mk>
+.include <bsd.compiler.mk>
+
+.if ${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} >= 100000
+# Clang 10+ performs additional floating-point optimizations that can result
+# in unexpected FP traps (most likely speculatively hoisting some operations
+# outside of loops/before not taken branches. It appears that the
+# -ffp-exception-behavior=maytrap flag fixes this.
+# CFLAGS+=	-ffp-exception-behavior=maytrap
+CFLAGS+=	-ffp-model=strict
+.endif
+CFLAGS+=-ftrapping-math -fno-builtin
 
 HAS_TESTS=
 SUBDIR.${MK_TESTS}+= tests

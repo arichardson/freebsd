@@ -2,6 +2,8 @@
 
 .include <bsd.own.mk>
 
+NO_SHARED=yes
+
 TESTSRC=	${SRCTOP}/contrib/netbsd-tests/lib/libm
 
 # All architectures on FreeBSD have fenv.h
@@ -98,6 +100,15 @@ ARCH_SUBDIR= ${MACHINE_CPUARCH}
 # XXX: for some odd reason float.h doesn't tell the full story about what the
 # precision is.
 CFLAGS+=	-DLDBL_PREC=${LDBL_PREC}
+.if ${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} >= 100000
+# Clang 10+ performs additional floating-point optimizations that can result
+# in unexpected FP traps (most likely speculatively hoisting some operations
+# outside of loops/before not taken branches. It appears that the
+# -ffp-exception-behavior=maytrap flag fixes this.
+# CFLAGS+=	-ffp-exception-behavior=maytrap
+CFLAGS+=	-ffp-model=precise
+.endif
+CFLAGS+=-ftrapping-math -fno-builtin
 
 CFLAGS.fe_round_test+=	-D__HAVE_FENV
 
