@@ -296,7 +296,7 @@ void
 sbfree(struct sockbuf *sb, struct mbuf *m)
 {
 
-#if 0	/* XXX: not yet: soclose() call path comes here w/o lock. */
+#if 1	/* XXX: not yet: soclose() call path comes here w/o lock. */
 	SOCKBUF_LOCK_ASSERT(sb);
 #endif
 
@@ -366,7 +366,7 @@ void
 sbfree_ktls_rx(struct sockbuf *sb, struct mbuf *m)
 {
 
-#if 0	/* XXX: not yet: soclose() call path comes here w/o lock. */
+#if 1	/* XXX: not yet: soclose() call path comes here w/o lock. */
 	SOCKBUF_LOCK_ASSERT(sb);
 #endif
 
@@ -745,13 +745,15 @@ sbrelease(struct sockbuf *sb, struct socket *so)
 void
 sbdestroy(struct sockbuf *sb, struct socket *so)
 {
-
+	MPASS(so->so_count == 0 || so->so_count == 1);
+	SOCKBUF_LOCK(sb); // XXX: not needed but silences assertions
 	sbrelease_internal(sb, so);
 #ifdef KERN_TLS
 	if (sb->sb_tls_info != NULL)
 		ktls_free(sb->sb_tls_info);
 	sb->sb_tls_info = NULL;
 #endif
+	SOCKBUF_UNLOCK(sb); // XXX: no needed
 }
 
 /*

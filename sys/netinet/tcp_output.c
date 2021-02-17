@@ -572,6 +572,7 @@ after_sack_rexmit:
 			flags &= ~TH_FIN;
 	}
 
+	SOCKBUF_LOCK(&so->so_rcv);
 	recwin = lmin(lmax(sbspace(&so->so_rcv), 0),
 	    (long)TCP_MAXWIN << tp->rcv_scale);
 
@@ -759,10 +760,12 @@ dontupdate:
 	 */
 just_return:
 	SOCKBUF_UNLOCK(&so->so_snd);
+	SOCKBUF_UNLOCK(&so->so_rcv);
 	return (0);
 
 send:
 	SOCKBUF_LOCK_ASSERT(&so->so_snd);
+	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 	if (len > 0) {
 		if (len >= tp->t_maxseg)
 			tp->t_flags2 |= TF2_PLPMTU_MAXSEGSNT;
@@ -887,6 +890,7 @@ send:
 		    !(to.to_flags & TOF_FASTOPEN))
 			len = 0;
 	}
+	SOCKBUF_UNLOCK(&so->so_rcv);
 
 	/*
 	 * Adjust data length if insertion of options will
@@ -1133,6 +1137,7 @@ send:
 		m->m_len = hdrlen;
 	}
 	SOCKBUF_UNLOCK_ASSERT(&so->so_snd);
+	SOCKBUF_UNLOCK_ASSERT(&so->so_rcv);
 	m->m_pkthdr.rcvif = (struct ifnet *)0;
 #ifdef MAC
 	mac_inpcb_create_mbuf(tp->t_inpcb, m);
@@ -1212,6 +1217,7 @@ send:
 			flags |= TH_ECE;
 	}
 
+	SOCKBUF_LOCK(&so->so_rcv);
 	/*
 	 * If we are doing retransmissions, then snd_nxt will
 	 * not reflect the first unsent octet.  For ACK only
@@ -1250,6 +1256,7 @@ send:
 	if (flags & TH_RST) {
 		recwin = 0;
 	} else {
+		SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 		if (recwin < (so->so_rcv.sb_hiwat / 4) &&
 		    recwin < tp->t_maxseg)
 			recwin = 0;
@@ -1270,6 +1277,7 @@ send:
 		recwin = roundup2(recwin, 1 << tp->rcv_scale);
 		th->th_win = htons((u_short)(recwin >> tp->rcv_scale));
 	}
+	SOCKBUF_UNLOCK(&so->so_rcv);
 
 	/*
 	 * Adjust the RXWIN0SENT flag - indicate that we have advertised
@@ -1696,6 +1704,8 @@ timer:
 #endif
 	if (sendalot)
 		goto again;
+	SOCKBUF_UNLOCK_ASSERT(&so->so_rcv);
+	SOCKBUF_UNLOCK_ASSERT(&so->so_snd);
 	return (0);
 }
 

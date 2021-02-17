@@ -295,11 +295,13 @@ tcp_twstart(struct tcpcb *tp)
 	 * Recover last window size sent.
 	 */
 	so = inp->inp_socket;
+	SOCKBUF_LOCK(&so->so_rcv);
 	recwin = lmin(lmax(sbspace(&so->so_rcv), 0),
 	    (long)TCP_MAXWIN << tp->rcv_scale);
 	if (recwin < (so->so_rcv.sb_hiwat / 4) &&
 	    recwin < tp->t_maxseg)
 		recwin = 0;
+	SOCKBUF_UNLOCK(&so->so_rcv);
 	if (SEQ_GT(tp->rcv_adv, tp->rcv_nxt) &&
 	    recwin < (tp->rcv_adv - tp->rcv_nxt))
 		recwin = (tp->rcv_adv - tp->rcv_nxt);

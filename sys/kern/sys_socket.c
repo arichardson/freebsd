@@ -228,12 +228,14 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 		if (SOLISTENING(so)) {
 			error = EINVAL;
 		} else {
+			SOCKBUF_LOCK(&so->so_snd);
 			if ((so->so_snd.sb_hiwat < sbused(&so->so_snd)) ||
 			    (so->so_snd.sb_mbmax < so->so_snd.sb_mbcnt)) {
 				*(int *)data = 0;
 			} else {
 				*(int *)data = sbspace(&so->so_snd);
 			}
+			SOCKBUF_UNLOCK(&so->so_snd);
 		}
 		break;
 

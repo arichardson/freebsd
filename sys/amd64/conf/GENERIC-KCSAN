@@ -39,3 +39,8 @@ options 	SMBFS
 options 	NETSMB			# Seems to be needed by SMBFS
 options 	LIBMCHAIN		# Also seems to be needed by SMBFS
 options 	LIBICONV		# Also seems to be needed by SMBFS
+
+# More debug
+options 	DEBUG_VFS_LOCKS	# enable VFS lock debugging
+options 	SOCKBUF_DEBUG	# enable sockbuf last record/mb tail checking
+options 	IFMEDIA_DEBUG	# enable debugging in net/if_media.c

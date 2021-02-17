@@ -59,10 +59,10 @@
 #define	SBS_RCVATMARK		0x0040	/* at mark on input */
 
 #if defined(_KERNEL) || defined(_WANT_SOCKET)
-#include <sys/_lock.h>
-#include <sys/_mutex.h>
 #include <sys/_sx.h>
 #include <sys/_task.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
 
 #define	SB_MAX		(2*1024*1024)	/* default for max chars in sockbuf */
 
@@ -202,7 +202,7 @@ sbavail(struct sockbuf *sb)
 #if 0
 	SOCKBUF_LOCK_ASSERT(sb);
 #endif
-	return (sb->sb_acc);
+	return atomic_load_int(&sb->sb_acc);
 }
 
 /*
@@ -216,7 +216,7 @@ sbused(struct sockbuf *sb)
 #if 0
 	SOCKBUF_LOCK_ASSERT(sb);
 #endif
-	return (sb->sb_ccc);
+	return atomic_load_int(&sb->sb_ccc);
 }
 
 /*
@@ -229,7 +229,7 @@ sbspace(struct sockbuf *sb)
 {
 	int bleft, mleft;		/* size should match sockbuf fields */
 
-#if 0
+#if 1
 	SOCKBUF_LOCK_ASSERT(sb);
 #endif
 
@@ -241,6 +241,14 @@ sbspace(struct sockbuf *sb)
 
 	return ((bleft < mleft) ? bleft : mleft);
 }
+
+#define sbspace_dolock(sb)			\
+	({					\
+		SOCKBUF_LOCK(sb);		\
+		long _space = sbspace(sb);	\
+		SOCKBUF_UNLOCK(sb);		\
+		_space;				\
+	})
 
 #define SB_EMPTY_FIXUP(sb) do {						\
 	if ((sb)->sb_mb == NULL) {					\

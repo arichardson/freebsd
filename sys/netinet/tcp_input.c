@@ -1450,10 +1450,12 @@ tcp_autorcvbuf(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	    tp->t_srtt != 0 && tp->rfbuf_ts != 0 &&
 	    TCP_TS_TO_TICKS(tcp_ts_getticks() - tp->rfbuf_ts) >
 	    ((tp->t_srtt >> TCP_RTT_SHIFT)/2)) {
+		SOCKBUF_LOCK(&so->so_rcv);
 		if (tp->rfbuf_cnt > ((so->so_rcv.sb_hiwat / 2)/ 4 * 3) &&
 		    so->so_rcv.sb_hiwat < V_tcp_autorcvbuf_max) {
 			newsize = min((so->so_rcv.sb_hiwat + (so->so_rcv.sb_hiwat/2)), V_tcp_autorcvbuf_max);
 		}
+		SOCKBUF_UNLOCK(&so->so_rcv);
 		TCP_PROBE6(receive__autoresize, NULL, tp, m, tp, th, newsize);
 
 		/* Start over with next RTT. */
@@ -1864,7 +1866,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				goto check_delack;
 			}
 		} else if (th->th_ack == tp->snd_una &&
-		    tlen <= sbspace(&so->so_rcv)) {
+		    tlen <= sbspace_dolock(&so->so_rcv)) {
 			int newsize = 0;	/* automatic sockbuf scaling */
 
 			/*
@@ -1941,7 +1943,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * Receive window is amount of space in rcv queue,
 	 * but not less than advertised window.
 	 */
-	win = sbspace(&so->so_rcv);
+	win = sbspace_dolock(&so->so_rcv);
 	if (win < 0)
 		win = 0;
 	tp->rcv_wnd = imax(win, (int)(tp->rcv_adv - tp->rcv_nxt));
@@ -2986,12 +2988,17 @@ process_ACK:
 				 * we should release the tp also, and use a
 				 * compressed state.
 				 */
+				SOCKBUF_UNLOCK_ASSERT(&so->so_rcv);
+				SOCKBUF_LOCK(&so->so_rcv);
 				if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
+					SOCKBUF_UNLOCK(&so->so_rcv);
 					soisdisconnected(so);
 					tcp_timer_activate(tp, TT_2MSL,
 					    (tcp_fast_finwait2_recycle ?
 					    tcp_finwait2_timeout :
 					    TP_MAXIDLE(tp)));
+				} else {
+					SOCKBUF_UNLOCK(&so->so_rcv);
 				}
 				tcp_state_change(tp, TCPS_FIN_WAIT_2);
 			}
@@ -3219,6 +3226,7 @@ dodata:							/* XXX */
 		 * buffer size.
 		 * XXX: Unused.
 		 */
+		SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 		if (SEQ_GT(tp->rcv_adv, tp->rcv_nxt))
 			len = so->so_rcv.sb_hiwat - (tp->rcv_adv - tp->rcv_nxt);
 		else
