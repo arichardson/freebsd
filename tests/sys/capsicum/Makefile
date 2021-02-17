@@ -8,6 +8,7 @@ ATF_TESTS_C+=	bindat_connectat
 ATF_TESTS_C+=	ioctls_test
 
 CFLAGS+=	-I${SRCTOP}/tests
+LIBADD+=	procstat
 
 .if ${MK_GOOGLETEST} != no
 
