@@ -32,4 +32,4 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/time.h>
 
-volatile time_t time_second = 1;
+_Atomic(time_t) time_second = 1;

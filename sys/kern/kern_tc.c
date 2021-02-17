@@ -94,14 +94,14 @@ static struct timehands ths[16] = {
     },
 };
 
-static struct timehands *volatile timehands = &ths[0];
+static _Atomic(struct timehands *) timehands = &ths[0];
 struct timecounter *timecounter = &dummy_timecounter;
 static struct timecounter *timecounters = &dummy_timecounter;
 
 int tc_min_ticktock_freq = 1;
 
-volatile time_t time_second = 1;
-volatile time_t time_uptime = 1;
+_Atomic(time_t) time_second = 1;
+_Atomic(time_t) time_uptime = 1;
 
 static int sysctl_kern_boottime(SYSCTL_HANDLER_ARGS);
 SYSCTL_PROC(_kern, KERN_BOOTTIME, boottime,
@@ -482,6 +482,7 @@ getboottimebin(struct bintime *boottimebin)
 }
 
 #ifdef FFCLOCK
+#error RACY
 /*
  * Support for feed-forward synchronization algorithms. This is heavily inspired
  * by the timehands mechanism but kept independent from it. *_windup() functions

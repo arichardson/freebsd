@@ -778,7 +778,7 @@ foffset_unlock(struct file *fp, off_t val, int flags)
 	if ((flags & FOF_NEXTOFF_R) != 0)
 		fp->f_nextoff[UIO_READ] = val;
 	if ((flags & FOF_NEXTOFF_W) != 0)
-		fp->f_nextoff[UIO_WRITE] = val;
+		fp->f_nextoff[UIO_WRITE] = val; // FIXME: atomic
 
 	if ((flags & FOF_NOLOCK) != 0)
 		return;

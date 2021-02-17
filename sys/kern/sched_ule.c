@@ -237,13 +237,13 @@ struct tdq {
 	 */
 	struct mtx_padalign tdq_lock;		/* run queue lock. */
 	struct cpu_group *tdq_cg;		/* Pointer to cpu topology. */
-	volatile int	tdq_load;		/* Aggregate load. */
-	volatile int	tdq_cpu_idle;		/* cpu_idle() is active. */
+	_Atomic(int)	tdq_load;		/* Aggregate load. */
+	_Atomic(int)	tdq_cpu_idle;		/* cpu_idle() is active. */
 	int		tdq_sysload;		/* For loadavg, !ITHD load. */
-	volatile int	tdq_transferable;	/* Transferable thread count. */
-	volatile short	tdq_switchcnt;		/* Switches this tick. */
-	volatile short	tdq_oldswitchcnt;	/* Switches last tick. */
-	u_char		tdq_lowpri;		/* Lowest priority thread. */
+	_Atomic(int)	tdq_transferable;	/* Transferable thread count. */
+	_Atomic(int)	tdq_switchcnt;		/* Switches this tick. */
+	_Atomic(int)	tdq_oldswitchcnt;	/* Switches last tick. */
+	_Atomic(u_char)	tdq_lowpri;		/* Lowest priority thread. */
 	u_char		tdq_owepreempt;		/* Remote preemption pending. */
 	u_char		tdq_idx;		/* Current insert index. */
 	u_char		tdq_ridx;		/* Current removal index. */

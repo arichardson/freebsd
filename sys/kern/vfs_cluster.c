@@ -159,6 +159,7 @@ cluster_read(struct vnode *vp, u_quad_t filesize, daddr_t lblkno, long size,
 				 * is invalid (about to go away?)
 				 */
 				rbp = gbincore(&vp->v_bufobj, lblkno+i);
+				// FIXME: KCSAN race?
 				if (rbp == NULL || (rbp->b_flags & B_INVAL))
 					break;
 

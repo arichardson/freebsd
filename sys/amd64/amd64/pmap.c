@@ -873,7 +873,7 @@ again:
 	 * pmap_di_store_invl() provides fence between the generation
 	 * write and the update of next.
 	 */
-	invl_gen->next = NULL;
+	atomic_store_ptr(&invl_gen->next, NULL);
 	critical_exit();
 }
 
@@ -6012,7 +6012,7 @@ pmap_remove_ptes(pmap_t pmap, vm_offset_t sva, vm_offset_t eva,
 void
 pmap_remove(pmap_t pmap, vm_offset_t sva, vm_offset_t eva)
 {
-	struct rwlock *lock;
+	struct rwlock *lock = NULL;
 	vm_page_t mt;
 	vm_offset_t va_next;
 	pml5_entry_t *pml5e;
@@ -6052,7 +6052,6 @@ pmap_remove(pmap_t pmap, vm_offset_t sva, vm_offset_t eva)
 		}
 	}
 
-	lock = NULL;
 	for (; sva < eva; sva = va_next) {
 		if (pmap->pm_stats.resident_count == 0)
 			break;

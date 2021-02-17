@@ -31,3 +31,11 @@ include GENERIC
 ident   GENERIC-KCSAN
 
 options 	KCSAN
+nooptions	WITNESS
+nooptions	WITNESS_SKIPSPIN
+
+# Access host files on QEMU
+options 	SMBFS
+options 	NETSMB			# Seems to be needed by SMBFS
+options 	LIBMCHAIN		# Also seems to be needed by SMBFS
+options 	LIBICONV		# Also seems to be needed by SMBFS

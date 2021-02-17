@@ -500,8 +500,8 @@ struct clockinfo {
 void	inittodr(time_t base);
 void	resettodr(void);
 
-extern volatile time_t	time_second;
-extern volatile time_t	time_uptime;
+extern _Atomic(time_t)	time_second;
+extern _Atomic(time_t)	time_uptime;
 extern struct bintime tc_tick_bt;
 extern sbintime_t tc_tick_sbt;
 extern struct bintime tick_bt;

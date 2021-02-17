@@ -72,6 +72,7 @@ typedef struct {
 
 static csan_cpu_t kcsan_cpus[MAXCPU];
 static bool kcsan_enabled __read_mostly;
+struct mtx kcsan_mutex;
 
 #define __RET_ADDR	(uintptr_t)__builtin_return_address(0)
 
@@ -90,6 +91,7 @@ kcsan_enable(void *dummy __unused)
 {
 
 	printf("Enabling KCSCAN, expect reduced performance.\n");
+	mtx_init(&kcsan_mutex, "kcsan_mutex", NULL, MTX_DEF);
 	kcsan_enabled = true;
 }
 SYSINIT(kcsan_enable, SI_SUB_SMP, SI_ORDER_SECOND, kcsan_enable, NULL);
@@ -442,6 +444,12 @@ kcsan_copyout(const void *kaddr, void *uaddr, size_t len)
 		kcsan_access((uintptr_t)ptr, sizeof(type), true, true,	\
 		    __RET_ADDR);					\
 		return (atomic_fetchadd_##name(ptr, val));		\
+	}								\
+	__strong_reference(kcsan_atomic_fetchadd_##name,__tsan_atomic##name##_fetch_add); \
+	type __tsan_atomic##name##_fetch_sub(volatile type *ptr, type val);	\
+	type __tsan_atomic##name##_fetch_sub(volatile type *ptr, type val)	\
+	{								\
+		return (__tsan_atomic##name##_fetch_add(ptr, -val));	\
 	}
 
 #define	_CSAN_ATOMIC_FUNC_LOAD(name, type)				\
@@ -450,7 +458,8 @@ kcsan_copyout(const void *kaddr, void *uaddr, size_t len)
 		kcsan_access((uintptr_t)ptr, sizeof(type), false, true,	\
 		    __RET_ADDR);					\
 		return (atomic_load_##name(ptr));			\
-	}
+	}								\
+	__strong_reference(kcsan_atomic_load_##name,__tsan_atomic##name##_load);
 
 #define	CSAN_ATOMIC_FUNC_LOAD(name, type)				\
 	_CSAN_ATOMIC_FUNC_LOAD(name, type)				\
@@ -496,7 +505,8 @@ kcsan_copyout(const void *kaddr, void *uaddr, size_t len)
 		kcsan_access((uintptr_t)ptr, sizeof(type), true, true,	\
 		    __RET_ADDR);					\
 		atomic_store_##name(ptr, val); 				\
-	}
+	}								\
+	__strong_reference(kcsan_atomic_store_##name,__tsan_atomic##name##_store);
 
 #define	CSAN_ATOMIC_FUNC_STORE(name, type)				\
 	_CSAN_ATOMIC_FUNC_STORE(name, type)				\

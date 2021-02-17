@@ -87,18 +87,18 @@ struct uart_softc {
 	struct resource *sc_ires;	/* Interrupt resource. */
 	void		*sc_icookie;
 	int		sc_irid;
+	bool		sc_leaving;	/* This UART is going away. */
+	bool		sc_testintr;	/* This UART is under int. testing. */
 	struct callout	sc_timer;
 
 	int		sc_callout:1;	/* This UART is opened for callout. */
 	int		sc_fastintr:1;	/* This UART uses fast interrupts. */
 	int		sc_hwiflow:1;	/* This UART has HW input flow ctl. */
 	int		sc_hwoflow:1;	/* This UART has HW output flow ctl. */
-	int		sc_leaving:1;	/* This UART is going away. */
 	int		sc_opened:1;	/* This UART is open for business. */
 	int		sc_polled:1;	/* This UART has no interrupts. */
 	int		sc_txbusy:1;	/* This UART is transmitting. */
 	int		sc_isquelch:1;	/* This UART has input squelched. */
-	int		sc_testintr:1;	/* This UART is under int. testing. */
 
 	struct uart_devinfo *sc_sysdev;	/* System device (or NULL). */
 

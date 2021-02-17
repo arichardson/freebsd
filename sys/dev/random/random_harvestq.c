@@ -149,8 +149,8 @@ static struct harvest_context {
 	 */
 	struct entropy_ring {
 		struct harvest_event ring[RANDOM_RING_MAX];
-		volatile u_int in;
-		volatile u_int out;
+		_Atomic(u_int) in;
+		_Atomic(u_int) out;
 	} hc_entropy_ring;
 	struct fast_entropy_accumulator {
 		volatile u_int pos;
