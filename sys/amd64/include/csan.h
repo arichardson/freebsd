@@ -85,8 +85,6 @@ static void
 kcsan_md_unwind(void)
 {
 #ifdef DDB
-	mtx_lock(&kcsan_mutex);
 	db_trace_self();
-	mtx_unlock(&kcsan_mutex);
 #endif
 }
