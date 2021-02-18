@@ -248,10 +248,12 @@ MLINKS+=trunc.3 truncf.3 trunc.3 truncl.3
 # in unexpected FP traps (most likely speculatively hoisting some operations
 # outside of loops/before not taken branches. It appears that the
 # -ffp-exception-behavior=maytrap flag fixes this.
-# CFLAGS+=	-ffp-exception-behavior=maytrap
+CFLAGS+=	-ffp-exception-behavior=maytrap
 CFLAGS+=	-ffp-model=strict
 .endif
-CFLAGS+=-ftrapping-math -fno-builtin
+CFLAGS+=-ftrapping-math
+# CFLAGS+=-DDOPRINT -DDEBUG -DDOPRINT_LD80
+CFLAGS+=-DDEBUG
 
 HAS_TESTS=
 SUBDIR.${MK_TESTS}+= tests

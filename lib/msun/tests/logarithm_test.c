@@ -42,6 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <ieeefp.h>
 #endif
 
+#include <atf-c.h>
+
 #include "test-utils.h"
 
 #pragma STDC FENV_ACCESS ON
@@ -59,17 +61,22 @@ __FBSDID("$FreeBSD$");
  * XXX The volatile here is to avoid gcc's bogus constant folding and work
  *     around the lack of support for the FENV_ACCESS pragma.
  */
-#define	test(func, x, result, exceptmask, excepts)	do {		\
-	volatile long double _d = x;					\
-	assert(feclearexcept(FE_ALL_EXCEPT) == 0);			\
-	assert(fpequal((func)(_d), (result)));				\
-	assert(((void)(func), x, fetestexcept(exceptmask) == (excepts)));	\
+#define	test(func, x, result, exceptmask, excepts)	do { \
+	volatile long double _d = x;                           \
+	printf("%s:%d: intitial=%#x\n", __func__, __LINE__, fetestexcept(FE_INEXACT)); \
+	ATF_CHECK_EQ(0, feclearexcept(FE_ALL_EXCEPT));			\
+	printf("%s:%d: after clear inex=%#x\n", __func__, __LINE__, fetestexcept(FE_INEXACT)); \
+	ATF_CHECK(fpequal((func)(_d), (result)));			\
+	printf("%s:%d: after func inex=%#x\n", __func__, __LINE__, fetestexcept(FE_INEXACT)); \
+	ATF_CHECK_EQ_MSG((excepts), fetestexcept(exceptmask),		\
+	    "unexpected exception flags for %s(%s): %#x not %#x",	\
+	    #func, #x, fetestexcept(exceptmask), (excepts));		\
 } while (0)
 
 #define	test_tol(func, z, result, tol)			do {		\
 	volatile long double _d = z;					\
 	debug("  testing %6s(%15La) ~= % .36Le\n", #func, _d, result);	\
-	assert(fpequal_tol((func)(_d), (result), (tol), CS_BOTH));	\
+	ATF_CHECK(fpequal_tol((func)(_d), (result), (tol), CS_BOTH));	\
 } while (0)
 
 /* Test all the functions that compute log(x). */
@@ -92,8 +99,8 @@ __FBSDID("$FreeBSD$");
 	test(log1pl, x, result, exceptmask, excepts);			\
 } while (0)
 
-static void
-run_generic_tests(void)
+ATF_TC_WITHOUT_HEAD(generic_tests);
+ATF_TC_BODY(generic_tests, tc)
 {
 
 	/* log(1) == 0, no exceptions raised */
@@ -121,8 +128,8 @@ run_generic_tests(void)
 	testall1(-1.0, -INFINITY, ALL_STD_EXCEPT & ~FE_INEXACT, FE_DIVBYZERO);
 }
 
-static void
-run_log2_tests(void)
+ATF_TC_WITHOUT_HEAD(log2_tests);
+ATF_TC_BODY(log2_tests, tc)
 {
 	unsigned i;
 
@@ -148,8 +155,8 @@ run_log2_tests(void)
 	}
 }
 
-static void
-run_roundingmode_tests(void)
+ATF_TC_WITHOUT_HEAD(roundingmode_tests);
+ATF_TC_BODY(roundingmode_tests, tc)
 {
 
 	/*
@@ -182,8 +189,8 @@ run_roundingmode_tests(void)
 	fesetround(FE_TONEAREST);
 }
 
-static void
-run_accuracy_tests(void)
+ATF_TC_WITHOUT_HEAD(accuracy_tests);
+ATF_TC_BODY(accuracy_tests, tc)
 {
 	static const struct {
 		float x;
@@ -236,10 +243,9 @@ run_accuracy_tests(void)
 	}
 }
 
-static void
-run_log1p_accuracy_tests(void)
+ATF_TC_WITHOUT_HEAD(log1p_accuracy_tests);
+ATF_TC_BODY(log1p_accuracy_tests, tc)
 {
-
 	test_tol(log1pf, 0x0.333333p0F,
 		 1.82321546859847114303367992804596800640e-1L, FLT_ULP());
 	test_tol(log1p, 0x0.3333333333333p0,
@@ -255,26 +261,14 @@ run_log1p_accuracy_tests(void)
 		 -2.23143551314209755752742563153765697950e-1L, LDBL_ULP());
 }
 
-int
-main(void)
+ATF_TP_ADD_TCS(tp)
 {
 
-	printf("1..5\n");
+	ATF_TP_ADD_TC(tp, generic_tests);
+	ATF_TP_ADD_TC(tp, log2_tests);
+	ATF_TP_ADD_TC(tp, roundingmode_tests);
+	ATF_TP_ADD_TC(tp, accuracy_tests);
+	ATF_TP_ADD_TC(tp, log1p_accuracy_tests);
 
-	run_generic_tests();
-	printf("ok 1 - logarithm\n");
-
-	run_log2_tests();
-	printf("ok 2 - logarithm\n");
-
-	run_roundingmode_tests();
-	printf("ok 3 - logarithm\n");
-
-	run_accuracy_tests();
-	printf("ok 4 - logarithm\n");
-
-	run_log1p_accuracy_tests();
-	printf("ok 5 - logarithm\n");
-
-	return (0);
+	return (atf_no_error());
 }

@@ -668,9 +668,15 @@ logl(long double x)
 {
 	struct ld r;
 
+	printf("logl(%.21Lg); ", x);
+	printf("on entry: inex=%#x\n", fetestexcept(FE_INEXACT));
 	ENTERI();
+	printf("before DOPRINT_START=%#x\n", fetestexcept(FE_INEXACT));
 	DOPRINT_START(&x);
+	printf("after DOPRINT logl(%.21Lg); ", x);
+	printf("before k_logl: inex=%#x\n", fetestexcept(FE_INEXACT));
 	k_logl(x, &r);
+	printf("after k_logl: inex=%#x\n", fetestexcept(FE_INEXACT));
 	RETURNSPI(&r);
 }
 
@@ -706,13 +712,29 @@ log2l(long double x)
 
 	ENTERI();
 	DOPRINT_START(&x);
+	printf("before k_logl: inex=%#x\n", fetestexcept(FE_INEXACT));
 	k_logl(x, &r);
+	printf("after k_logl: inex=%#x\n", fetestexcept(FE_INEXACT));
 	if (!r.lo_set)
 		RETURNPI(r.hi);
 	_2sumF(r.hi, r.lo);
+	printf("after _2sumF: inex=%#x\n", fetestexcept(FE_INEXACT));
 	hi = (float)r.hi;
 	lo = r.lo + (r.hi - hi);
+	printf("after r.lo + (r.hi - hi): inex=%#x\n", fetestexcept(FE_INEXACT));
 	// FIXME: this sets FE_INEXACT
+	printf("invln2_hi=%.21Lg, hi=%.21Lg, invln_lo=%.21Lg, lo=%.21Lg\n", (long double)invln2_hi, hi, (long double)invln2_lo, lo);
+	printf("inex=%#x\n", fetestexcept(FE_INEXACT));
+	printf("invln2_hi * hi=%.21Lg ", (long double)(invln2_hi * hi));
+	printf("inex=%#x\n", fetestexcept(FE_INEXACT));
+	printf("invln2_lo + invln2_hi=%.21Lg ", (long double)(invln2_lo + invln2_hi));
+	printf("inex=%#x\n", fetestexcept(FE_INEXACT));
+	printf("(invln2_lo + invln2_hi) * lo=%.21Lg ", (long double)((invln2_lo + invln2_hi) * lo));
+	printf("inex=%#x\n", fetestexcept(FE_INEXACT));
+	printf("(invln2_lo + invln2_hi) * lo + invln2_lo=%.21Lg ", (long double)((invln2_lo + invln2_hi) * lo + invln2_lo));
+	printf("inex=%#x\n", fetestexcept(FE_INEXACT));
+	printf("(invln2_lo + invln2_hi) * lo + invln2_lo=%.21Lg ", (long double)((invln2_lo + invln2_hi) * lo + invln2_lo * hi));
+	printf("inex=%#x\n", fetestexcept(FE_INEXACT));
 	RETURN2PI(invln2_hi * hi,
 	    (invln2_lo + invln2_hi) * lo + invln2_lo * hi);
 }

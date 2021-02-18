@@ -2,8 +2,6 @@
 
 .include <bsd.own.mk>
 
-NO_SHARED=yes
-
 TESTSRC=	${SRCTOP}/contrib/netbsd-tests/lib/libm
 
 # All architectures on FreeBSD have fenv.h
@@ -24,6 +22,8 @@ CFLAGS+=	-D__HAVE_LONG_DOUBLE
 NETBSD_ATF_TESTS_C=	acos_test
 NETBSD_ATF_TESTS_C+=	asin_test
 NETBSD_ATF_TESTS_C+=	atan_test
+NETBSD_ATF_TESTS_C+=	bit_test
+# TODO: NETBSD_ATF_TESTS_CXX+=	cabsl_test
 NETBSD_ATF_TESTS_C+=	cbrt_test
 NETBSD_ATF_TESTS_C+=	ceil_test
 NETBSD_ATF_TESTS_C+=	casinh_test
@@ -63,11 +63,11 @@ TAP_TESTS_C+=	fmaxmin_test
 TAP_TESTS_C+=	ilogb2_test
 TAP_TESTS_C+=	invtrig_test
 TAP_TESTS_C+=	invctrig_test
-TAP_TESTS_C+=	logarithm_test
+ATF_TESTS_C+=	logarithm_test
 TAP_TESTS_C+=	lrint_test
 # XXX: the testcase crashes on all platforms, but only on head
 # (bug 205451)
-#TAP_TESTS_C+=	lround_test
+TAP_TESTS_C+=	lround_test
 TAP_TESTS_C+=	nan_test
 TAP_TESTS_C+=	nearbyint_test
 TAP_TESTS_C+=	next_test
@@ -105,10 +105,10 @@ CFLAGS+=	-DLDBL_PREC=${LDBL_PREC}
 # in unexpected FP traps (most likely speculatively hoisting some operations
 # outside of loops/before not taken branches. It appears that the
 # -ffp-exception-behavior=maytrap flag fixes this.
-# CFLAGS+=	-ffp-exception-behavior=maytrap
-CFLAGS+=	-ffp-model=precise
+CFLAGS+=	-ffp-exception-behavior=maytrap
+CFLAGS+=	-ffp-model=strict
 .endif
-CFLAGS+=-ftrapping-math -fno-builtin
+CFLAGS+=-fno-builtin
 
 CFLAGS.fe_round_test+=	-D__HAVE_FENV
 
