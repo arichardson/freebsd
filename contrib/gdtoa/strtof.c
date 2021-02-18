@@ -40,7 +40,7 @@ strtof_l(s, sp, loc) CONST char *s; char **sp; locale_t loc;
 strtof_l(CONST char *s, char **sp, locale_t loc)
 #endif
 {
-	static FPI fpi0 = { 24, 1-127-24+1,  254-127-24+1, 1, SI };
+	static FPI fpi0 = { 24, 1-127-24+1,  254-127-24+1, 1, SI, 0 /*unused*/ };
 	ULong bits[1];
 	Long exp;
 	int k;
@@ -53,6 +53,7 @@ strtof_l(CONST char *s, char **sp, locale_t loc)
 
 	k = strtodg_l(s, sp, fpi, &exp, bits, loc);
 	switch(k & STRTOG_Retmask) {
+	  default: /* unused */
 	  case STRTOG_NoNumber:
 	  case STRTOG_Zero:
 		u.L[0] = 0;

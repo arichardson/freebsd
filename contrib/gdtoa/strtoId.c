@@ -38,19 +38,22 @@ strtoId(s, sp, f0, f1) CONST char *s; char **sp; double *f0, *f1;
 strtoId(CONST char *s, char **sp, double *f0, double *f1)
 #endif
 {
-	static FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI };
+	static FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI, 0 /*unused*/ };
 	Long exp[2];
 	Bigint *B[2];
 	int k, rv[2];
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 
-	B[0] = Balloc(1);
+	B[0] = Balloc(1 MTb);
 	B[0]->wds = 2;
 	k = strtoIg(s, sp, &fpi, exp, B, rv);
 	ULtod((ULong*)f0, B[0]->x, exp[0], rv[0]);
-	Bfree(B[0]);
+	Bfree(B[0] MTb);
 	if (B[1]) {
 		ULtod((ULong*)f1, B[1]->x, exp[1], rv[1]);
-		Bfree(B[1]);
+		Bfree(B[1] MTb);
 		}
 	else {
 		((ULong*)f1)[0] = ((ULong*)f0)[0];

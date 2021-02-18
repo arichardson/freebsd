@@ -51,6 +51,8 @@ THIS SOFTWARE.
 #define _3 0
 #endif
 
+ extern ULong NanDflt_Q_D2A[4];
+
  void
 #ifdef KR_headers
 ULtoQ(L, bits, exp, k) ULong *L; ULong *bits; Long exp; int k;
@@ -92,10 +94,10 @@ ULtoQ(ULong *L, ULong *bits, Long exp, int k)
 		break;
 
 	  case STRTOG_NaN:
-		L[0] = ld_QNAN0;
-		L[1] = ld_QNAN1;
-		L[2] = ld_QNAN2;
-		L[3] = ld_QNAN3;
+		L[_0] = NanDflt_Q_D2A[3];
+		L[_1] = NanDflt_Q_D2A[2];
+		L[_2] = NanDflt_Q_D2A[1];
+		L[_3] = NanDflt_Q_D2A[0];
 	  }
 	if (k & STRTOG_Neg)
 		L[_0] |= 0x80000000L;
@@ -109,7 +111,7 @@ void *L; locale_t locale;
 strtorQ_l(CONST char *s, char **sp, int rounding, void *L, locale_t locale)
 #endif
 {
-	static FPI fpi0 = { 113, 1-16383-113+1, 32766-16383-113+1, 1, SI };
+	static FPI fpi0 = { 113, 1-16383-113+1, 32766-16383-113+1, 1, SI, 0 /*unused*/ };
 	FPI *fpi, fpi1;
 	ULong bits[4];
 	Long exp;

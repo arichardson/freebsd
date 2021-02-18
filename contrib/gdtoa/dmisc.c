@@ -37,19 +37,19 @@ THIS SOFTWARE.
 
  char *
 #ifdef KR_headers
-rv_alloc(i) int i;
+rv_alloc(i MTa) int i; MTk
 #else
-rv_alloc(int i)
+rv_alloc(int i MTd)
 #endif
 {
 	int j, k, *r;
 
 	j = sizeof(ULong);
 	for(k = 0;
-		sizeof(Bigint) - sizeof(ULong) - sizeof(int) + j <= i;
+		(int)(sizeof(Bigint) - sizeof(ULong) - sizeof(int)) + j <= i;
 		j <<= 1)
 			k++;
-	r = (int*)Balloc(k);
+	r = (int*)Balloc(k MTa);
 	*r = k;
 	return
 #ifndef MULTIPLE_THREADS
@@ -60,14 +60,14 @@ rv_alloc(int i)
 
  char *
 #ifdef KR_headers
-nrv_alloc(s, rve, n) char *s, **rve; int n;
+nrv_alloc(s, rve, n MTa) char *s, **rve; int n; MTk
 #else
-nrv_alloc(char *s, char **rve, int n)
+nrv_alloc(char *s, char **rve, int n MTd)
 #endif
 {
 	char *rv, *t;
 
-	t = rv = rv_alloc(n);
+	t = rv = rv_alloc(n MTa);
 	while((*t = *s++) !=0)
 		t++;
 	if (rve)
@@ -88,9 +88,12 @@ freedtoa(s) char *s;
 freedtoa(char *s)
 #endif
 {
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 	Bigint *b = (Bigint *)((int *)s - 1);
 	b->maxwds = 1 << (b->k = *(int*)b);
-	Bfree(b);
+	Bfree(b MTb);
 #ifndef MULTIPLE_THREADS
 	if (s == dtoa_result)
 		dtoa_result = 0;

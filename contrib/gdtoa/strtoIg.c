@@ -33,15 +33,18 @@ THIS SOFTWARE.
 
  int
 #ifdef KR_headers
-strtoIg(s00, se, fpi, exp, B, rvp) CONST char *s00; char **se; FPI *fpi; Long *exp; Bigint **B; int *rvp;
+strtoIg(s00, se, fpi, exp, B, rvp) CONST char *s00; char **se; CONST FPI *fpi; Long *exp; Bigint **B; int *rvp;
 #else
-strtoIg(CONST char *s00, char **se, FPI *fpi, Long *exp, Bigint **B, int *rvp)
+strtoIg(CONST char *s00, char **se, CONST FPI *fpi, Long *exp, Bigint **B, int *rvp)
 #endif
 {
 	Bigint *b, *b1;
 	int i, nb, nw, nw1, rv, rv1, swap;
 	unsigned int nb1, nb11;
 	Long e1;
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 
 	b = *B;
 	rv = strtodg(s00, se, fpi, exp, b->x);
@@ -51,7 +54,7 @@ strtoIg(CONST char *s00, char **se, FPI *fpi, Long *exp, Bigint **B, int *rvp)
 		}
 	e1 = exp[0];
 	rv1 = rv ^ STRTOG_Inexact;
-	b1 = Balloc(b->k);
+	b1 = Balloc(b->k MTb);
 	Bcopy(b1, b);
 	nb = fpi->nbits;
 	nb1 = nb & 31;
@@ -60,7 +63,7 @@ strtoIg(CONST char *s00, char **se, FPI *fpi, Long *exp, Bigint **B, int *rvp)
 	nw1 = nw - 1;
 	if (rv & STRTOG_Inexlo) {
 		swap = 0;
-		b1 = increment(b1);
+		b1 = increment(b1 MTb);
 		if ((rv & STRTOG_Retmask) == STRTOG_Zero) {
 			if (fpi->sudden_underflow) {
 				b1->x[0] = 0;
@@ -69,7 +72,7 @@ strtoIg(CONST char *s00, char **se, FPI *fpi, Long *exp, Bigint **B, int *rvp)
 				rv1 &= ~STRTOG_Underflow;
 				goto swapcheck;
 				}
-			rv1 &= STRTOG_Inexlo | STRTOG_Underflow | STRTOG_Zero;
+			rv1 &= STRTOG_Inexlo | STRTOG_Underflow | STRTOG_Zero | STRTOG_Neg;
 			rv1 |= STRTOG_Inexhi | STRTOG_Denormal;
 			goto swapcheck;
 			}
@@ -89,16 +92,16 @@ strtoIg(CONST char *s00, char **se, FPI *fpi, Long *exp, Bigint **B, int *rvp)
 	else {
 		swap = STRTOG_Neg;
 		if ((rv & STRTOG_Retmask) == STRTOG_Infinite) {
-			b1 = set_ones(b1, nb);
+			b1 = set_ones(b1, nb MTb);
 			e1 = fpi->emax;
-			rv1 = STRTOG_Normal | STRTOG_Inexlo;
+			rv1 = STRTOG_Normal | STRTOG_Inexlo | (rv & STRTOG_Neg);
 			goto swapcheck;
 			}
 		decrement(b1);
 		if ((rv & STRTOG_Retmask) == STRTOG_Denormal) {
 			for(i = nw1; !b1->x[i]; --i)
 				if (!i) {
-					rv1 = STRTOG_Zero | STRTOG_Inexlo;
+					rv1 = STRTOG_Zero | STRTOG_Inexlo | (rv & STRTOG_Neg);
 					break;
 					}
 			goto swapcheck;
@@ -112,7 +115,7 @@ strtoIg(CONST char *s00, char **se, FPI *fpi, Long *exp, Bigint **B, int *rvp)
 				rv1 |= STRTOG_Underflow;
 				}
 			else {
-				b1 = lshift(b1, 1);
+				b1 = lshift(b1, 1 MTb);
 				b1->x[0] |= 1;
 				--e1;
 				}

@@ -38,7 +38,7 @@ g_dfmt(buf, d, ndig, bufsize) char *buf; double *d; int ndig; size_t bufsize;
 g_dfmt(char *buf, double *d, int ndig, size_t bufsize)
 #endif
 {
-	static FPI fpi0 = { 53, 1-1023-53+1, 2046-1023-53+1, 1, 0 };
+	static FPI fpi0 = { 53, 1-1023-53+1, 2046-1023-53+1, 1, 0, Int_max };
 	char *b, *s, *se;
 	ULong bits[2], *L, sign;
 	int decpt, ex, i, mode;
@@ -50,7 +50,7 @@ g_dfmt(char *buf, double *d, int ndig, size_t bufsize)
 
 	if (ndig < 0)
 		ndig = 0;
-	if (bufsize < ndig + 10)
+	if (bufsize < (size_t)(ndig + 10))
 		return 0;
 
 	L = (ULong*)d;

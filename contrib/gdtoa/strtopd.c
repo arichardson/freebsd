@@ -38,7 +38,7 @@ strtopd(s, sp, d) char *s; char **sp; double *d;
 strtopd(CONST char *s, char **sp, double *d)
 #endif
 {
-	static FPI fpi0 = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI };
+	static FPI fpi0 = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI, 0 /*unused*/ };
 	ULong bits[2];
 	Long exp;
 	int k;

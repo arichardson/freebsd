@@ -46,13 +46,53 @@ gd_qnan.h: arith.h qnan.c
 	./a.out >gd_qnan.h
 	rm -f a.out qnan.o
 
-gdtoa.a:  dmisc.c dtoa.c g_Qfmt.c g__fmt.c g_ddfmt.c g_dfmt.c\
-	 g_ffmt.c g_xLfmt.c g_xfmt.c gdtoa.c gethex.c gmisc.c hd_init.c\
-	 hexnan.c misc.c smisc.c strtoIQ.c strtoId.c strtoIdd.c\
-	 strtoIf.c strtoIg.c strtoIx.c strtoIxL.c strtod.c strtodI.c\
-	 strtodg.c strtof.c strtopQ.c strtopd.c strtopdd.c strtopf.c\
-	 strtopx.c strtopxL.c strtorQ.c strtord.c strtordd.c strtorf.c\
-	 strtorx.c strtorxL.c sum.c ulp.c
+gdtoa.a:  dmisc.c\
+	 dtoa.c\
+	 g_Qfmt.c\
+	 g_Qfmt_p.c\
+	 g__fmt.c\
+	 g_ddfmt.c\
+	 g_ddfmt_p.c\
+	 g_dfmt.c\
+	 g_dfmt_p.c\
+	 g_ffmt.c\
+	 g_ffmt_p.c\
+	 g_xLfmt.c\
+	 g_xLfmt_p.c\
+	 g_xfmt.c\
+	 g_xfmt_p.c\
+	 gdtoa.c\
+	 gethex.c\
+	 gmisc.c\
+	 hd_init.c\
+	 hexnan.c\
+	 misc.c\
+	 smisc.c\
+	 strtoIQ.c\
+	 strtoId.c\
+	 strtoIdd.c\
+	 strtoIf.c\
+	 strtoIg.c\
+	 strtoIx.c\
+	 strtoIxL.c\
+	 strtod.c\
+	 strtodI.c\
+	 strtodg.c\
+	 strtof.c\
+	 strtopQ.c\
+	 strtopd.c\
+	 strtopdd.c\
+	 strtopf.c\
+	 strtopx.c\
+	 strtopxL.c\
+	 strtorQ.c\
+	 strtord.c\
+	 strtordd.c\
+	 strtorf.c\
+	 strtorx.c\
+	 strtorxL.c\
+	 sum.c\
+	 ulp.c
 	$(CC) -c $(CFLAGS) $?
 	x=`echo $? | sed 's/\.c/.o/g'` && $(AR) $(ARFLAGS) gdtoa.a $$x && rm $$x
 	ranlib gdtoa.a || true
@@ -65,15 +105,64 @@ Printf: all printf.c
 
 # If your system lacks ranlib, you do not need it.
 
-xs0 = README arithchk.c dmisc.c dtoa.c g_Qfmt.c g__fmt.c g_ddfmt.c\
-	 g_dfmt.c g_ffmt.c g_xLfmt.c g_xfmt.c gdtoa.c gdtoa.h\
-	 gdtoa_fltrnds.h gdtoaimp.h gethex.c gmisc.c hd_init.c hexnan.c\
-	 makefile misc.c printf.c printf.c0 qnan.c smisc.c stdio1.h\
-	 strtoIQ.c strtoId.c strtoIdd.c strtoIf.c strtoIg.c strtoIx.c\
-	 strtoIxL.c strtod.c strtodI.c strtodg.c strtodnrp.c strtof.c\
-	 strtopQ.c strtopd.c strtopdd.c strtopf.c strtopx.c strtopxL.c\
-	 strtorQ.c strtord.c strtordd.c strtorf.c strtorx.c strtorxL.c\
-	 sum.c ulp.c
+xs0 = README\
+	 arithchk.c\
+	 dmisc.c\
+	 dtoa.c\
+	 g_Qfmt.c\
+	 g_Qfmt_p.c\
+	 g__fmt.c\
+	 g_ddfmt.c\
+	 g_ddfmt_p.c\
+	 g_dfmt.c\
+	 g_dfmt_p.c\
+	 g_ffmt.c\
+	 g_ffmt_p.c\
+	 g_xLfmt.c\
+	 g_xLfmt_p.c\
+	 g_xfmt.c\
+	 g_xfmt_p.c\
+	 gdtoa.c\
+	 gdtoa.h\
+	 gdtoa_fltrnds.h\
+	 gdtoaimp.h\
+	 gethex.c\
+	 gmisc.c\
+	 hd_init.c\
+	 hexnan.c\
+	 makefile\
+	 misc.c\
+	 printf.c\
+	 printf.c0\
+	 qnan.c\
+	 smisc.c\
+	 stdio1.h\
+	 strtoIQ.c\
+	 strtoId.c\
+	 strtoIdd.c\
+	 strtoIf.c\
+	 strtoIg.c\
+	 strtoIx.c\
+	 strtoIxL.c\
+	 strtod.c\
+	 strtodI.c\
+	 strtodg.c\
+	 strtodnrp.c\
+	 strtof.c\
+	 strtopQ.c\
+	 strtopd.c\
+	 strtopdd.c\
+	 strtopf.c\
+	 strtopx.c\
+	 strtopxL.c\
+	 strtorQ.c\
+	 strtord.c\
+	 strtordd.c\
+	 strtorf.c\
+	 strtorx.c\
+	 strtorxL.c\
+	 sum.c\
+	 ulp.c
 
 # "make -r xsum.out" to check for transmission errors; source for xsum is
 # netlib's "xsum.c from f2c", e.g.,

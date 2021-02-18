@@ -90,6 +90,7 @@ FPI {
 	int emax;
 	int rounding;
 	int sudden_underflow;
+	int int_max;
 	} FPI;
 
 enum {	/* FPI.rounding values: same as FLT_ROUNDS */
@@ -105,19 +106,25 @@ extern "C" {
 
 extern char* dtoa  ANSI((double d, int mode, int ndigits, int *decpt,
 			int *sign, char **rve));
-extern char* gdtoa ANSI((FPI *fpi, int be, ULong *bits, int *kindp,
+extern char* gdtoa ANSI((CONST FPI *fpi, int be, ULong *bits, int *kindp,
 			int mode, int ndigits, int *decpt, char **rve));
 extern void freedtoa ANSI((char*));
 extern float  strtof ANSI((CONST char *, char **));
 extern double strtod ANSI((CONST char *, char **));
-extern int strtodg ANSI((CONST char*, char**, FPI*, Long*, ULong*));
+extern int strtodg ANSI((CONST char*, char**, CONST FPI*, Long*, ULong*));
 
-extern char*	g_ddfmt  ANSI((char*, double*, int, size_t));
-extern char*	g_dfmt   ANSI((char*, double*, int, size_t));
-extern char*	g_ffmt   ANSI((char*, float*,  int, size_t));
-extern char*	g_Qfmt   ANSI((char*, void*,   int, size_t));
-extern char*	g_xfmt   ANSI((char*, void*,   int, size_t));
-extern char*	g_xLfmt  ANSI((char*, void*,   int, size_t));
+extern char*	g_ddfmt   ANSI((char*, double*, int, size_t));
+extern char*	g_ddfmt_p ANSI((char*, double*,	int, size_t, int));
+extern char*	g_dfmt    ANSI((char*, double*, int, size_t));
+extern char*	g_dfmt_p  ANSI((char*, double*,	int, size_t, int));
+extern char*	g_ffmt    ANSI((char*, float*,  int, size_t));
+extern char*	g_ffmt_p  ANSI((char*, float*,	int, size_t, int));
+extern char*	g_Qfmt    ANSI((char*, void*,   int, size_t));
+extern char*	g_Qfmt_p  ANSI((char*, void*,	int, size_t, int));
+extern char*	g_xfmt    ANSI((char*, void*,   int, size_t));
+extern char*	g_xfmt_p  ANSI((char*, void*,	int, size_t, int));
+extern char*	g_xLfmt   ANSI((char*, void*,   int, size_t));
+extern char*	g_xLfmt_p ANSI((char*, void*,	int, size_t, int));
 
 extern int	strtoId  ANSI((CONST char*, char**, double*, double*));
 extern int	strtoIdd ANSI((CONST char*, char**, double*, double*));

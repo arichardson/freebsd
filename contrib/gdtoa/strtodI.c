@@ -55,7 +55,7 @@ strtodI(s, sp, dd) CONST char *s; char **sp; double *dd;
 strtodI(CONST char *s, char **sp, double *dd)
 #endif
 {
-	static FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI };
+	static FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI, 0 /*unused*/ };
 	ULong bits[2], sign;
 	Long exp;
 	int j, k;

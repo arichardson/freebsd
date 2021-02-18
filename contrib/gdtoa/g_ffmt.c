@@ -38,7 +38,7 @@ g_ffmt(buf, f, ndig, bufsize) char *buf; float *f; int ndig; size_t bufsize;
 g_ffmt(char *buf, float *f, int ndig, size_t bufsize)
 #endif
 {
-	static FPI fpi0 = { 24, 1-127-24+1,  254-127-24+1, 1, 0 };
+	static FPI fpi0 = { 24, 1-127-24+1,  254-127-24+1, 1, 0, 6 };
 	char *b, *s, *se;
 	ULong bits[1], *L, sign;
 	int decpt, ex, i, mode;
@@ -50,7 +50,7 @@ g_ffmt(char *buf, float *f, int ndig, size_t bufsize)
 
 	if (ndig < 0)
 		ndig = 0;
-	if (bufsize < ndig + 10)
+	if (bufsize < (size_t)(ndig + 10))
 		return 0;
 
 	L = (ULong*)f;

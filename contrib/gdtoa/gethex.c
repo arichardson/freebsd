@@ -37,10 +37,10 @@ THIS SOFTWARE.
 
  int
 #ifdef KR_headers
-gethex(sp, fpi, exp, bp, sign)
-	CONST char **sp; FPI *fpi; Long *exp; Bigint **bp; int sign;
+gethex(sp, fpi, exp, bp, sign MTa)
+	CONST char **sp; CONST FPI *fpi; Long *exp; Bigint **bp; int sign; MTk
 #else
-gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
+gethex( CONST char **sp, CONST FPI *fpi, Long *exp, Bigint **bp, int sign MTd)
 #endif
 {
 	Bigint *b;
@@ -66,8 +66,7 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 #endif
 #endif
 
-	if (!hexdig['0'])
-		hexdig_init_D2A();
+	/**** if (!hexdig['0']) hexdig_init_D2A(); ****/
 	*bp = 0;
 	havedig = 0;
 	s0 = *(CONST unsigned char **)sp + 2;
@@ -166,7 +165,7 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 			  }
 			goto retz;
  ret_tiny:
-			b = Balloc(0);
+			b = Balloc(0 MTa);
 			b->wds = 1;
 			b->x[0] = 1;
 			goto dret;
@@ -181,7 +180,6 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 		  case FPI_Round_down:
 			if (sign)
 				goto ovfl1;
-			goto ret_big;
 		  }
  ret_big:
 		nbits = fpi->nbits;
@@ -189,19 +187,19 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 		if (nbits & kmask)
 			++n;
 		for(j = n, k = 0; j >>= 1; ++k);
-		*bp = b = Balloc(k);
+		*bp = b = Balloc(k MTa);
 		b->wds = n;
 		for(j = 0; j < n0; ++j)
 			b->x[j] = ALL_ON;
 		if (n > n0)
-			b->x[j] = ULbits >> (ULbits - (nbits & kmask));
-		*exp = fpi->emin;
+			b->x[j] = ALL_ON >> (ULbits - (nbits & kmask));
+		*exp = fpi->emax;
 		return STRTOG_Normal | STRTOG_Inexlo;
 		}
 	n = s1 - s0 - 1;
 	for(k = 0; n > (1 << (kshift-2)) - 1; n >>= 1)
 		k++;
-	b = Balloc(k);
+	b = Balloc(k MTa);
 	x = b->x;
 	n = 0;
 	L = 0;
@@ -248,17 +246,28 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 		}
 	else if (n < nbits) {
 		n = nbits - n;
-		b = lshift(b, n);
+		b = lshift(b, n MTa);
 		e -= n;
 		x = b->x;
 		}
 	if (e > fpi->emax) {
  ovfl:
-		Bfree(b);
+		Bfree(b MTa);
  ovfl1:
 #ifndef NO_ERRNO
 		errno = ERANGE;
 #endif
+		switch (fpi->rounding) {
+		  case FPI_Round_zero:
+			goto ret_big;
+		  case FPI_Round_down:
+			if (!sign)
+				goto ret_big;
+			break;
+		  case FPI_Round_up:
+			if (sign)
+				goto ret_big;
+		  }
 		return STRTOG_Infinite | STRTOG_Overflow | STRTOG_Inexhi;
 		}
 	irv = STRTOG_Normal;
@@ -268,7 +277,7 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 		if (n >= nbits) {
 			switch (fpi->rounding) {
 			  case FPI_Round_near:
-				if (n == nbits && (n < 2 || any_on(b,n-1)))
+				if (n == nbits && (n < 2 || lostbits || any_on(b,n-1)))
 					goto one_bit;
 				break;
 			  case FPI_Round_up:
@@ -289,7 +298,7 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 						| STRTOG_Underflow;
 					}
 			  }
-			Bfree(b);
+			Bfree(b MTa);
  retz:
 #ifndef NO_ERRNO
 			errno = ERANGE;
@@ -325,7 +334,7 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
 		  }
 		if (up) {
 			k = b->wds;
-			b = increment(b);
+			b = increment(b MTa);
 			x = b->x;
 			if (irv == STRTOG_Denormal) {
 				if (nbits == fpi->nbits - 1

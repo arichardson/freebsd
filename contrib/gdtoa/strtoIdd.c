@@ -39,22 +39,25 @@ strtoIdd(CONST char *s, char **sp, double *f0, double *f1)
 #endif
 {
 #ifdef Sudden_Underflow
-	static FPI fpi = { 106, 1-1023, 2046-1023-106+1, 1, 1 };
+	static FPI fpi = { 106, 1-1023, 2046-1023-106+1, 1, 1, 0 /*unused*/ };
 #else
-	static FPI fpi = { 106, 1-1023-53+1, 2046-1023-106+1, 1, 0 };
+	static FPI fpi = { 106, 1-1023-53+1, 2046-1023-106+1, 1, 0, 0 /*unused*/ };
 #endif
 	Long exp[2];
 	Bigint *B[2];
 	int k, rv[2];
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 
-	B[0] = Balloc(2);
+	B[0] = Balloc(2 MTb);
 	B[0]->wds = 4;
 	k = strtoIg(s, sp, &fpi, exp, B, rv);
 	ULtodd((ULong*)f0, B[0]->x, exp[0], rv[0]);
-	Bfree(B[0]);
+	Bfree(B[0] MTb);
 	if (B[1]) {
 		ULtodd((ULong*)f1, B[1]->x, exp[1], rv[1]);
-		Bfree(B[1]);
+		Bfree(B[1] MTb);
 		}
 	else {
 		((ULong*)f1)[0] = ((ULong*)f0)[0];

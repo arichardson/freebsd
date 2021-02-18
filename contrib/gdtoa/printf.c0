@@ -54,9 +54,14 @@ THIS SOFTWARE.
 #define Use_GDTOA_Qtype
 #ifdef __ICC__ /* or __INTEL_COMPILER__ or __INTEL_COMPILER ?? */
 #define GDTOA_Qtype _Quad
-#else
+#else /*{*/
+#ifdef __linux
 #define GDTOA_Qtype __float128
+#else
+#undef GDTOA_both
+#undef Use_GDTOA_Qtype
 #endif
+#endif /*}*/
 #endif /*} NO_GDTOA_i386_Quad */
 #endif /*} Use_GDTOA_for_i386_long_double */
 
@@ -115,7 +120,7 @@ Finfo {
 	size_t lastlen;
 	} Finfo;
 
- typedef char *(*pgdtoa) ANSI((FPI*, int be, ULong *bits, int *kind, int mode, int ndigits, int *decpt, char **rve));
+ typedef char *(*pgdtoa) ANSI((CONST FPI*, int be, ULong *bits, int *kind, int mode, int ndigits, int *decpt, char **rve));
 
  typedef struct
 FPBits {
@@ -167,7 +172,7 @@ xfpbits(U *u, FPBits *b)
 {
 	ULong *bits;
 	int ex, i;
-	static FPI fpi0 = { 64, 1-16383-64+1, 32766 - 16383 - 64 + 1, 1, 0 };
+	static FPI fpi0 = { 64, 1-16383-64+1, 32766 - 16383 - 64 + 1, 1, 0, 0 /*not used*/ };
 
 	b->fpi = &fpi0;
 	b->gdtoa = gdtoa;
@@ -228,7 +233,7 @@ Qfpbits(U *u, FPBits *b)
 {
 	ULong *bits;
 	int ex, i;
-	static FPI fpi0 = { 113, 1-16383-113+1, 32766 - 16383 - 113 + 1, 1, 0 };
+	static FPI fpi0 = { 113, 1-16383-113+1, 32766 - 16383 - 113 + 1, 1, 0, 0 /*not used*/ };
 
 	b->fpi = &fpi0;
 	b->gdtoa = gdtoa;
@@ -483,7 +488,7 @@ dfpbits(U *u, FPBits *b)
 {
 	ULong *bits;
 	int ex, i;
-	static FPI fpi0 = { 53, 1-1023-53+1, 2046-1023-53+1, 1, 0 };
+	static FPI fpi0 = { 53, 1-1023-53+1, 2046-1023-53+1, 1, 0, 0 /*not used*/ };
 
 	b->fpi = &fpi0;
 	b->gdtoa = gdtoa;
@@ -575,7 +580,6 @@ fpiprec(FPBits *b)	/* return number of hex digits minus 1, or 0 for zero */
  static int
 bround(FPBits *b, int prec, int prec1)	/* round to prec hex digits after the "." */
 {					/* prec1 = incoming precision (after ".") */
-	FPI *fpi = b->fpi;
 	ULong *bits, t;
 	int i, inc, j, k, m, n;
 #ifdef Honor_FLT_ROUNDS
@@ -1615,7 +1619,8 @@ Vsnprintf
 {
 	Finfo f;
 	char buf[Bsize];
-	int L, rv;
+	int rv;
+	size_t L;
 
 	if (n <= 0 || !s) {
 		n = 1;

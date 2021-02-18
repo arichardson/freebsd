@@ -31,7 +31,6 @@ THIS SOFTWARE.
 
 #include "gdtoaimp.h"
 
- static Bigint *freelist[Kmax+1];
 #ifndef Omit_Private_Memory
 #ifndef PRIVATE_MEM
 #define PRIVATE_MEM 2304
@@ -40,12 +39,62 @@ THIS SOFTWARE.
 static double private_mem[PRIVATE_mem], *pmem_next = private_mem;
 #endif
 
+ static ThInfo TI0;
+
+#ifdef MULTIPLE_THREADS /*{{*/
+ static unsigned int maxthreads = 0;
+ static ThInfo *TI1;
+ static int TI0_used;
+
+ void
+set_max_gdtoa_threads(unsigned int n)
+{
+	size_t L;
+
+	if (n > maxthreads) {
+		L = n*sizeof(ThInfo);
+		if (TI1) {
+			TI1 = (ThInfo*)REALLOC(TI1, L);
+			memset(TI1 + maxthreads, 0, (n-maxthreads)*sizeof(ThInfo));
+			}
+		else {
+			TI1 = (ThInfo*)MALLOC(L);
+			if (TI0_used) {
+				memcpy(TI1, &TI0, sizeof(ThInfo));
+				if (n > 1)
+					memset(TI1 + 1, 0, L - sizeof(ThInfo));
+				memset(&TI0, 0, sizeof(ThInfo));
+				}
+			else
+				memset(TI1, 0, L);
+			}
+		maxthreads = n;
+		}
+	}
+
+ static ThInfo*
+get_TI(void)
+{
+	unsigned int thno = dtoa_get_threadno();
+	if (thno < maxthreads)
+		return TI1 + thno;
+	if (thno == 0)
+		TI0_used = 1;
+	return &TI0;
+	}
+#define freelist TI->Freelist
+#define p5s TI->P5s
+#else /*}{*/
+#define freelist TI0.Freelist
+#define p5s TI0.P5s
+#endif /*}}*/
+
  Bigint *
 Balloc
 #ifdef KR_headers
-	(k) int k;
+	(k MTa) int k; MTk
 #else
-	(int k)
+	(int k MTd)
 #endif
 {
 	int x;
@@ -54,7 +103,14 @@ Balloc
 	unsigned int len;
 #endif
 
-	ACQUIRE_DTOA_LOCK(0);
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI;
+
+	if (!(TI = *PTI))
+		*PTI = TI = get_TI();
+	if (TI == &TI0)
+		ACQUIRE_DTOA_LOCK(0);
+#endif
 	/* The k > Kmax case does not need ACQUIRE_DTOA_LOCK(0), */
 	/* but this case seems very unlikely. */
 	if (k <= Kmax && (rv = freelist[k]) !=0) {
@@ -67,7 +123,11 @@ Balloc
 #else
 		len = (sizeof(Bigint) + (x-1)*sizeof(ULong) + sizeof(double) - 1)
 			/sizeof(double);
-		if (k <= Kmax && pmem_next - private_mem + len <= PRIVATE_mem) {
+		if (k <= Kmax && pmem_next - private_mem + len - PRIVATE_mem <= 0
+#ifdef MULTIPLE_THREADS
+			&& TI == TI1
+#endif
+			) {
 			rv = (Bigint*)pmem_next;
 			pmem_next += len;
 			}
@@ -77,7 +137,10 @@ Balloc
 		rv->k = k;
 		rv->maxwds = x;
 		}
-	FREE_DTOA_LOCK(0);
+#ifdef MULTIPLE_THREADS
+	if (TI == &TI0)
+		FREE_DTOA_LOCK(0);
+#endif
 	rv->sign = rv->wds = 0;
 	return rv;
 	}
@@ -85,11 +148,14 @@ Balloc
  void
 Bfree
 #ifdef KR_headers
-	(v) Bigint *v;
+	(v MTa) Bigint *v; MTk
 #else
-	(Bigint *v)
+	(Bigint *v MTd)
 #endif
 {
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI;
+#endif
 	if (v) {
 		if (v->k > Kmax)
 #ifdef FREE
@@ -98,10 +164,18 @@ Bfree
 			free((void*)v);
 #endif
 		else {
-			ACQUIRE_DTOA_LOCK(0);
+#ifdef MULTIPLE_THREADS
+			if (!(TI = *PTI))
+				*PTI = TI = get_TI();
+			if (TI == &TI0)
+				ACQUIRE_DTOA_LOCK(0);
+#endif
 			v->next = freelist[v->k];
 			freelist[v->k] = v;
-			FREE_DTOA_LOCK(0);
+#ifdef MULTIPLE_THREADS
+			if (TI == &TI0)
+				FREE_DTOA_LOCK(0);
+#endif
 			}
 		}
 	}
@@ -157,9 +231,9 @@ lo0bits
  Bigint *
 multadd
 #ifdef KR_headers
-	(b, m, a) Bigint *b; int m, a;
+	(b, m, a MTa) Bigint *b; int m, a; MTk
 #else
-	(Bigint *b, int m, int a)	/* multiply by m and add a */
+	(Bigint *b, int m, int a MTd)	/* multiply by m and add a */
 #endif
 {
 	int i, wds;
@@ -200,9 +274,9 @@ multadd
 		while(++i < wds);
 	if (carry) {
 		if (wds >= b->maxwds) {
-			b1 = Balloc(b->k+1);
+			b1 = Balloc(b->k+1 MTa);
 			Bcopy(b1, b);
-			Bfree(b);
+			Bfree(b MTa);
 			b = b1;
 			}
 		b->x[wds++] = carry;
@@ -248,14 +322,14 @@ hi0bits_D2A
  Bigint *
 i2b
 #ifdef KR_headers
-	(i) int i;
+	(i MTa) int i; MTk
 #else
-	(int i)
+	(int i MTd)
 #endif
 {
 	Bigint *b;
 
-	b = Balloc(1);
+	b = Balloc(1 MTa);
 	b->x[0] = i;
 	b->wds = 1;
 	return b;
@@ -264,9 +338,9 @@ i2b
  Bigint *
 mult
 #ifdef KR_headers
-	(a, b) Bigint *a, *b;
+	(a, b MTa) Bigint *a, *b; MTk
 #else
-	(Bigint *a, Bigint *b)
+	(Bigint *a, Bigint *b MTd)
 #endif
 {
 	Bigint *c;
@@ -293,7 +367,7 @@ mult
 	wc = wa + wb;
 	if (wc > a->maxwds)
 		k++;
-	c = Balloc(k);
+	c = Balloc(k MTa);
 	for(x = c->x, xa = x + wc; x < xa; x++)
 		*x = 0;
 	xa = a->x;
@@ -371,34 +445,43 @@ mult
 	return c;
 	}
 
- static Bigint *p5s;
-
  Bigint *
 pow5mult
 #ifdef KR_headers
-	(b, k) Bigint *b; int k;
+	(b, k MTa) Bigint *b; int k; MTk
 #else
-	(Bigint *b, int k)
+	(Bigint *b, int k MTd)
 #endif
 {
 	Bigint *b1, *p5, *p51;
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI;
+#endif
 	int i;
 	static int p05[3] = { 5, 25, 125 };
 
 	if ( (i = k & 3) !=0)
-		b = multadd(b, p05[i-1], 0);
+		b = multadd(b, p05[i-1], 0 MTa);
 
 	if (!(k >>= 2))
 		return b;
+#ifdef  MULTIPLE_THREADS
+	if (!(TI = *PTI))
+		*PTI = TI = get_TI();
+#endif
 	if ((p5 = p5s) == 0) {
 		/* first time */
 #ifdef MULTIPLE_THREADS
-		ACQUIRE_DTOA_LOCK(1);
+		if (!(TI = *PTI))
+			*PTI = TI = get_TI();
+		if (TI == &TI0)
+			ACQUIRE_DTOA_LOCK(1);
 		if (!(p5 = p5s)) {
-			p5 = p5s = i2b(625);
+			p5 = p5s = i2b(625 MTa);
 			p5->next = 0;
 			}
-		FREE_DTOA_LOCK(1);
+		if (TI == &TI0)
+			FREE_DTOA_LOCK(1);
 #else
 		p5 = p5s = i2b(625);
 		p5->next = 0;
@@ -406,22 +489,26 @@ pow5mult
 		}
 	for(;;) {
 		if (k & 1) {
-			b1 = mult(b, p5);
-			Bfree(b);
+			b1 = mult(b, p5 MTa);
+			Bfree(b MTa);
 			b = b1;
 			}
 		if (!(k >>= 1))
 			break;
 		if ((p51 = p5->next) == 0) {
 #ifdef MULTIPLE_THREADS
-			ACQUIRE_DTOA_LOCK(1);
+			if (!TI && !(TI = *PTI))
+				*PTI = TI = get_TI();
+			if (TI == &TI0)
+				ACQUIRE_DTOA_LOCK(1);
 			if (!(p51 = p5->next)) {
-				p51 = p5->next = mult(p5,p5);
+				p51 = p5->next = mult(p5,p5 MTa);
 				p51->next = 0;
 				}
-			FREE_DTOA_LOCK(1);
+			if (TI == &TI0)
+				FREE_DTOA_LOCK(1);
 #else
-			p51 = p5->next = mult(p5,p5);
+			p51 = p5->next = mult(p5,p5 MTa);
 			p51->next = 0;
 #endif
 			}
@@ -433,9 +520,9 @@ pow5mult
  Bigint *
 lshift
 #ifdef KR_headers
-	(b, k) Bigint *b; int k;
+	(b, k MTa) Bigint *b; int k; MTk
 #else
-	(Bigint *b, int k)
+	(Bigint *b, int k MTd)
 #endif
 {
 	int i, k1, n, n1;
@@ -447,7 +534,7 @@ lshift
 	n1 = n + b->wds + 1;
 	for(i = b->maxwds; n1 > i; i <<= 1)
 		k1++;
-	b1 = Balloc(k1);
+	b1 = Balloc(k1 MTa);
 	x1 = b1->x;
 	for(i = 0; i < n; i++)
 		*x1++ = 0;
@@ -480,7 +567,7 @@ lshift
 		*x1++ = *x++;
 		while(x < xe);
 	b1->wds = n1 - 1;
-	Bfree(b);
+	Bfree(b MTa);
 	return b1;
 	}
 
@@ -521,9 +608,9 @@ cmp
  Bigint *
 diff
 #ifdef KR_headers
-	(a, b) Bigint *a, *b;
+	(a, b MTa) Bigint *a, *b; MTk
 #else
-	(Bigint *a, Bigint *b)
+	(Bigint *a, Bigint *b MTd)
 #endif
 {
 	Bigint *c;
@@ -540,7 +627,7 @@ diff
 
 	i = cmp(a,b);
 	if (!i) {
-		c = Balloc(0);
+		c = Balloc(0 MTa);
 		c->wds = 1;
 		c->x[0] = 0;
 		return c;
@@ -553,7 +640,7 @@ diff
 		}
 	else
 		i = 0;
-	c = Balloc(a->k);
+	c = Balloc(a->k MTa);
 	c->sign = i;
 	wa = a->wds;
 	xa = a->x;
@@ -684,9 +771,9 @@ b2d
  Bigint *
 d2b
 #ifdef KR_headers
-	(dd, e, bits) double dd; int *e, *bits;
+	(dd, e, bits MTa) double dd; int *e, *bits; MTk
 #else
-	(double dd, int *e, int *bits)
+	(double dd, int *e, int *bits MTd)
 #endif
 {
 	Bigint *b;
@@ -709,9 +796,9 @@ d2b
 #endif
 
 #ifdef Pack_32
-	b = Balloc(1);
+	b = Balloc(1 MTa);
 #else
-	b = Balloc(2);
+	b = Balloc(2 MTa);
 #endif
 	x = b->x;
 

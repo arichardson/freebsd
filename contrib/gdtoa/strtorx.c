@@ -53,6 +53,8 @@ THIS SOFTWARE.
 #define _4 0
 #endif
 
+ extern UShort NanDflt_ldus_D2A[5];
+
  void
 #ifdef KR_headers
 ULtox(L, bits, exp, k) UShort *L; ULong *bits; Long exp; int k;
@@ -94,11 +96,11 @@ ULtox(UShort *L, ULong *bits, Long exp, int k)
 		break;
 
 	  case STRTOG_NaN:
-		L[0] = ldus_QNAN0;
-		L[1] = ldus_QNAN1;
-		L[2] = ldus_QNAN2;
-		L[3] = ldus_QNAN3;
-		L[4] = ldus_QNAN4;
+		L[_4] = NanDflt_ldus_D2A[0];
+		L[_3] = NanDflt_ldus_D2A[1];
+		L[_2] = NanDflt_ldus_D2A[2];
+		L[_1] = NanDflt_ldus_D2A[3];
+		L[_0] = NanDflt_ldus_D2A[4];
 	  }
 	if (k & STRTOG_Neg)
 		L[_0] |= 0x8000;
@@ -112,7 +114,7 @@ void *L; locale_t locale;
 strtorx_l(CONST char *s, char **sp, int rounding, void *L, locale_t locale)
 #endif
 {
-	static FPI fpi0 = { 64, 1-16383-64+1, 32766 - 16383 - 64 + 1, 1, SI };
+	static FPI fpi0 = { 64, 1-16383-64+1, 32766 - 16383 - 64 + 1, 1, SI, 0 /*unused*/ };
 	FPI *fpi, fpi1;
 	ULong bits[2];
 	Long exp;
