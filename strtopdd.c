@@ -39,9 +39,9 @@ strtopdd(CONST char *s, char **sp, double *dd)
 #endif
 {
 #ifdef Sudden_Underflow
-	static FPI fpi0 = { 106, 1-1023, 2046-1023-106+1, 1, 1 };
+	static FPI fpi0 = { 106, 1-1023, 2046-1023-106+1, 1, 1, 0 /*unused*/ };
 #else
-	static FPI fpi0 = { 106, 1-1023-53+1, 2046-1023-106+1, 1, 0 };
+	static FPI fpi0 = { 106, 1-1023-53+1, 2046-1023-106+1, 1, 0, 0 /*unused*/ };
 #endif
 	ULong bits[4];
 	Long exp;

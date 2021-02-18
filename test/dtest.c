@@ -55,18 +55,18 @@ THIS SOFTWARE.
 
  extern int getround ANSI((int,char*));
 
- static char ibuf[2048], obuf[1024];
+ static char ibuf[2048], obuf[2048], obuf1[2048];
 
-#define U (unsigned long)
+#define UL (unsigned long)
 
  int
 main(Void)
 {
+	U fI[2], u;
 	char *s, *se, *se1;
-	double f1, fI[2];
-	int i, i1, ndig = 0, r = 1;
+	double f1;
+	int i, i1, ndig = 0, nik, nike, r = 1;
 	long LL[2];
-	union { double f; ULong L[2]; } u;
 
 	while( (s = fgets(ibuf, sizeof(ibuf), stdin)) !=0) {
 		while(*s <= ' ')
@@ -91,49 +91,67 @@ main(Void)
 			u.L[_1] = LL[1];
 			printf("\nInput: %s", ibuf);
 			printf("--> f = #%lx %lx\n", (long)u.L[_0], (long)u.L[_1]);
+			i = 0;
 			goto fmt_test;
 			}
 		printf("\nInput: %s", ibuf);
-		i = strtord(ibuf, &se, r, &u.f);
+		i = strtord(ibuf, &se, r, &u.d);
 		if (r == 1) {
-			if ((u.f != strtod(ibuf, &se1) || se1 != se))
+			if ((u.d != strtod(ibuf, &se1) || se1 != se))
 				printf("***strtod and strtord disagree!!\n");
 			i1 = strtopd(ibuf, &se, &f1);
-			if (i != i1 || u.f != f1 || se != se1)
+			if (i != i1 || u.d != f1 || se != se1)
 				printf("***strtord and strtopd disagree!!\n");
 			}
-		printf("strtod consumes %d bytes and returns %d with f = %.17g = #%lx %lx\n",
-				(int)(se-ibuf), i, u.f, U u.L[_0], U u.L[_1]);
+		printf("strtord consumes %d bytes and returns %d with f = %.17g = #%lx %lx\n",
+				(int)(se-ibuf), i, u.d, UL u.L[_0], UL u.L[_1]);
  fmt_test:
-		se = g_dfmt(obuf, &u.f, ndig, sizeof(obuf));
+		se = g_dfmt(obuf, &u.d, ndig, sizeof(obuf));
 		printf("g_dfmt(%d) gives %d bytes: \"%s\"\n\n",
 			ndig, (int)(se-obuf), se ? obuf : "<null>");
+		se1 = g_dfmt_p(obuf1, &u.d, ndig, sizeof(obuf1), 0);
+		if (se1 - obuf1 != se - obuf || strcmp(obuf, obuf1))
+			printf("Botch: g_dfmt_p gives \"%s\" rather than \"%s\"\n",
+				obuf1, obuf);
 		if (*s == '#')
 			continue;
-		printf("strtoId returns %d,", strtoId(ibuf, &se, fI, &fI[1]));
+		printf("strtoId returns %d,", strtoId(ibuf, &se, &fI[0].d, &fI[1].d));
 		printf(" consuming %d bytes.\n", (int)(se-ibuf));
-		if (fI[0] == fI[1]) {
-			if (fI[0] == u.f)
+		if (fI[0].d == fI[1].d) {
+			if (fI[0].d == u.d)
 				printf("fI[0] == fI[1] == strtod\n");
 			else
 				printf("fI[0] == fI[1] = #%lx %lx = %.17g\n",
-					U ((ULong*)fI)[_0], U ((ULong*)fI)[_1],
-					fI[0]);
+					UL fI[0].L[_0], UL fI[0].L[_1], fI[0].d);
 			}
 		else {
 			printf("fI[0] = #%lx %lx = %.17g\n",
-				U ((ULong*)fI)[_0], U ((ULong*)fI)[_1], fI[0]);
+				UL fI[0].L[_0], UL fI[0].L[_1], fI[0].d);
 			printf("fI[1] = #%lx %lx = %.17g\n",
-				U ((ULong*)&fI[1])[_0], U ((ULong*)&fI[1])[_1],
-				fI[1]);
-			if (fI[0] == u.f)
+				UL fI[1].L[_0], UL fI[1].L[_1], fI[1].d);
+			if (fI[0].d == u.d)
 				printf("fI[0] == strtod\n");
-			else if (fI[1] == u.f)
+			else if (fI[1].d == u.d)
 				printf("fI[1] == strtod\n");
 			else
 				printf("**** Both differ from strtod ****\n");
 			}
 		printf("\n");
+		switch(i & STRTOG_Retmask) {
+		  case STRTOG_Infinite:
+			for(nik = 0; nik < 6; ++nik) {
+				se1 = g_dfmt_p(obuf1, &u.d, ndig, sizeof(obuf1), nik);
+				printf("g_dfmt_p(...,%d): \"%s\"\n", nik, obuf1);
+				}
+			break;
+		  case STRTOG_NaN:
+		  case STRTOG_NaNbits:
+			for(i = 0; i < 3; ++i)
+				for(nik = 6*i, nike = nik + 3; nik < nike; ++nik) {
+					se1 = g_dfmt_p(obuf1, &u.d, ndig, sizeof(obuf1), nik);
+					printf("g_dfmt_p(...,%d): \"%s\"\n", nik, obuf1);
+					}
+		  }
 		}
 	return 0;
 	}

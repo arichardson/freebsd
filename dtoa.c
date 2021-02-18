@@ -115,6 +115,9 @@ dtoa
 		to hold the suppressed trailing zeros.
 	*/
 
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 	int bbits, b2, b5, be, dig, i, ieps, ilim, ilim0, ilim1,
 		j, j1, k, k0, k_check, leftright, m2, m5, s2, s5,
 		spec_case, try_quick;
@@ -124,7 +127,7 @@ dtoa
 	ULong x;
 #endif
 	Bigint *b, *b1, *delta, *mlo, *mhi, *S;
-	U d, d2, eps;
+	U d, d2, eps, eps1;
 	double ds;
 	char *s, *s0;
 #ifdef SET_INEXACT
@@ -170,9 +173,9 @@ dtoa
 		*decpt = 9999;
 #ifdef IEEE_Arith
 		if (!word1(&d) && !(word0(&d) & 0xfffff))
-			return nrv_alloc("Infinity", rve, 8);
+			return nrv_alloc("Infinity", rve, 8 MTb);
 #endif
-		return nrv_alloc("NaN", rve, 3);
+		return nrv_alloc("NaN", rve, 3 MTb);
 		}
 #endif
 #ifdef IBM
@@ -180,7 +183,7 @@ dtoa
 #endif
 	if (!dval(&d)) {
 		*decpt = 1;
-		return nrv_alloc("0", rve, 1);
+		return nrv_alloc("0", rve, 1 MTb);
 		}
 
 #ifdef SET_INEXACT
@@ -197,7 +200,7 @@ dtoa
 		}
 #endif
 
-	b = d2b(dval(&d), &be, &bbits);
+	b = d2b(dval(&d), &be, &bbits MTb);
 #ifdef Sudden_Underflow
 	i = (int)(word0(&d) >> Exp_shift1 & (Exp_mask>>Exp_shift1));
 #else
@@ -324,7 +327,7 @@ dtoa
 			if (i <= 0)
 				i = 1;
 		}
-	s = s0 = rv_alloc(i);
+	s = s0 = rv_alloc(i MTb);
 
 #ifdef Honor_FLT_ROUNDS
 	if (mode > 1 && Rounding != 1)
@@ -389,12 +392,28 @@ dtoa
 			 * generating digits needed.
 			 */
 			dval(&eps) = 0.5/tens[ilim-1] - dval(&eps);
+			if (k0 < 0 && j1 >= 307) {
+				eps1.d = 1.01e256; /* 1.01 allows roundoff in the next few lines */
+				word0(&eps1) -= Exp_msk1 * (Bias+P-1);
+				dval(&eps1) *= tens[j1 & 0xf];
+				for(i = 0, j = (j1-256) >> 4; j; j >>= 1, i++)
+					if (j & 1)
+						dval(&eps1) *= bigtens[i];
+				if (eps.d < eps1.d)
+					eps.d = eps1.d;
+				if (10. - d.d < 10.*eps.d && eps.d < 1.) {
+					/* eps.d < 1. excludes trouble with the tiniest denormal */
+					*s++ = '1';
+					++k;
+					goto ret1;
+					}
+				}
 			for(i = 0;;) {
 				L = dval(&d);
 				dval(&d) -= L;
 				*s++ = '0' + (int)L;
 				if (dval(&d) < dval(&eps))
-					goto ret1;
+					goto retc;
 				if (1. - dval(&d) < dval(&eps))
 					goto bump_up;
 				if (++i >= ilim)
@@ -415,11 +434,8 @@ dtoa
 				if (i == ilim) {
 					if (dval(&d) > 0.5 + dval(&eps))
 						goto bump_up;
-					else if (dval(&d) < 0.5 - dval(&eps)) {
-						while(*--s == '0');
-						s++;
-						goto ret1;
-						}
+					else if (dval(&d) < 0.5 - dval(&eps))
+						goto retc;
 					break;
 					}
 				}
@@ -465,7 +481,7 @@ dtoa
 #ifdef Honor_FLT_ROUNDS
 				if (mode > 1)
 				switch(Rounding) {
-				  case 0: goto ret1;
+				  case 0: goto retc;
 				  case 2: goto bump_up;
 				  }
 #endif
@@ -488,7 +504,7 @@ dtoa
 				break;
 				}
 			}
-		goto ret1;
+		goto retc;
 		}
 
 	m2 = b2;
@@ -506,7 +522,7 @@ dtoa
 #endif
 		b2 += i;
 		s2 += i;
-		mhi = i2b(1);
+		mhi = i2b(1 MTb);
 		}
 	if (m2 > 0 && s2 > 0) {
 		i = m2 < s2 ? m2 : s2;
@@ -517,20 +533,20 @@ dtoa
 	if (b5 > 0) {
 		if (leftright) {
 			if (m5 > 0) {
-				mhi = pow5mult(mhi, m5);
-				b1 = mult(mhi, b);
-				Bfree(b);
+				mhi = pow5mult(mhi, m5 MTb);
+				b1 = mult(mhi, b MTb);
+				Bfree(b MTb);
 				b = b1;
 				}
 			if (( j = b5 - m5 )!=0)
-				b = pow5mult(b, j);
+				b = pow5mult(b, j MTb);
 			}
 		else
-			b = pow5mult(b, b5);
+			b = pow5mult(b, b5 MTb);
 		}
-	S = i2b(1);
+	S = i2b(1 MTb);
 	if (s5 > 0)
-		S = pow5mult(S, s5);
+		S = pow5mult(S, s5 MTb);
 
 	/* Check for special case that d is a normalized power of 2. */
 
@@ -579,20 +595,20 @@ dtoa
 		s2 += i;
 		}
 	if (b2 > 0)
-		b = lshift(b, b2);
+		b = lshift(b, b2 MTb);
 	if (s2 > 0)
-		S = lshift(S, s2);
+		S = lshift(S, s2 MTb);
 	if (k_check) {
 		if (cmp(b,S) < 0) {
 			k--;
-			b = multadd(b, 10, 0);	/* we botched the k estimate */
+			b = multadd(b, 10, 0 MTb);	/* we botched the k estimate */
 			if (leftright)
-				mhi = multadd(mhi, 10, 0);
+				mhi = multadd(mhi, 10, 0 MTb);
 			ilim = ilim1;
 			}
 		}
 	if (ilim <= 0 && (mode == 3 || mode == 5)) {
-		if (ilim < 0 || cmp(b,S = multadd(S,5,0)) <= 0) {
+		if (ilim < 0 || cmp(b,S = multadd(S,5,0 MTb)) <= 0) {
 			/* no digits, fcvt style */
  no_digits:
 			k = -1 - ndigits;
@@ -605,7 +621,7 @@ dtoa
 		}
 	if (leftright) {
 		if (m2 > 0)
-			mhi = lshift(mhi, m2);
+			mhi = lshift(mhi, m2 MTb);
 
 		/* Compute mlo -- check for special case
 		 * that d is a normalized power of 2.
@@ -613,9 +629,9 @@ dtoa
 
 		mlo = mhi;
 		if (spec_case) {
-			mhi = Balloc(mhi->k);
+			mhi = Balloc(mhi->k MTb);
 			Bcopy(mhi, mlo);
-			mhi = lshift(mhi, Log2P);
+			mhi = lshift(mhi, Log2P MTb);
 			}
 
 		for(i = 1;;i++) {
@@ -624,9 +640,9 @@ dtoa
 			 * that will round to d?
 			 */
 			j = cmp(b, mlo);
-			delta = diff(S, mhi);
+			delta = diff(S, mhi MTb);
 			j1 = delta->sign ? 1 : cmp(b, delta);
-			Bfree(delta);
+			Bfree(delta MTb);
 #ifndef ROUND_BIASED
 			if (j1 == 0 && mode != 1 && !(word1(&d) & 1)
 #ifdef Honor_FLT_ROUNDS
@@ -664,7 +680,7 @@ dtoa
 				  }
 #endif /*Honor_FLT_ROUNDS*/
 				if (j1 > 0) {
-					b = lshift(b, 1);
+					b = lshift(b, 1 MTb);
 					j1 = cmp(b, S);
 #ifdef ROUND_BIASED
 					if (j1 >= 0 /*)*/
@@ -680,7 +696,7 @@ dtoa
 				}
 			if (j1 > 0) {
 #ifdef Honor_FLT_ROUNDS
-				if (!Rounding)
+				if (!Rounding && mode > 1)
 					goto accept_dig;
 #endif
 				if (dig == '9') { /* possible if i == 1 */
@@ -697,12 +713,12 @@ dtoa
 			*s++ = dig;
 			if (i == ilim)
 				break;
-			b = multadd(b, 10, 0);
+			b = multadd(b, 10, 0 MTb);
 			if (mlo == mhi)
-				mlo = mhi = multadd(mhi, 10, 0);
+				mlo = mhi = multadd(mhi, 10, 0 MTb);
 			else {
-				mlo = multadd(mlo, 10, 0);
-				mhi = multadd(mhi, 10, 0);
+				mlo = multadd(mlo, 10, 0 MTb);
+				mhi = multadd(mhi, 10, 0 MTb);
 				}
 			}
 		}
@@ -717,7 +733,7 @@ dtoa
 				}
 			if (i >= ilim)
 				break;
-			b = multadd(b, 10, 0);
+			b = multadd(b, 10, 0 MTb);
 			}
 
 	/* Round off last digit */
@@ -728,7 +744,7 @@ dtoa
 	  case 2: goto roundoff;
 	  }
 #endif
-	b = lshift(b, 1);
+	b = lshift(b, 1 MTb);
 	j = cmp(b, S);
 #ifdef ROUND_BIASED
 	if (j >= 0)
@@ -753,12 +769,15 @@ dtoa
 		s++;
 		}
  ret:
-	Bfree(S);
+	Bfree(S MTb);
 	if (mhi) {
 		if (mlo && mlo != mhi)
-			Bfree(mlo);
-		Bfree(mhi);
+			Bfree(mlo MTb);
+		Bfree(mhi MTb);
 		}
+ retc:
+	while(s > s0 && s[-1] == '0')
+		--s;
  ret1:
 #ifdef SET_INEXACT
 	if (inexact) {
@@ -771,7 +790,7 @@ dtoa
 	else if (!oldinexact)
 		clear_inexact();
 #endif
-	Bfree(b);
+	Bfree(b MTb);
 	*s = 0;
 	*decpt = k + 1;
 	if (rve)

@@ -104,6 +104,9 @@ strtod
 #ifdef SET_INEXACT
 	int inexact, oldinexact;
 #endif
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 #ifdef USE_LOCALE /*{{*/
 #ifdef NO_LOCALE_CACHE
 	char *decimalpoint = localeconv()->decimal_point;
@@ -166,7 +169,7 @@ strtod
 	if (*s == '0') {
 #ifndef NO_HEX_FP /*{*/
 		{
-		static FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI };
+		static FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI, 0 /*unused*/ };
 		Long exp;
 		ULong bits[2];
 		switch(s[1]) {
@@ -179,7 +182,7 @@ strtod
 #else
 #define fpi1 fpi
 #endif
-			switch((i = gethex(&s, &fpi1, &exp, &bb, sign)) & STRTOG_Retmask) {
+			switch((i = gethex(&s, &fpi1, &exp, &bb, sign MTb)) & STRTOG_Retmask) {
 			  case STRTOG_NoNumber:
 				s = s00;
 				sign = 0;
@@ -188,7 +191,7 @@ strtod
 			  default:
 				if (bb) {
 					copybits(bits, fpi.nbits, bb);
-					Bfree(bb);
+					Bfree(bb MTb);
 					}
 				ULtod(((U*)&rv)->L, bits, exp, i);
 			  }}
@@ -206,7 +209,7 @@ strtod
 	for(nd = nf = 0; (c = *s) >= '0' && c <= '9'; nd++, s++)
 		if (nd < 9)
 			y = 10*y + c - '0';
-		else if (nd < 16)
+		else if (nd < DBL_DIG + 2)
 			z = 10*z + c - '0';
 	nd0 = nd;
 #ifdef USE_LOCALE
@@ -240,11 +243,11 @@ strtod
 				for(i = 1; i < nz; i++)
 					if (nd++ < 9)
 						y *= 10;
-					else if (nd <= DBL_DIG + 1)
+					else if (nd <= DBL_DIG + 2)
 						z *= 10;
 				if (nd++ < 9)
 					y = 10*y + c;
-				else if (nd <= DBL_DIG + 1)
+				else if (nd <= DBL_DIG + 2)
 					z = 10*z + c;
 				nz = 0;
 				}
@@ -294,7 +297,7 @@ strtod
 			/* Check for Nan and Infinity */
 			ULong bits[2];
 			static FPI fpinan =	/* only 52 explicit bits */
-				{ 52, 1-1023-53+1, 2046-1023-53+1, 1, SI };
+				{ 52, 1-1023-53+1, 2046-1023-53+1, 1, SI, 0 /*unused*/ };
 			if (!decpt)
 			 switch(c) {
 			  case 'i':
@@ -344,7 +347,7 @@ strtod
 
 	if (!nd0)
 		nd0 = nd;
-	k = nd < DBL_DIG + 1 ? nd : DBL_DIG + 1;
+	k = nd < DBL_DIG + 2 ? nd : DBL_DIG + 2;
 	dval(&rv) = y;
 	if (k > 9) {
 #ifdef SET_INEXACT
@@ -484,11 +487,11 @@ strtod
 #endif /*IEEE_Arith*/
  range_err:
 				if (bd0) {
-					Bfree(bb);
-					Bfree(bd);
-					Bfree(bs);
-					Bfree(bd0);
-					Bfree(delta);
+					Bfree(bb MTb);
+					Bfree(bd MTb);
+					Bfree(bs MTb);
+					Bfree(bd0 MTb);
+					Bfree(delta MTb);
 					}
 #ifndef NO_ERRNO
 				errno = ERANGE;
@@ -555,6 +558,10 @@ strtod
 				if (!dval(&rv)) {
  undfl:
 					dval(&rv) = 0.;
+#ifdef Honor_FLT_ROUNDS
+					if (Rounding == 2)
+						word1(&rv) = 1;
+#endif
 					goto range_err;
 					}
 #ifndef Avoid_Underflow
@@ -572,13 +579,13 @@ strtod
 
 	/* Put digits into bd: true value = bd * 10^e */
 
-	bd0 = s2b(s0, nd0, nd, y, dplen);
+	bd0 = s2b(s0, nd0, nd, y, dplen MTb);
 
 	for(;;) {
-		bd = Balloc(bd0->k);
+		bd = Balloc(bd0->k MTb);
 		Bcopy(bd, bd0);
-		bb = d2b(dval(&rv), &bbe, &bbbits);	/* rv = bb * 2^bbe */
-		bs = i2b(1);
+		bb = d2b(dval(&rv), &bbe, &bbbits MTb);	/* rv = bb * 2^bbe */
+		bs = i2b(1 MTb);
 
 		if (e >= 0) {
 			bb2 = bb5 = 0;
@@ -641,20 +648,20 @@ strtod
 			bs2 -= i;
 			}
 		if (bb5 > 0) {
-			bs = pow5mult(bs, bb5);
-			bb1 = mult(bs, bb);
-			Bfree(bb);
+			bs = pow5mult(bs, bb5 MTb);
+			bb1 = mult(bs, bb MTb);
+			Bfree(bb MTb);
 			bb = bb1;
 			}
 		if (bb2 > 0)
-			bb = lshift(bb, bb2);
+			bb = lshift(bb, bb2 MTb);
 		if (bd5 > 0)
-			bd = pow5mult(bd, bd5);
+			bd = pow5mult(bd, bd5 MTb);
 		if (bd2 > 0)
-			bd = lshift(bd, bd2);
+			bd = lshift(bd, bd2 MTb);
 		if (bs2 > 0)
-			bs = lshift(bs, bs2);
-		delta = diff(bb, bd);
+			bs = lshift(bs, bs2 MTb);
+		delta = diff(bb, bd MTb);
 		dsign = delta->sign;
 		delta->sign = 0;
 		i = cmp(delta, bs);
@@ -686,7 +693,7 @@ strtod
 						if (y)
 #endif
 						  {
-						  delta = lshift(delta,Log2P);
+						  delta = lshift(delta,Log2P MTb);
 						  if (cmp(delta, bs) <= 0)
 							dval(&adj) = -0.5;
 						  }
@@ -778,7 +785,7 @@ strtod
 #endif
 				break;
 				}
-			delta = lshift(delta,Log2P);
+			delta = lshift(delta,Log2P MTb);
 			if (cmp(delta, bs) > 0)
 				goto drop_down;
 			break;
@@ -1022,16 +1029,16 @@ strtod
 			}
 #endif
  cont:
-		Bfree(bb);
-		Bfree(bd);
-		Bfree(bs);
-		Bfree(delta);
+		Bfree(bb MTb);
+		Bfree(bd MTb);
+		Bfree(bs MTb);
+		Bfree(delta MTb);
 		}
-	Bfree(bb);
-	Bfree(bd);
-	Bfree(bs);
-	Bfree(bd0);
-	Bfree(delta);
+	Bfree(bb MTb);
+	Bfree(bd MTb);
+	Bfree(bs MTb);
+	Bfree(bd0 MTb);
+	Bfree(delta MTb);
 #ifdef SET_INEXACT
 	if (inexact) {
 		if (!oldinexact) {

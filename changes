@@ -657,7 +657,7 @@ Example: .010000000000000000057612911342378542997169 .
 Thanks to Rick Regan <exploringbinary@gmail.com> for reporting the
 symptoms and providing an example.
 
-20110403:
+20110304:
   dtoa.c, gdtoa/gdtoaimp.h, gdtoa/strtod.c:  if
 ROUND_BIASED_without_Round_Up is #defined, assume ROUND_BIASED and
 omit the quick computation that would use ordinary arithmetic to
@@ -670,3 +670,252 @@ of portability when compiling without -DLong=... specified).  On some
 64-bit systems, long is a 64-bit type; we need a 32-bit type here.
   dtoa.c, gdtoa/gdtoa.c: fix a glith with ndigits with mode = 4 at
 the bottom of the exponent range, e.g., 1e-323.
+
+20110321:
+  dtoa.c, gdtoaimp.h: add comment that defining No_leftright will
+sometimes cause dtoa (or gdtoa) modes 4 and 5 to be treated the
+same as modes 2 and 3, respectively (and thus not work as intended).
+
+20110428:
+  dtoa.c: fix a glitch under compilation with Honor_FLT_ROUNDS and
+NO_HEX_FP #defined.
+
+20111102:
+  gdota.tgz: add field int_max to struct FPI and adjust gdtoa.c and
+*fmt.c so gdtoa.c tests against fpi->int_max rather than Int_max.
+This only affects some conversions by g_ffmt.c, which in some cases
+produced too many digits, such as the case added to the end of
+tests/testnos.
+
+20120417
+  dtoa.c:  augment a test in bigcomp() to correctly compare a long
+input string of digits with a computed string after all of the
+input string has otherwise been processed.  This matters only
+rarely; a string for which it matters (reported by Herman Geza) is
+1.8254370818746402660437411213933955878019332885742187 .
+
+20120423
+  dtoa.c:  add a comment that gcc's -ffast-math flag disables IEEE
+arithmetic (whence dtoa and strtod may not function right if you
+use this flag or related flags).
+
+20121220
+  dtoa.c and gdtoa.tgz:  to avoid a possible one-time race when
+Infinity or NaN appear in decimal->binary conversions done in parallel
+threads, replace hexdig_init() with static initialization.
+
+20121223
+  gdtoa.tgz:  add variants g_ddfmt_p(), g_dfmt_p(), g_ffmt_p(),
+g_Qfmt_p(), g_xfmt_p(), and g_xLfmt_p() of g_ddfmt(), g_dfmt(),
+g_ffmt(), g_Qfmt(), g_xfmt(), and g_xLfmt(), respectively, that
+have an additional final int argument that governs details of
+the rendering of Infinity and NaN.  For more details, see the
+updated README.
+
+20130129
+  dtoa.c:  fix an obscure memory leak in gethex().  (See the
+new ret_tinyf label.)  Thanks to avernar@gmail.com for pointing
+this issue out.
+
+20131122
+  dtoa.c:  fix a possible glitch with strtod in deciding whether a
+decimal value less in absolute value than the smallest denormal should
+be rounded to zero.  (The fix is to force use of bigcomp() when at the
+bottom of the exponent range and we otherwise would have returned 0.)
+Thanks to Rick Regan <exploringbinary@gmail.com> for sending an
+example that illustrated the bug.
+
+20131209
+  dtoa.c, gdtoa.tgz: when strtod computes its starting approximation,
+allow z to involve one more digit for IEEE arithmetic and two more
+digits for IBM-mainframe and VAX arithmetics.  Thanks to Walter Qian
+(water.qian@gmail.com) for suggesting this change, which makes some
+conversions faster.
+
+20150112
+  dtoa.c: "ifdef KR_headers" stuff removed; modifications to
+"#ifdef MULTIPLE_THREADS":  function
+	void set_max_dtoa_threads(unsigned int n);
+is provided and
+	unsigned int dtoa_get_threadno(void);
+is expected to be available to return the current thread number.
+After set_max_dtoa_threads(n), calls on strtod and dtoa by
+threads with thread numbers < n avoid calls on ACQUIRE_DTOA_LOCK
+and FREE_DTOA_LOCK by keeping thread-specific copies of entities
+for which changes by other threads would otherwise cause trouble.
+See the updated comments in dtoa.c about MULTIPLE_THREADS.
+
+20150119
+  dtoa.c:  fix a glitch (possible fault) in the updates of 20150112.
+
+20151020
+  dtoa.c:  add a test for dtoa() to return "1" under mode 4 when
+converting some very small powers of 10, such as 1e-322 with
+ndigits = 4 and 1e-319 with ndigits = 7 (examples provided by
+jay.foad@gmail.com).
+
+20160219
+  dtoa.c: fix glitches when compiled with both MULTIPLE_THREADS and
+Honor_FLT_ROUNDS #defined (a senseless combination).
+  gdtoa.tgz: make changes similar to the "#ifdef MULTIPLE_THREADS"
+changes to dtoa.c of 20150112.  Adjust gdtoa(...,mode,...) to assume
+"round near" when mode is 0 or 1.  Make various tweaks to banish
+(useless) warnings from "gcc -Wall -Wextra".  Thanks to Jarkko
+Hietaniemi <jhi@iki.fi> for advocating the latter exercise (and
+correcting a typo in README).
+
+20160220
+  gdtoa.tgz: in gdtoa/test, adjust dItest.c, ddtest.c, dtest,c, ftest.c
+to banish pedantic warnings that appear with "gcc -O2 -Wall -Wextra"
+but not with "gcc -O -Wall -Wextra".
+
+20160307
+  dtoa.c:  fix glitches with floating-point values in hexadecimal
+notation:  some values that should overflow to (appropriately signed)
+Infinity, such as 0x1p1025, were mishandled, and values greater than
+0x1p-1075 and less than 0x1.0000000000001p-1075 where treated as zero
+rather than the smallest denormal number.
+  gdtoa.tgz:  fix a bug with hexadecimal input greater than the
+smallest denormal and less than the smallest denormal times the
+smallest number greater than one.  In round-to-nearest values, such
+values should round to the smallest denormal rather than to zero.
+Thanks to Albert Chan <albertmcchan@yahoo.com> for bug reports.
+
+20160325
+  dtoa.c:  fix a bug whereby dtoa(...,mode,...) with, e.g., mode = 2 or
+3 could return a string with trailing zeros, contrary to specification.
+An example provided by Albert Chan:  dtoa(81320560005., 2, 10,...).
+  gdtoa.tgz: fix the analogous bug in gdtoa/dtoa.c and gdtoa/gdtoa.c
+and apply the bug fix of 20151020 to gdtoa/dtoa.c.
+
+
+20160429
+  dtoa.c:  new variant dtoa_r() of dtoa(), with new trailing arguments
+char *s0 and size_t s0len.  When s0len is large enough to accommodate
+the desired return value (including a trailing NULL byte) and possibly
+some intermediate trailing zeros, dtoa_r() returns s0.  Otherwise
+dtoa_r() returns NULL, and if the call had the form
+        dtoa_r(..., rve, s0, s0len)
+with rve not NULL, then a subsequent call with s0len greater than
+*rve - (char*)0 should succeed in returning s0.
+  On systems with 64-bit integer arithmetic and IEEE arithmetic, new
+logic in dtoa.c sometimes makes strtod(), dtoa(), and dtoa_r() faster
+than before -- an order of magnitude or more faster in some cases.
+The new logic can be suppressed by compilation with -DNO_BF96 or
+-DNO_LONG_LONG.  Thanks to Albert Chan <albertmcchan@yahoo.com> for
+prompting me to revisit use of 64-bit integer arithmetic here.
+  dtoa.c, gdtoa.tgz (file dtoa.c):  Fix a bug with dtoa mode 0 when
+Honor_FLT_ROUNDS is defined:  with some inputs and nondefault rounding
+modes (e.g., 1.23 with round toward zero), the returned string was off
+by one.  When the new 64-bit integer logic is used, the test in
+question is very unlikely to be used.  This is another bug reported by
+Albert Chan.
+
+20160502
+  dtoa.c:  add "ll" suffix to long long decimal constants (array pfive).
+
+20160503
+  dtoa.c:  fix some glitches in obscure cases; remove
+"#ifdef DELAY_URES" logic, which gave wrong results in rare cases.
+
+20160504
+  dtoa.c:  fix more rarely seen bugs with dtoa()'s rounding of final
+digits.
+
+20160505
+  dtoa.c:  fix some glitches in strtod() when Honor_FLT_ROUNDS is
+defined:  zero was returned for some decimal values that should have
+been rounded to +- the smallest denormal, and +-Infinity was returned
+for some hexadecimal strings with huge values that should have been
+rounded to +- the largest finite value.
+
+20160506
+  gdtoa.tgz: analogous bug fixes to those of 20160505.
+  dtoa.c: fix glitches with some denormals and some directed roundings.
+
+20160507
+  dtoa.c: fix strtod overflow tests.
+
+20160508
+  dtoa.c: strtod: fix rounding bugs with some denormals and with some
+strings of more than 19 digits; dtoa: fix rarely seen off-by-one bug
+in the final digit with modes 2 and 3.
+
+20160510
+  dtoa.c: strtod: fix a glitch that caused some values less than the
+half smallest denormal not to round to zero, and adjust a test that
+in rare cases incorrectly avoided a longer computation; dtoa: fix a
+glitch with -DNO_BF96 -DHonor_FLT_ROUNDS.
+
+20160513
+  dtoa.c: tighten a test that occasionally falsely indicated
+sufficiency of an approximate computation.  In some difficult but
+unlikely cases, the value returned by strtod was off by one bit.
+Fix some tests used with directed roundings that sometimes caused
+(and dota_r) modes 2 and 3 to return off-by-one values.  Thanks
+to Albert Chan for providing examples.
+
+20160514
+  dtoa.c:  strtod:  tighten a variant, missed yesterday, of a test
+that occasionally falsely indicated sufficiency of an approximate
+computation.  Also apply to denormals a test hitherto only applied to
+normal numbers for sufficiency of an approximate computation.
+
+20160516
+  dtoa.c (versions >= 20160429, without -DNO_BF96):  fix more glitches
+with directed roundings.
+
+20160518
+  dtoa.c: strtod (without -DNO_BF96): minor efficiency improvement on some
+inputs with more than 19 significant digits.
+
+20160521
+  dtoa.c (without -DNO_BF96):  strtod:  fix glitches with directed
+rounding of denormals; dtoa and strtod:  fix some bugs with
+-DSET_INEXACT.
+
+20160523
+  dtoa.c (without -DNO_BF96):  strtod:  fix a bug in rounding some
+denormal values; dtoa:  fix a potential glitch with -DSET_INEXACT.
+Thanks to Albert Chan for providing examples of the strtod bug.
+
+20160607
+  dtoa.c (without -DNO_BF96):  strtod:  fix a rarely seen 1-bit error
+converting strings of more than 19 digits.  Thanks to Albert Chan for
+examples.
+
+20160611
+  dtoa.c (without -DNO_BF96):  minor performance improvement on some
+strtod inputs, using truncated rather than rounded 96-bit approximate
+powers of 10.  Thanks to Albert Chan for suggesting use of truncated
+rather than rounded constants.
+
+20161024
+  dtoa.c: tweak for C++ compilation with MALLOC or REALLOC #defined.
+
+20161107
+  dtoa.c: make errno assignments via a macro, Set_errno(x), that by
+default is "errno = x", but can be set to something else in a local
+errno.h, such as "#define Set_errno(x) _set_errno(x)", which works
+with some compilers on Microsoft systems, but not others, and is
+not known to be necessary with any of those compilers.  Note that
+a local errno.h (included in dtoa.c via #include "errno.h") probably
+should #include <errno.h>.
+
+20180411
+  dtoa.c: fix glitches (compile errors) with compilation under
+-DSudden_Underflow .
+
+20180730
+  strtodg.c in gdtoa.c:  fix a glitch, introduced 20160506, with some
+return values of +-Infinity:  the STRTOG_Overflow bit was not set.
+  strtoIg.c in gdtoa.c: undo some changes, probably of 20160506, that
+caused trouble with subnormal values, such as 1.23e-320, on which
+strtoId (which calls strtoIg) returned two equal values, rather than
+values differing by one in the least-significant bit.
+  test/dt.c:  when compiled with -DUSE_fpinit, initially invoke
+fpinit_ASL() (found in the AMPL/solver interface library) to set Intel
+80x87-style floating point arithmetic to 53-bit rounding precision.
+  test/dtest.c: change output to say "strtord consumes" rather than
+"strtod consumes".
+  test/d.out: update to reflect the above change to dtest.c.

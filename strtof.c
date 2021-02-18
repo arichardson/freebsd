@@ -38,7 +38,7 @@ strtof(s, sp) CONST char *s; char **sp;
 strtof(CONST char *s, char **sp)
 #endif
 {
-	static FPI fpi0 = { 24, 1-127-24+1,  254-127-24+1, 1, SI };
+	static FPI fpi0 = { 24, 1-127-24+1,  254-127-24+1, 1, SI, 0 /*unused*/ };
 	ULong bits[1];
 	Long exp;
 	int k;
@@ -51,6 +51,7 @@ strtof(CONST char *s, char **sp)
 
 	k = strtodg(s, sp, fpi, &exp, bits);
 	switch(k & STRTOG_Retmask) {
+	  default: /* unused */
 	  case STRTOG_NoNumber:
 	  case STRTOG_Zero:
 		u.L[0] = 0;

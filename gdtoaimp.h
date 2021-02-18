@@ -89,7 +89,8 @@ THIS SOFTWARE.
  * #define IBM for IBM mainframe-style floating-point arithmetic.
  * #define VAX for VAX-style floating-point arithmetic (D_floating).
  * #define No_leftright to omit left-right logic in fast floating-point
- *	computation of dtoa.
+ *	computation of dtoa and gdtoa.  This will cause modes 4 and 5 to be
+ *	treated the same as modes 2 and 3 for some inputs.
  * #define Check_FLT_ROUNDS if FLT_ROUNDS can assume the values 2 or 3.
  * #define RND_PRODQUOT to use rnd_prod and rnd_quot (assembly routines
  *	that use extended-precision instructions to compute rounded
@@ -161,6 +162,25 @@ THIS SOFTWARE.
  *	probability of wasting memory, but would otherwise be harmless.)
  *	You must also invoke freedtoa(s) to free the value s returned by
  *	dtoa.  You may do so whether or not MULTIPLE_THREADS is #defined.
+
+ *	When MULTIPLE_THREADS is #defined, source file misc.c provides
+ *		void set_max_gdtoa_threads(unsigned int n);
+ *	and expects
+ *		unsigned int dtoa_get_threadno(void);
+ *	to be available (possibly provided by
+ *		#define dtoa_get_threadno omp_get_thread_num
+ *	if OpenMP is in use or by
+ *		#define dtoa_get_threadno pthread_self
+ *	if Pthreads is in use), to return the current thread number.
+ *	If set_max_dtoa_threads(n) was called and the current thread
+ *	number is k with k < n, then calls on ACQUIRE_DTOA_LOCK(...) and
+ *	FREE_DTOA_LOCK(...) are avoided; instead each thread with thread
+ *	number < n has a separate copy of relevant data structures.
+ *	After set_max_dtoa_threads(n), a call set_max_dtoa_threads(m)
+ *	with m <= n has has no effect, but a call with m > n is honored.
+ *	Such a call invokes REALLOC (assumed to be "realloc" if REALLOC
+ *	is not #defined) to extend the size of the relevant array.
+
  * #define IMPRECISE_INEXACT if you do not care about the setting of
  *	the STRTOG_Inexact bits in the special case of doing IEEE double
  *	precision conversions (which could also be done by the strtod in
@@ -201,6 +221,12 @@ THIS SOFTWARE.
 extern Char *MALLOC ANSI((size_t));
 #else
 #define MALLOC malloc
+#endif
+
+#ifdef REALLOC
+extern Char *REALLOC ANSI((Char*, size_t));
+#else
+#define REALLOC realloc
 #endif
 
 #undef IEEE_Arith
@@ -456,10 +482,22 @@ extern double rnd_prod(double, double), rnd_quot(double, double);
 #define ALL_ON 0xffff
 #endif
 
-#ifndef MULTIPLE_THREADS
+#ifdef MULTIPLE_THREADS /*{{*/
+#define MTa , PTI
+#define MTb , &TI
+#define MTd , ThInfo **PTI
+#define MTk ThInfo **PTI;
+extern void ACQUIRE_DTOA_LOCK ANSI((unsigned int));
+extern void FREE_DTOA_LOCK ANSI((unsigned int));
+extern unsigned int dtoa_get_threadno ANSI((void));
+#else /*}{*/
 #define ACQUIRE_DTOA_LOCK(n)	/*nothing*/
 #define FREE_DTOA_LOCK(n)	/*nothing*/
-#endif
+#define MTa /*nothing*/
+#define MTb /*nothing*/
+#define MTd /*nothing*/
+#define MTk /*nothing*/
+#endif /*}}*/
 
 #define Kmax 9
 
@@ -471,6 +509,12 @@ Bigint {
 	};
 
  typedef struct Bigint Bigint;
+
+ typedef struct
+ThInfo {
+	Bigint *Freelist[Kmax+1];
+	Bigint *P5s;
+	} ThInfo;
 
 #ifdef NO_STRING_H
 #ifdef DECLARE_SIZE_T
@@ -484,12 +528,15 @@ extern void memcpy_D2A ANSI((void*, const void*, size_t));
 
 #define Balloc Balloc_D2A
 #define Bfree Bfree_D2A
+#define InfName InfName_D2A
+#define NanName NanName_D2A
 #define ULtoQ ULtoQ_D2A
 #define ULtof ULtof_D2A
 #define ULtod ULtod_D2A
 #define ULtodd ULtodd_D2A
 #define ULtox ULtox_D2A
 #define ULtoxL ULtoxL_D2A
+#define add_nanbits add_nanbits_D2A
 #define any_on any_on_D2A
 #define b2d b2d_D2A
 #define bigtens bigtens_D2A
@@ -528,12 +575,14 @@ extern void memcpy_D2A ANSI((void*, const void*, size_t));
 #define trailz trailz_D2A
 #define ulp ulp_D2A
 
+ extern char *add_nanbits ANSI((char*, size_t, ULong*, int));
  extern char *dtoa_result;
  extern CONST double bigtens[], tens[], tinytens[];
  extern unsigned char hexdig[];
+ extern const char *InfName[6], *NanName[3];
 
- extern Bigint *Balloc ANSI((int));
- extern void Bfree ANSI((Bigint*));
+ extern Bigint *Balloc ANSI((int MTd));
+ extern void Bfree ANSI((Bigint* MTd));
  extern void ULtof ANSI((ULong*, ULong*, Long, int));
  extern void ULtod ANSI((ULong*, ULong*, Long, int));
  extern void ULtodd ANSI((ULong*, ULong*, Long, int));
@@ -544,35 +593,35 @@ extern void memcpy_D2A ANSI((void*, const void*, size_t));
  extern double b2d ANSI((Bigint*, int*));
  extern int cmp ANSI((Bigint*, Bigint*));
  extern void copybits ANSI((ULong*, int, Bigint*));
- extern Bigint *d2b ANSI((double, int*, int*));
+ extern Bigint *d2b ANSI((double, int*, int* MTd));
  extern void decrement ANSI((Bigint*));
- extern Bigint *diff ANSI((Bigint*, Bigint*));
+ extern Bigint *diff ANSI((Bigint*, Bigint* MTd));
  extern char *dtoa ANSI((double d, int mode, int ndigits,
 			int *decpt, int *sign, char **rve));
  extern char *g__fmt ANSI((char*, char*, char*, int, ULong, size_t));
- extern int gethex ANSI((CONST char**, FPI*, Long*, Bigint**, int));
+ extern int gethex ANSI((CONST char**, CONST FPI*, Long*, Bigint**, int MTd));
  extern void hexdig_init_D2A(Void);
- extern int hexnan ANSI((CONST char**, FPI*, ULong*));
+ extern int hexnan ANSI((CONST char**, CONST FPI*, ULong*));
  extern int hi0bits_D2A ANSI((ULong));
- extern Bigint *i2b ANSI((int));
- extern Bigint *increment ANSI((Bigint*));
+ extern Bigint *i2b ANSI((int MTd));
+ extern Bigint *increment ANSI((Bigint* MTd));
  extern int lo0bits ANSI((ULong*));
- extern Bigint *lshift ANSI((Bigint*, int));
+ extern Bigint *lshift ANSI((Bigint*, int MTd));
  extern int match ANSI((CONST char**, char*));
- extern Bigint *mult ANSI((Bigint*, Bigint*));
- extern Bigint *multadd ANSI((Bigint*, int, int));
- extern char *nrv_alloc ANSI((char*, char **, int));
- extern Bigint *pow5mult ANSI((Bigint*, int));
+ extern Bigint *mult ANSI((Bigint*, Bigint* MTd));
+ extern Bigint *multadd ANSI((Bigint*, int, int MTd));
+ extern char *nrv_alloc ANSI((char*, char **, int MTd));
+ extern Bigint *pow5mult ANSI((Bigint*, int MTd));
  extern int quorem ANSI((Bigint*, Bigint*));
  extern double ratio ANSI((Bigint*, Bigint*));
  extern void rshift ANSI((Bigint*, int));
- extern char *rv_alloc ANSI((int));
- extern Bigint *s2b ANSI((CONST char*, int, int, ULong, int));
- extern Bigint *set_ones ANSI((Bigint*, int));
+ extern char *rv_alloc ANSI((int MTd));
+ extern Bigint *s2b ANSI((CONST char*, int, int, ULong, int MTd));
+ extern Bigint *set_ones ANSI((Bigint*, int MTd));
  extern char *strcp ANSI((char*, const char*));
- extern int strtoIg ANSI((CONST char*, char**, FPI*, Long*, Bigint**, int*));
+ extern int strtoIg ANSI((CONST char*, char**, CONST FPI*, Long*, Bigint**, int*));
  extern double strtod ANSI((const char *s00, char **se));
- extern Bigint *sum ANSI((Bigint*, Bigint*));
+ extern Bigint *sum ANSI((Bigint*, Bigint* MTd));
  extern int trailz ANSI((Bigint*));
  extern double ulp ANSI((U*));
 

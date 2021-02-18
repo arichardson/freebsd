@@ -31,6 +31,8 @@ THIS SOFTWARE.
 
 #include "gdtoaimp.h"
 
+ extern ULong NanDflt_xL_D2A[3];
+
 #undef _0
 #undef _1
 
@@ -54,7 +56,7 @@ strtopxL(s, sp, V) CONST char *s; char **sp; void *V;
 strtopxL(CONST char *s, char **sp, void *V)
 #endif
 {
-	static FPI fpi0 = { 64, 1-16383-64+1, 32766 - 16383 - 64 + 1, 1, SI };
+	static FPI fpi0 = { 64, 1-16383-64+1, 32766 - 16383 - 64 + 1, 1, SI, 0 /*unused*/ };
 	ULong bits[2];
 	Long exp;
 	int k;
@@ -87,9 +89,9 @@ strtopxL(CONST char *s, char **sp, void *V)
 		break;
 
 	  case STRTOG_NaN:
-		L[0] = ld_QNAN0;
-		L[1] = ld_QNAN1;
-		L[2] = ld_QNAN2;
+		L[_0] = NanDflt_xL_D2A[2];
+		L[_1] = NanDflt_xL_D2A[1];
+		L[_2] = NanDflt_xL_D2A[0];
 	  }
 	if (k & STRTOG_Neg)
 		L[_0] |= 0x80000000L;

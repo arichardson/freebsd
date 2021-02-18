@@ -303,6 +303,12 @@ ddI[0] = #7fefffff ffffffff + 7c9fffff ffffffff
 ddI[1] = #7ff00000 0 + 7ff00000 0
 = Infinity + Infinity
 ddI[1] == strtod
+g_ddfmt_p(...,0): "Infinity"
+g_ddfmt_p(...,1): "Infinity"
+g_ddfmt_p(...,2): "Infinity"
+g_ddfmt_p(...,3): "Infinity"
+g_ddfmt_p(...,4): "Infinity"
+g_ddfmt_p(...,5): "Infinity"
 
 
 Input: 9.0259718793241475e-277
@@ -373,6 +379,16 @@ ddI[0] = #fffff ffffffff + 0 0
 ddI[1] = #100000 0 + 0 0
 = 2.2250738585072014e-308 + 0
 ddI[1] == strtod
+
+
+Input: 3.2649476e14
+strtopdd consumes 12 bytes and returns 1
+dd[0] = 3.2649476e+14 = #42f28f1f c30da000
+dd[1] = 0 = #0 0
+g_ddfmt(0) gives 13 bytes: "3.2649476e+14"
+
+strtoIdd returns 1, consuming 12 bytes.
+ddI[0] == ddI[1] == strtopdd
 
 Rounding mode for strtor... changed from 1 (nearest) to 0 (toward zero)
 

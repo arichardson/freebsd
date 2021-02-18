@@ -166,3 +166,9 @@ strtodI consumes 23 bytes and returns 33
 dd[0] = #0 0 = 0
 dd[1] = #100000 0 = 2.2250738585072014e-308
 
+
+Input: 3.2649476e14
+strtodI consumes 12 bytes and returns 1
+dd[0] = #42f28f1f c30da000 = 3.2649476e+14
+dd[1] = #42f28f1f c30da000 = 3.2649476e+14
+

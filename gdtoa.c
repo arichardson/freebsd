@@ -33,9 +33,9 @@ THIS SOFTWARE.
 
  static Bigint *
 #ifdef KR_headers
-bitstob(bits, nbits, bbits) ULong *bits; int nbits; int *bbits;
+bitstob(bits, nbits, bbits MTa) ULong *bits; int nbits; int *bbits; MTk
 #else
-bitstob(ULong *bits, int nbits, int *bbits)
+bitstob(ULong *bits, int nbits, int *bbits MTd)
 #endif
 {
 	int i, k;
@@ -52,7 +52,7 @@ bitstob(ULong *bits, int nbits, int *bbits)
 	if (!k)
 		k = 1;
 #endif
-	b = Balloc(k);
+	b = Balloc(k MTa);
 	be = bits + ((nbits - 1) >> kshift);
 	x = x0 = b->x;
 	do {
@@ -112,10 +112,10 @@ bitstob(ULong *bits, int nbits, int *bbits)
 gdtoa
 #ifdef KR_headers
 	(fpi, be, bits, kindp, mode, ndigits, decpt, rve)
-	FPI *fpi; int be; ULong *bits;
+	CONST FPI *fpi; int be; ULong *bits;
 	int *kindp, mode, ndigits, *decpt; char **rve;
 #else
-	(FPI *fpi, int be, ULong *bits, int *kindp, int mode, int ndigits, int *decpt, char **rve)
+	(CONST FPI *fpi, int be, ULong *bits, int *kindp, int mode, int ndigits, int *decpt, char **rve)
 #endif
 {
  /*	Arguments ndigits and decpt are similar to the second and third
@@ -153,6 +153,9 @@ gdtoa
 		to hold the suppressed trailing zeros.
 	*/
 
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 	int bbits, b2, b5, be0, dig, i, ieps, ilim, ilim0, ilim1, inex;
 	int j, j1, k, k0, k_check, kind, leftright, m2, m5, nbits;
 	int rdir, s2, s5, spec_case, try_quick;
@@ -178,14 +181,14 @@ gdtoa
 		break;
 	  case STRTOG_Infinite:
 		*decpt = -32768;
-		return nrv_alloc("Infinity", rve, 8);
+		return nrv_alloc("Infinity", rve, 8 MTb);
 	  case STRTOG_NaN:
 		*decpt = -32768;
-		return nrv_alloc("NaN", rve, 3);
+		return nrv_alloc("NaN", rve, 3 MTb);
 	  default:
 		return 0;
 	  }
-	b = bitstob(bits, nbits = fpi->nbits, &bbits);
+	b = bitstob(bits, nbits = fpi->nbits, &bbits MTb);
 	be0 = be;
 	if ( (i = trailz(b)) !=0) {
 		rshift(b, i);
@@ -193,10 +196,10 @@ gdtoa
 		bbits -= i;
 		}
 	if (!b->wds) {
-		Bfree(b);
+		Bfree(b MTb);
  ret_zero:
 		*decpt = 1;
-		return nrv_alloc("0", rve, 1);
+		return nrv_alloc("0", rve, 1 MTb);
 		}
 
 	dval(&d) = b2d(b, &i);
@@ -229,10 +232,7 @@ gdtoa
 	 * (We could get a more accurate k by invoking log10,
 	 *  but this is probably not worthwhile.)
 	 */
-#ifdef IBM
-	i <<= 2;
-	i += j;
-#endif
+
 	ds = (dval(&d)-1.5)*0.289529654602168 + 0.1760912590558 + i*0.301029995663981;
 
 	/* correct assumption about exponent range */
@@ -313,9 +313,11 @@ gdtoa
 			if (i <= 0)
 				i = 1;
 		}
-	s = s0 = rv_alloc(i);
+	s = s0 = rv_alloc(i MTb);
 
-	if ( (rdir = fpi->rounding - 1) !=0) {
+	if (mode <= 1)
+		rdir = 0;
+	else if ( (rdir = fpi->rounding - 1) !=0) {
 		if (rdir < 0)
 			rdir = 2;
 		if (kind & STRTOG_Neg)
@@ -334,10 +336,6 @@ gdtoa
 
 		i = 0;
 		d2 = dval(&d);
-#ifdef IBM
-		if ( (j = 11 - hi0bits(word0(&d) & Frac_mask)) !=0)
-			dval(&d) /= 1 << j;
-#endif
 		k0 = k;
 		ilim0 = ilim;
 		ieps = 2; /* conservative */
@@ -424,7 +422,7 @@ gdtoa
 					else if (dval(&d) < ds - dval(&eps)) {
 						if (dval(&d))
 							inex = STRTOG_Inexlo;
-						goto clear_trailing0;
+						goto ret1;
 						}
 					break;
 					}
@@ -441,7 +439,7 @@ gdtoa
 
 	/* Do we have a "small" integer? */
 
-	if (be >= 0 && k <= Int_max) {
+	if (be >= 0 && k <= fpi->int_max) {
 		/* Yes. */
 		ds = tens[k];
 		if (ndigits < 0 && ilim <= 0) {
@@ -487,12 +485,8 @@ gdtoa
 							}
 					++*s++;
 					}
-				else {
+				else
 					inex = STRTOG_Inexlo;
- clear_trailing0:
-					while(*--s == '0'){}
-					++s;
-					}
 				break;
 				}
 			}
@@ -527,7 +521,7 @@ gdtoa
 			}
 		b2 += i;
 		s2 += i;
-		mhi = i2b(1);
+		mhi = i2b(1 MTb);
 		}
 	if (m2 > 0 && s2 > 0) {
 		i = m2 < s2 ? m2 : s2;
@@ -538,20 +532,20 @@ gdtoa
 	if (b5 > 0) {
 		if (leftright) {
 			if (m5 > 0) {
-				mhi = pow5mult(mhi, m5);
-				b1 = mult(mhi, b);
-				Bfree(b);
+				mhi = pow5mult(mhi, m5 MTb);
+				b1 = mult(mhi, b MTb);
+				Bfree(b MTb);
 				b = b1;
 				}
 			if ( (j = b5 - m5) !=0)
-				b = pow5mult(b, j);
+				b = pow5mult(b, j MTb);
 			}
 		else
-			b = pow5mult(b, b5);
+			b = pow5mult(b, b5 MTb);
 		}
-	S = i2b(1);
+	S = i2b(1 MTb);
 	if (s5 > 0)
-		S = pow5mult(S, s5);
+		S = pow5mult(S, s5 MTb);
 
 	/* Check for special case that d is a normalized power of 2. */
 
@@ -575,20 +569,20 @@ gdtoa
 	i = ((s5 ? hi0bits(S->x[S->wds-1]) : ULbits - 1) - s2 - 4) & kmask;
 	m2 += i;
 	if ((b2 += i) > 0)
-		b = lshift(b, b2);
+		b = lshift(b, b2 MTb);
 	if ((s2 += i) > 0)
-		S = lshift(S, s2);
+		S = lshift(S, s2 MTb);
 	if (k_check) {
 		if (cmp(b,S) < 0) {
 			k--;
-			b = multadd(b, 10, 0);	/* we botched the k estimate */
+			b = multadd(b, 10, 0 MTb);	/* we botched the k estimate */
 			if (leftright)
-				mhi = multadd(mhi, 10, 0);
+				mhi = multadd(mhi, 10, 0 MTb);
 			ilim = ilim1;
 			}
 		}
 	if (ilim <= 0 && mode > 2) {
-		if (ilim < 0 || cmp(b,S = multadd(S,5,0)) <= 0) {
+		if (ilim < 0 || cmp(b,S = multadd(S,5,0 MTb)) <= 0) {
 			/* no digits, fcvt style */
  no_digits:
 			k = -1 - ndigits;
@@ -603,7 +597,7 @@ gdtoa
 		}
 	if (leftright) {
 		if (m2 > 0)
-			mhi = lshift(mhi, m2);
+			mhi = lshift(mhi, m2 MTb);
 
 		/* Compute mlo -- check for special case
 		 * that d is a normalized power of 2.
@@ -611,9 +605,9 @@ gdtoa
 
 		mlo = mhi;
 		if (spec_case) {
-			mhi = Balloc(mhi->k);
+			mhi = Balloc(mhi->k MTb);
 			Bcopy(mhi, mlo);
-			mhi = lshift(mhi, 1);
+			mhi = lshift(mhi, 1 MTb);
 			}
 
 		for(i = 1;;i++) {
@@ -622,9 +616,9 @@ gdtoa
 			 * that will round to d?
 			 */
 			j = cmp(b, mlo);
-			delta = diff(S, mhi);
+			delta = diff(S, mhi MTb);
 			j1 = delta->sign ? 1 : cmp(b, delta);
-			Bfree(delta);
+			Bfree(delta MTb);
 #ifndef ROUND_BIASED
 			if (j1 == 0 && !mode && !(bits[0] & 1) && !rdir) {
 				if (dig == '9')
@@ -653,11 +647,11 @@ gdtoa
 						}
 					while (cmp(S,mhi) > 0) {
 						*s++ = dig;
-						mhi1 = multadd(mhi, 10, 0);
+						mhi1 = multadd(mhi, 10, 0 MTb);
 						if (mlo == mhi)
 							mlo = mhi1;
 						mhi = mhi1;
-						b = multadd(b, 10, 0);
+						b = multadd(b, 10, 0 MTb);
 						dig = quorem(b,S) + '0';
 						}
 					if (dig++ == '9')
@@ -666,7 +660,7 @@ gdtoa
 					goto accept;
 					}
 				if (j1 > 0) {
-					b = lshift(b, 1);
+					b = lshift(b, 1 MTb);
 					j1 = cmp(b, S);
 #ifdef ROUND_BIASED
 					if (j1 >= 0 /*)*/
@@ -697,12 +691,12 @@ gdtoa
 			*s++ = dig;
 			if (i == ilim)
 				break;
-			b = multadd(b, 10, 0);
+			b = multadd(b, 10, 0 MTb);
 			if (mlo == mhi)
-				mlo = mhi = multadd(mhi, 10, 0);
+				mlo = mhi = multadd(mhi, 10, 0 MTb);
 			else {
-				mlo = multadd(mlo, 10, 0);
-				mhi = multadd(mhi, 10, 0);
+				mlo = multadd(mlo, 10, 0 MTb);
+				mhi = multadd(mhi, 10, 0 MTb);
 				}
 			}
 		}
@@ -711,7 +705,7 @@ gdtoa
 			*s++ = dig = quorem(b,S) + '0';
 			if (i >= ilim)
 				break;
-			b = multadd(b, 10, 0);
+			b = multadd(b, 10, 0 MTb);
 			}
 
 	/* Round off last digit */
@@ -721,7 +715,7 @@ gdtoa
 			goto chopzeros;
 		goto roundoff;
 		}
-	b = lshift(b, 1);
+	b = lshift(b, 1 MTb);
 	j = cmp(b, S);
 #ifdef ROUND_BIASED
 	if (j >= 0)
@@ -743,18 +737,18 @@ gdtoa
  chopzeros:
 		if (b->wds > 1 || b->x[0])
 			inex = STRTOG_Inexlo;
-		while(*--s == '0'){}
-		++s;
 		}
  ret:
-	Bfree(S);
+	Bfree(S MTb);
 	if (mhi) {
 		if (mlo && mlo != mhi)
-			Bfree(mlo);
-		Bfree(mhi);
+			Bfree(mlo MTb);
+		Bfree(mhi MTb);
 		}
  ret1:
-	Bfree(b);
+	while(s > s0 && s[-1] == '0')
+		--s;
+	Bfree(b MTb);
 	*s = 0;
 	*decpt = k + 1;
 	if (rve)

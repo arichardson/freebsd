@@ -46,9 +46,9 @@ fivesbits[] = {	 0,  3,  5,  7, 10, 12, 14, 17, 19, 21,
 
  Bigint *
 #ifdef KR_headers
-increment(b) Bigint *b;
+increment(b MTa) Bigint *b; MTk
 #else
-increment(Bigint *b)
+increment(Bigint *b MTd)
 #endif
 {
 	ULong *x, *xe;
@@ -79,9 +79,9 @@ increment(Bigint *b)
 #endif
 	{
 		if (b->wds >= b->maxwds) {
-			b1 = Balloc(b->k+1);
+			b1 = Balloc(b->k+1 MTa);
 			Bcopy(b1,b);
-			Bfree(b);
+			Bfree(b MTa);
 			b = b1;
 			}
 		b->x[b->wds++] = 1;
@@ -142,9 +142,9 @@ all_on(Bigint *b, int n)
 
  Bigint *
 #ifdef KR_headers
-set_ones(b, n) Bigint *b; int n;
+set_ones(b, n MTa) Bigint *b; int n; MTk
 #else
-set_ones(Bigint *b, int n)
+set_ones(Bigint *b, int n MTd)
 #endif
 {
 	int k;
@@ -152,8 +152,8 @@ set_ones(Bigint *b, int n)
 
 	k = (n + ((1 << kshift) - 1)) >> kshift;
 	if (b->k < k) {
-		Bfree(b);
-		b = Balloc(k);
+		Bfree(b MTa);
+		b = Balloc(k MTa);
 		}
 	k = n >> kshift;
 	if (n &= kmask)
@@ -171,10 +171,10 @@ set_ones(Bigint *b, int n)
  static int
 rvOK
 #ifdef KR_headers
- (d, fpi, exp, bits, exact, rd, irv)
- U *d; FPI *fpi; Long *exp; ULong *bits; int exact, rd, *irv;
+ (d, fpi, exp, bits, exact, rd, irv MTa)
+ U *d; CONST FPI *fpi; Long *exp; ULong *bits; int exact, rd, *irv; MTk
 #else
- (U *d, FPI *fpi, Long *exp, ULong *bits, int exact, int rd, int *irv)
+ (U *d, CONST FPI *fpi, Long *exp, ULong *bits, int exact, int rd, int *irv MTd)
 #endif
 {
 	Bigint *b;
@@ -182,7 +182,7 @@ rvOK
 	int bdif, e, j, k, k1, nb, rv;
 
 	carry = rv = 0;
-	b = d2b(dval(d), &e, &bdif);
+	b = d2b(dval(d), &e, &bdif MTa);
 	bdif -= nb = fpi->nbits;
 	e += bdif;
 	if (bdif <= 0) {
@@ -234,7 +234,7 @@ rvOK
 		rshift(b, bdif);
 		if (carry) {
 			inex = STRTOG_Inexhi;
-			b = increment(b);
+			b = increment(b MTa);
 			if ( (j = nb & kmask) !=0)
 				j = ULbits - j;
 			if (hi0bits(b->x[b->wds - 1]) != j) {
@@ -246,7 +246,7 @@ rvOK
 			}
 		}
 	else if (bdif < 0)
-		b = lshift(b, -bdif);
+		b = lshift(b, -bdif MTa);
 	if (e < fpi->emin) {
 		k = fpi->emin - e;
 		e = fpi->emin;
@@ -265,7 +265,7 @@ rvOK
 			rshift(b, k);
 			*irv = STRTOG_Denormal;
 			if (carry) {
-				b = increment(b);
+				b = increment(b MTa);
 				inex = STRTOG_Inexhi | STRTOG_Underflow;
 				}
 			else if (lostbits)
@@ -285,7 +285,7 @@ rvOK
 	*irv |= inex;
 	rv = 1;
  ret:
-	Bfree(b);
+	Bfree(b MTa);
 	return rv;
 	}
 
@@ -316,15 +316,15 @@ mantbits(U *d)
 strtodg
 #ifdef KR_headers
 	(s00, se, fpi, exp, bits)
-	CONST char *s00; char **se; FPI *fpi; Long *exp; ULong *bits;
+	CONST char *s00; char **se; CONST FPI *fpi; Long *exp; ULong *bits;
 #else
-	(CONST char *s00, char **se, FPI *fpi, Long *exp, ULong *bits)
+	(CONST char *s00, char **se, CONST FPI *fpi, Long *exp, ULong *bits)
 #endif
 {
 	int abe, abits, asub;
 	int bb0, bb2, bb5, bbe, bd2, bd5, bbbits, bs2, c, decpt, denorm;
-	int dsign, e, e1, e2, emin, esign, finished, i, inex, irv;
-	int j, k, nbits, nd, nd0, nf, nz, nz0, rd, rvbits, rve, rve1, sign;
+	int dsign, e, e1, e2, emin, esign, finished, i, inex, irv, j, k;
+	int nbits, nd, nd0, nf, nz, nz0, rd, rvbits, rve, rve1, sign;
 	int sudden_underflow;
 	CONST char *s, *s0, *s1;
 	double adj0, tol;
@@ -332,6 +332,9 @@ strtodg
 	U adj, rv;
 	ULong *b, *be, y, z;
 	Bigint *ab, *bb, *bb1, *bd, *bd0, *bs, *delta, *rvb, *rvb0;
+#ifdef MULTIPLE_THREADS
+	ThInfo *TI = 0;
+#endif
 #ifdef USE_LOCALE /*{{*/
 #ifdef NO_LOCALE_CACHE
 	char *decimalpoint = localeconv()->decimal_point;
@@ -388,7 +391,7 @@ strtodg
 		switch(s[1]) {
 		  case 'x':
 		  case 'X':
-			irv = gethex(&s, fpi, exp, &rvb, sign);
+			irv = gethex(&s, fpi, exp, &rvb, sign MTb);
 			if (irv == STRTOG_NoNumber) {
 				s = s00;
 				sign = 0;
@@ -407,7 +410,7 @@ strtodg
 	for(decpt = nd = nf = 0; (c = *s) >= '0' && c <= '9'; nd++, s++)
 		if (nd < 9)
 			y = 10*y + c - '0';
-		else if (nd < 16)
+		else if (nd < DBL_DIG + 2)
 			z = 10*z + c - '0';
 	nd0 = nd;
 #ifdef USE_LOCALE
@@ -441,11 +444,11 @@ strtodg
 				for(i = 1; i < nz; i++)
 					if (nd++ < 9)
 						y *= 10;
-					else if (nd <= DBL_DIG + 1)
+					else if (nd <= DBL_DIG + 2)
 						z *= 10;
 				if (nd++ < 9)
 					y = 10*y + c;
-				else if (nd <= DBL_DIG + 1)
+				else if (nd <= DBL_DIG + 2)
 					z = 10*z + c;
 				nz = 0;
 				}
@@ -547,14 +550,14 @@ strtodg
 
 	if (!nd0)
 		nd0 = nd;
-	k = nd < DBL_DIG + 1 ? nd : DBL_DIG + 1;
+	k = nd < DBL_DIG + 2 ? nd : DBL_DIG + 2;
 	dval(&rv) = y;
 	if (k > 9)
 		dval(&rv) = tens[k - 9] * dval(&rv) + z;
 	bd0 = 0;
 	if (nbits <= P && nd <= DBL_DIG) {
 		if (!e) {
-			if (rvOK(&rv, fpi, exp, bits, 1, rd, &irv))
+			if (rvOK(&rv, fpi, exp, bits, 1, rd, &irv MTb))
 				goto ret;
 			}
 		else if (e > 0) {
@@ -564,7 +567,7 @@ strtodg
 #else
 				i = fivesbits[e] + mantbits(&rv) <= P;
 				/* rv = */ rounded_product(dval(&rv), tens[e]);
-				if (rvOK(&rv, fpi, exp, bits, i, rd, &irv))
+				if (rvOK(&rv, fpi, exp, bits, i, rd, &irv MTb))
 					goto ret;
 				e1 -= e;
 				goto rv_notOK;
@@ -594,7 +597,7 @@ strtodg
 #else
 				/* rv = */ rounded_product(dval(&rv), tens[e2]);
 #endif
-				if (rvOK(&rv, fpi, exp, bits, 0, rd, &irv))
+				if (rvOK(&rv, fpi, exp, bits, 0, rd, &irv MTb))
 					goto ret;
 				e1 -= e2;
 				}
@@ -602,7 +605,7 @@ strtodg
 #ifndef Inaccurate_Divide
 		else if (e >= -Ten_pmax) {
 			/* rv = */ rounded_quotient(dval(&rv), tens[-e]);
-			if (rvOK(&rv, fpi, exp, bits, 0, rd, &irv))
+			if (rvOK(&rv, fpi, exp, bits, 0, rd, &irv MTb))
 				goto ret;
 			e1 -= e;
 			}
@@ -665,7 +668,7 @@ strtodg
 	 */
 	e2 <<= 2;
 #endif
-	rvb = d2b(dval(&rv), &rve, &rvbits);	/* rv = rvb * 2^rve */
+	rvb = d2b(dval(&rv), &rve, &rvbits MTb);	/* rv = rvb * 2^rve */
 	rve += e2;
 	if ((j = rvbits - nbits) > 0) {
 		rshift(rvb, j);
@@ -681,7 +684,7 @@ strtodg
 		denorm = 1;
 		j = rve - emin;
 		if (j > 0) {
-			rvb = lshift(rvb, j);
+			rvb = lshift(rvb, j MTb);
 			rvbits += j;
 			}
 		else if (j < 0) {
@@ -691,6 +694,17 @@ strtodg
  ufl:
 					rvb->wds = 0;
 					rvb->x[0] = 0;
+					switch(fpi->rounding) {
+					  case FPI_Round_up:
+						if (!sign)
+							goto ret_tiny;
+						break;
+					  case FPI_Round_down:
+						if (sign) {
+ ret_tiny:
+							rvb->wds = rvb->x[0] = 1;
+							}
+					  }
 					*exp = emin;
 					irv = STRTOG_Underflow | STRTOG_Inexlo;
 					goto ret;
@@ -709,16 +723,16 @@ strtodg
 
 	/* Put digits into bd: true value = bd * 10^e */
 
-	bd0 = s2b(s0, nd0, nd, y, dplen);
+	bd0 = s2b(s0, nd0, nd, y, dplen MTb);
 
 	for(;;) {
-		bd = Balloc(bd0->k);
+		bd = Balloc(bd0->k MTb);
 		Bcopy(bd, bd0);
-		bb = Balloc(rvb->k);
+		bb = Balloc(rvb->k MTb);
 		Bcopy(bb, rvb);
 		bbbits = rvbits - bb0;
 		bbe = rve + bb0;
-		bs = i2b(1);
+		bs = i2b(1 MTb);
 
 		if (e >= 0) {
 			bb2 = bb5 = 0;
@@ -748,25 +762,25 @@ strtodg
 			bs2 -= i;
 			}
 		if (bb5 > 0) {
-			bs = pow5mult(bs, bb5);
-			bb1 = mult(bs, bb);
-			Bfree(bb);
+			bs = pow5mult(bs, bb5 MTb);
+			bb1 = mult(bs, bb MTb);
+			Bfree(bb MTb);
 			bb = bb1;
 			}
 		bb2 -= bb0;
 		if (bb2 > 0)
-			bb = lshift(bb, bb2);
+			bb = lshift(bb, bb2 MTb);
 		else if (bb2 < 0)
 			rshift(bb, -bb2);
 		if (bd5 > 0)
-			bd = pow5mult(bd, bd5);
+			bd = pow5mult(bd, bd5 MTb);
 		if (bd2 > 0)
-			bd = lshift(bd, bd2);
+			bd = lshift(bd, bd2 MTb);
 		if (bs2 > 0)
-			bs = lshift(bs, bs2);
+			bs = lshift(bs, bs2 MTb);
 		asub = 1;
 		inex = STRTOG_Inexhi;
-		delta = diff(bb, bd);
+		delta = diff(bb, bd MTb);
 		if (delta->wds <= 1 && !delta->x[0])
 			break;
 		dsign = delta->sign;
@@ -791,7 +805,7 @@ strtodg
 				if (j > 1 && lo0bits(rvb->x + i) < j - 1)
 					goto adj1;
 				rve = rve1 - 1;
-				rvb = set_ones(rvb, rvbits = nbits);
+				rvb = set_ones(rvb, rvbits = nbits MTb);
 				break;
 				}
 			irv |= dsign ? STRTOG_Inexlo : STRTOG_Inexhi;
@@ -806,7 +820,7 @@ strtodg
 				: STRTOG_Normal | STRTOG_Inexhi;
 			if (dsign || bbbits > 1 || denorm || rve1 == emin)
 				break;
-			delta = lshift(delta,1);
+			delta = lshift(delta,1 MTb);
 			if (cmp(delta, bs) > 0) {
 				irv = STRTOG_Normal | STRTOG_Inexlo;
 				goto drop_down;
@@ -838,7 +852,7 @@ strtodg
 					break;
 					}
 				rve -= nbits;
-				rvb = set_ones(rvb, rvbits = nbits);
+				rvb = set_ones(rvb, rvbits = nbits MTb);
 				break;
 				}
 			else
@@ -846,7 +860,7 @@ strtodg
 			if ((bbbits < nbits && !denorm) || !(rvb->x[0] & 1))
 				break;
 			if (dsign) {
-				rvb = increment(rvb);
+				rvb = increment(rvb MTb);
 				j = kmask & (ULbits - (rvbits & kmask));
 				if (hi0bits(rvb->x[rvb->wds - 1]) != j)
 					rvbits++;
@@ -872,6 +886,11 @@ strtodg
 				rvb->wds = 0;
 				rve = emin;
 				irv = STRTOG_Underflow | STRTOG_Inexlo;
+				if (fpi->rounding == 2) {
+					rvb->wds = 1;
+					rvb->x[0] = 1;
+					irv = STRTOG_Underflow | STRTOG_Inexhi;
+					}
 				break;
 				}
 			adj0 = dval(&adj) = 1.;
@@ -910,20 +929,20 @@ strtodg
 		/* if (asub) rv -= adj; else rv += adj; */
 
 		if (!denorm && rvbits < nbits) {
-			rvb = lshift(rvb, j = nbits - rvbits);
+			rvb = lshift(rvb, j = nbits - rvbits MTb);
 			rve -= j;
 			rvbits = nbits;
 			}
-		ab = d2b(dval(&adj), &abe, &abits);
+		ab = d2b(dval(&adj), &abe, &abits MTb);
 		if (abe < 0)
 			rshift(ab, -abe);
 		else if (abe > 0)
-			ab = lshift(ab, abe);
+			ab = lshift(ab, abe MTb);
 		rvb0 = rvb;
 		if (asub) {
 			/* rv -= adj; */
 			j = hi0bits(rvb->x[rvb->wds-1]);
-			rvb = diff(rvb, ab);
+			rvb = diff(rvb, ab MTb);
 			k = rvb0->wds - 1;
 			if (denorm)
 				/* do nothing */;
@@ -936,7 +955,7 @@ strtodg
 					denorm = 1;
 					}
 				else {
-					rvb = lshift(rvb, 1);
+					rvb = lshift(rvb, 1 MTb);
 					--rve;
 					--rve1;
 					L = finished = 0;
@@ -944,7 +963,7 @@ strtodg
 				}
 			}
 		else {
-			rvb = sum(rvb, ab);
+			rvb = sum(rvb, ab MTb);
 			k = rvb->wds - 1;
 			if (k >= rvb0->wds
 			 || hi0bits(rvb->x[k]) < hi0bits(rvb0->x[k])) {
@@ -960,8 +979,8 @@ strtodg
 					}
 				}
 			}
-		Bfree(ab);
-		Bfree(rvb0);
+		Bfree(ab MTb);
+		Bfree(rvb0 MTb);
 		if (finished)
 			break;
 
@@ -982,39 +1001,51 @@ strtodg
 				}
 			}
 		bb0 = denorm ? 0 : trailz(rvb);
-		Bfree(bb);
-		Bfree(bd);
-		Bfree(bs);
-		Bfree(delta);
+		Bfree(bb MTb);
+		Bfree(bd MTb);
+		Bfree(bs MTb);
+		Bfree(delta MTb);
 		}
 	if (!denorm && (j = nbits - rvbits)) {
 		if (j > 0)
-			rvb = lshift(rvb, j);
+			rvb = lshift(rvb, j MTb);
 		else
 			rshift(rvb, -j);
 		rve -= j;
 		}
 	*exp = rve;
-	Bfree(bb);
-	Bfree(bd);
-	Bfree(bs);
-	Bfree(bd0);
-	Bfree(delta);
+	Bfree(bb MTb);
+	Bfree(bd MTb);
+	Bfree(bs MTb);
+	Bfree(bd0 MTb);
+	Bfree(delta MTb);
 	if (rve > fpi->emax) {
+ huge:
+		Bfree(rvb MTb);
+		rvb = 0;
+#ifndef NO_ERRNO
+		errno = ERANGE;
+#endif
 		switch(fpi->rounding & 3) {
-		  case FPI_Round_near:
-			goto huge;
 		  case FPI_Round_up:
 			if (!sign)
-				goto huge;
+				goto ret_inf;
 			break;
 		  case FPI_Round_down:
-			if (sign)
-				goto huge;
+			if (!sign)
+				break;
+		  case FPI_Round_near:
+ ret_inf:
+			irv = STRTOG_Infinite | STRTOG_Overflow | STRTOG_Inexhi;
+			k = nbits >> kshift;
+			if (nbits & kmask)
+				++k;
+			memset(bits, 0, k*sizeof(ULong));
+ infnanexp:
+			*exp = fpi->emax + 1;
+			goto ret;
 		  }
 		/* Round to largest representable magnitude */
-		Bfree(rvb);
-		rvb = 0;
 		irv = STRTOG_Normal | STRTOG_Inexlo;
 		*exp = fpi->emax;
 		b = bits;
@@ -1023,15 +1054,6 @@ strtodg
 			*b++ = -1;
 		if ((j = fpi->nbits & 0x1f))
 			*--be >>= (32 - j);
-		goto ret;
- huge:
-		rvb->wds = 0;
-		irv = STRTOG_Infinite | STRTOG_Overflow | STRTOG_Inexhi;
-#ifndef NO_ERRNO
-		errno = ERANGE;
-#endif
- infnanexp:
-		*exp = fpi->emax + 1;
 		}
  ret:
 	if (denorm) {
@@ -1059,7 +1081,7 @@ strtodg
 		irv |= STRTOG_Neg;
 	if (rvb) {
 		copybits(bits, nbits, rvb);
-		Bfree(rvb);
+		Bfree(rvb MTb);
 		}
 	return irv;
 	}

@@ -406,6 +406,17 @@ fI[1] = #3c000000 ffffffff fffffd50
 = 3.36210314311209325547e-4932
 fI[0] == strtoxL
 
+
+Input: 3.2649476e14
+
+strtoxL consumes 12 bytes and returns 1
+with bits = #402f0000 9478fe18 6d000000
+printf("%.21Lg") gives 5.3774284544988676575e-4933
+g_xLfmt(0) gives 13 bytes: "3.2649476e+14"
+
+strtoIxL returns 1, consuming 12 bytes.
+fI[0] == fI[1] == strtoxL
+
 Rounding mode for strtor... changed from 1 (nearest) to 0 (toward zero)
 
 Input: 1.1

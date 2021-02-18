@@ -390,6 +390,21 @@ Output: d =
 	g_fmt gives "2.225073858507202e-308"
 	dtoa returns sign = 0, decpt = -307, 16 digits:
 2225073858507202
+Input: 3.2649476e14
+Output: d =
+326494760000000 = 0x42f28f1f c30da000, se = 
+	g_fmt gives "3.2649476e+14"
+	dtoa(mode = 0, ndigits = 17):
+	dtoa returns sign = 0, decpt = 15, 8 digits:
+32649476
+	nextafter(d,+Infinity) = 326494760000000.06 = 0x42f28f1f c30da001:
+	g_fmt gives "326494760000000.06"
+	dtoa returns sign = 0, decpt = 15, 17 digits:
+32649476000000006
+	nextafter(d,-Infinity) = 326494759999999.94 = 0x42f28f1f c30d9fff:
+	g_fmt gives "326494759999999.94"
+	dtoa returns sign = 0, decpt = 15, 17 digits:
+32649475999999994
 Input: 1.23:2 6
 Output: d =
 1.23 = 0x3ff3ae14 7ae147ae, se = :2 6

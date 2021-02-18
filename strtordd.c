@@ -31,6 +31,8 @@ THIS SOFTWARE.
 
 #include "gdtoaimp.h"
 
+ extern ULong NanDflt_d_D2A[2];
+
  void
 #ifdef KR_headers
 ULtodd(L, bits, exp, k) ULong *L; ULong *bits; Long exp; int k;
@@ -153,16 +155,17 @@ ULtodd(ULong *L, ULong *bits, Long exp, int k)
 		break;
 
 	  case STRTOG_NaN:
-		L[0] = L[2] = d_QNAN0;
-		L[1] = L[3] = d_QNAN1;
+		L[_0] = L[_0+2] = NanDflt_d_D2A[1];
+		L[_1] = L[_1+2] = NanDflt_d_D2A[0];
 		break;
 
 	  case STRTOG_NaNbits:
-		L[_1] = (bits[1] >> 21 | bits[2] << 11) & (ULong)0xffffffffL;
-		L[_0] = bits[2] >> 21 | bits[3] << 11
-			  | (ULong)0x7ff00000L;
-		L[2+_1] = bits[0];
-		L[2+_0] = bits[1] | (ULong)0x7ff00000L;
+		L[_1] = (bits[1] >> 20 | bits[2] << 12) & (ULong)0xffffffffL;
+		L[_0] = bits[2] >> 20 | bits[3] << 12;
+		L[_0] |= (L[_1] | L[_0]) ? (ULong)0x7ff00000L : (ULong)0x7ff80000L;
+		L[2+_1] = bits[0] & (ULong)0xffffffffL;
+		L[2+_0] = bits[1] & 0xfffffL;
+		L[2+_0] |= (L[2+_1] | L[2+_0]) ? (ULong)0x7ff00000L : (ULong)0x7ff80000L;
 	  }
 	if (k & STRTOG_Neg) {
 		L[_0] |= 0x80000000L;
@@ -178,9 +181,9 @@ strtordd(CONST char *s, char **sp, int rounding, double *dd)
 #endif
 {
 #ifdef Sudden_Underflow
-	static FPI fpi0 = { 106, 1-1023, 2046-1023-106+1, 1, 1 };
+	static FPI fpi0 = { 106, 1-1023, 2046-1023-106+1, 1, 1, 0 /*unused*/ };
 #else
-	static FPI fpi0 = { 106, 1-1023-53+1, 2046-1023-106+1, 1, 0 };
+	static FPI fpi0 = { 106, 1-1023-53+1, 2046-1023-106+1, 1, 0, 0 /*unused*/ };
 #endif
 	FPI *fpi, fpi1;
 	ULong bits[4];

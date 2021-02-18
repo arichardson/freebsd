@@ -118,6 +118,12 @@ fI[0] = #7f7fffff = 3.4028235e+38
 fI[1] = #7f800000 = Infinity
 fI[1] == strtof
 
+g_ffmt_p(...,0): "Infinity"
+g_ffmt_p(...,1): "Infinity"
+g_ffmt_p(...,2): "Infinity"
+g_ffmt_p(...,3): "Infinity"
+g_ffmt_p(...,4): "Infinity"
+g_ffmt_p(...,5): "Infinity"
 
 Input: 1.23e-306
 strtof consumes 9 bytes and returns 0 = #0
@@ -158,6 +164,12 @@ fI[0] = #7f7fffff = 3.4028235e+38
 fI[1] = #7f800000 = Infinity
 fI[1] == strtof
 
+g_ffmt_p(...,0): "Infinity"
+g_ffmt_p(...,1): "Infinity"
+g_ffmt_p(...,2): "Infinity"
+g_ffmt_p(...,3): "Infinity"
+g_ffmt_p(...,4): "Infinity"
+g_ffmt_p(...,5): "Infinity"
 
 Input: 1.23456589e-307
 strtof consumes 15 bytes and returns 0 = #0
@@ -188,6 +200,12 @@ fI[0] = #7f7fffff = 3.4028235e+38
 fI[1] = #7f800000 = Infinity
 fI[1] == strtof
 
+g_ffmt_p(...,0): "Infinity"
+g_ffmt_p(...,1): "Infinity"
+g_ffmt_p(...,2): "Infinity"
+g_ffmt_p(...,3): "Infinity"
+g_ffmt_p(...,4): "Infinity"
+g_ffmt_p(...,5): "Infinity"
 
 Input: 1.234567890123456789e-301
 strtof consumes 25 bytes and returns 0 = #0
@@ -228,6 +246,12 @@ fI[0] = #7f7fffff = 3.4028235e+38
 fI[1] = #7f800000 = Infinity
 fI[1] == strtof
 
+g_ffmt_p(...,0): "Infinity"
+g_ffmt_p(...,1): "Infinity"
+g_ffmt_p(...,2): "Infinity"
+g_ffmt_p(...,3): "Infinity"
+g_ffmt_p(...,4): "Infinity"
+g_ffmt_p(...,5): "Infinity"
 
 Input: 9.0259718793241475e-277
 strtof consumes 23 bytes and returns 0 = #0
@@ -276,6 +300,16 @@ g_ffmt(0) gives 1 bytes: "0"
 strtoIf returns 80, consuming 23 bytes.
 fI[0] = #0 = 0
 fI[1] = #1 = 1.4012985e-45
+fI[0] == strtof
+
+
+Input: 3.2649476e14
+strtof consumes 12 bytes and returns 3.2649476e+14 = #579478fe
+g_ffmt(0) gives 13 bytes: "3.2649476e+14"
+
+strtoIf returns 17, consuming 12 bytes.
+fI[0] = #579478fe = 3.2649476e+14
+fI[1] = #579478ff = 3.2649479e+14
 fI[0] == strtof
 
 Rounding mode for strtor... changed from 1 (nearest) to 0 (toward zero)

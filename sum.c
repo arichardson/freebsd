@@ -33,9 +33,9 @@ THIS SOFTWARE.
 
  Bigint *
 #ifdef KR_headers
-sum(a, b) Bigint *a; Bigint *b;
+sum(a, b MTa) Bigint *a; Bigint *b; MTk
 #else
-sum(Bigint *a, Bigint *b)
+sum(Bigint *a, Bigint *b MTd)
 #endif
 {
 	Bigint *c;
@@ -47,7 +47,7 @@ sum(Bigint *a, Bigint *b)
 	if (a->wds < b->wds) {
 		c = b; b = a; a = c;
 		}
-	c = Balloc(a->k);
+	c = Balloc(a->k MTa);
 	c->wds = a->wds;
 	carry = 0;
 	xa = a->x;
@@ -87,9 +87,9 @@ sum(Bigint *a, Bigint *b)
 #endif
 	if (carry) {
 		if (c->wds == c->maxwds) {
-			b = Balloc(c->k + 1);
+			b = Balloc(c->k + 1 MTa);
 			Bcopy(b, c);
-			Bfree(c);
+			Bfree(c MTa);
 			c = b;
 			}
 		c->x[c->wds++] = 1;

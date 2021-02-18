@@ -56,7 +56,7 @@ THIS SOFTWARE.
 
  extern int getround ANSI((int,char*));
 
- static char ibuf[2048], obuf[2048];
+ static char ibuf[2048], obuf[2048], obuf1[2048];
 
 #undef _0
 #undef _1
@@ -82,7 +82,7 @@ THIS SOFTWARE.
 main(Void)
 {
 	char *s, *se, *se1;
-	int i, dItry, ndig = 0, r = 1;
+	int i, dItry, ndig = 0, nik, nike, r = 1;
 	union { long double d; UShort bits[5]; } u, v[2];
 
 	while((s = fgets(ibuf, sizeof(ibuf), stdin))) {
@@ -108,6 +108,7 @@ main(Void)
 			printf("\nInput: %s", ibuf);
 			printf(" --> f = #%x %x %x %x %x\n", u.bits[_0],
 				u.bits[_1], u.bits[_2], u.bits[_3], u.bits[_4]);
+			i = 0;
 			goto fmt_test;
 			}
 		dItry = 1;
@@ -127,6 +128,10 @@ main(Void)
 		se = g_xfmt(obuf, u.bits, ndig, sizeof(obuf));
 		printf("g_xfmt(%d) gives %d bytes: \"%s\"\n\n",
 			ndig, (int)(se-obuf), se ? obuf : "<null>");
+		se1 = g_xfmt_p(obuf1, u.bits, ndig, sizeof(obuf1), 0);
+		if (se1 - obuf1 != se - obuf || strcmp(obuf, obuf1))
+			printf("Botch: g_xfmt_p gives \"%s\" rather than \"%s\"\n",
+				obuf1, obuf);
 		if (!dItry)
 			continue;
 		printf("strtoIx returns %d,",
@@ -165,6 +170,21 @@ main(Void)
 				printf("**** Both differ from strtod ****\n");
 			}
 		printf("\n");
+		switch(i & STRTOG_Retmask) {
+		  case STRTOG_Infinite:
+			for(nik = 0; nik < 6; ++nik) {
+				se1 = g_xfmt_p(obuf1, u.bits, ndig, sizeof(obuf1), nik);
+				printf("g_xfmt_p(...,%d): \"%s\"\n", nik, obuf1);
+				}
+			break;
+		  case STRTOG_NaN:
+		  case STRTOG_NaNbits:
+			for(i = 0; i < 3; ++i)
+				for(nik = 6*i, nike = nik + 3; nik < nike; ++nik) {
+					se1 = g_xfmt_p(obuf1, u.bits, ndig, sizeof(obuf1), nik);
+					printf("g_xfmt_p(...,%d): \"%s\"\n", nik, obuf1);
+					}
+		  }
 		}
 	return 0;
 	}

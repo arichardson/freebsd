@@ -35,7 +35,7 @@ THIS SOFTWARE.
 
  static char ibuf[2048];
 
-#define U (unsigned long)
+#define UL (unsigned long)
 
  static void
 #ifdef KR_headers
@@ -47,7 +47,7 @@ dshow(char *what, double d)
 	char buf[32];
 	g_dfmt(buf, &d, 0, sizeof(buf));
 	printf("%s = #%lx %lx = %s\n", what,
-		U ((ULong*)&d)[_0], U ((ULong*)&d)[_1], buf);
+		UL ((U*)&d)->L[_0], UL ((U*)&d)->L[_1], buf);
 	}
 
  int

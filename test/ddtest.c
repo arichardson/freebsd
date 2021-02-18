@@ -55,9 +55,9 @@ THIS SOFTWARE.
 
  extern int getround ANSI((int,char*));
 
- static char ibuf[2048], obuf[1024];
+ static char ibuf[2048], obuf[1024], obuf1[2048];
 
-#define U (unsigned long)
+#define UL (unsigned long)
 
  static void
 #ifdef KR_headers
@@ -66,22 +66,21 @@ dprint(what, d) char *what; double d;
 dprint(char *what, double d)
 #endif
 {
+	U u;
 	char buf[32];
-	union { double d; ULong L[2]; } u;
 
 	u.d = d;
 	g_dfmt(buf,&d,0,sizeof(buf));
-	printf("%s = %s = #%lx %lx\n", what, buf, U u.L[_0], U u.L[_1]);
+	printf("%s = %s = #%lx %lx\n", what, buf, UL u.L[_0], UL u.L[_1]);
 	}
 
  int
 main(Void)
 {
+	U ddI[4], u[2];
 	char *s, *s1, *se, *se1;
-	int dItry, i, j, r = 1, ndig = 0;
-	double ddI[4];
+	int dItry, i, j, nik, nike, r = 1, ndig = 0;
 	long LL[4];
-	union { double dd[2]; ULong L[4]; } u;
 
 	while( (s = fgets(ibuf, sizeof(ibuf), stdin)) !=0) {
 		while(*s <= ' ')
@@ -100,19 +99,20 @@ main(Void)
 				}
 			break; /* nan? */
 		  case '#':
-			LL[0] = u.L[_0];
-			LL[1] = u.L[_1];
-			LL[2] = u.L[2+_0];
-			LL[3] = u.L[2+_1];
+			LL[0] = u[0].L[_0];
+			LL[1] = u[0].L[_1];
+			LL[2] = u[1].L[_0];
+			LL[3] = u[1].L[_1];
 			sscanf(s+1, "%lx %lx %lx %lx", &LL[0], &LL[1],
 				&LL[2], &LL[3]);
-			u.L[_0] = LL[0];
-			u.L[_1] = LL[1];
-			u.L[2+_0] = LL[2];
-			u.L[2+_1] = LL[3];
+			u[0].L[_0] = LL[0];
+			u[0].L[_1] = LL[1];
+			u[1].L[_0] = LL[2];
+			u[1].L[_1] = LL[3];
 			printf("\nInput: %s", ibuf);
 			printf(" --> f = #%lx %lx %lx %lx\n",
 				LL[0],LL[1],LL[2],LL[3]);
+			i = 0;
 			goto fmt_test;
 			}
 		printf("\nInput: %s", ibuf);
@@ -120,57 +120,76 @@ main(Void)
 		while(*s1 <= ' ' && *s1) s1++;
 		if (!*s1) {
 			dItry = 1;
-			i = strtordd(ibuf, &se, r, u.dd);
+			i = strtordd(ibuf, &se, r, &u[0].d);
 			if (r == 1) {
-				j = strtopdd(ibuf, &se1, ddI);
-				if (i != j || u.dd[0] != ddI[0]
-				 || u.dd[1] != ddI[1] || se != se1)
+				j = strtopdd(ibuf, &se1, &ddI[0].d);
+				if (i != j || u[0].d != ddI[0].d
+				 || u[1].d != ddI[1].d || se != se1)
 					printf("***strtopdd and strtordd disagree!!\n:");
 				}
 			printf("strtopdd consumes %d bytes and returns %d\n",
 				(int)(se-ibuf), i);
 			}
 		else {
-			u.dd[0] = strtod(s, &se);
-			u.dd[1] = strtod(se, &se);
+			u[0].d = strtod(s, &se);
+			u[1].d = strtod(se, &se);
 			}
  fmt_test:
-		dprint("dd[0]", u.dd[0]);
-		dprint("dd[1]", u.dd[1]);
-		se = g_ddfmt(obuf, u.dd, ndig, sizeof(obuf));
+		dprint("dd[0]", u[0].d);
+		dprint("dd[1]", u[1].d);
+		se = g_ddfmt(obuf, &u[0].d, ndig, sizeof(obuf));
 		printf("g_ddfmt(%d) gives %d bytes: \"%s\"\n\n",
 			ndig, (int)(se-obuf), se ? obuf : "<null>");
+		se1 = g_ddfmt_p(obuf1, &u[0].d, ndig, sizeof(obuf1), 0);
+		if (se1 - obuf1 != se - obuf || strcmp(obuf, obuf1))
+			printf("Botch: g_ddfmt_p gives \"%s\" rather than \"%s\"\n",
+				obuf1, obuf);
 		if (!dItry)
 			continue;
-		printf("strtoIdd returns %d,", strtoIdd(ibuf, &se, ddI,&ddI[2]));
+		printf("strtoIdd returns %d,", strtoIdd(ibuf, &se, &ddI[0].d, &ddI[2].d));
 		printf(" consuming %d bytes.\n", (int)(se-ibuf));
-		if (ddI[0] == ddI[2] && ddI[1] == ddI[3]) {
-			if (ddI[0] == u.dd[0] && ddI[1] == u.dd[1])
+		if (ddI[0].d == ddI[2].d && ddI[1].d == ddI[3].d) {
+			if (ddI[0].d == u[0].d && ddI[1].d == u[1].d)
 				printf("ddI[0] == ddI[1] == strtopdd\n");
 			else
 				printf("ddI[0] == ddI[1] = #%lx %lx + %lx %lx\n= %.17g + %17.g\n",
-					U ((ULong*)ddI)[_0],
-					U ((ULong*)ddI)[_1],
-					U ((ULong*)ddI)[2+_0],
-					U ((ULong*)ddI)[2+_1],
-					ddI[0], ddI[1]);
+					UL ddI[0].L[_0],
+					UL ddI[0].L[_1],
+					UL ddI[1].L[_0],
+					UL ddI[1].L[_1],
+					ddI[0].d, ddI[1].d);
 			}
 		else {
 			printf("ddI[0] = #%lx %lx + %lx %lx\n= %.17g + %.17g\n",
-				U ((ULong*)ddI)[_0], U ((ULong*)ddI)[_1],
-				U ((ULong*)ddI)[2+_0], U ((ULong*)ddI)[2+_1],
-				ddI[0], ddI[1]);
+				UL ddI[0].L[_0], UL ddI[0].L[_1],
+				UL ddI[1].L[_0],UL ddI[1].L[_1],
+				ddI[0].d, ddI[1].d);
 			printf("ddI[1] = #%lx %lx + %lx %lx\n= %.17g + %.17g\n",
-				U ((ULong*)ddI)[4+_0], U ((ULong*)ddI)[4+_1],
-				U ((ULong*)ddI)[6+_0], U ((ULong*)ddI)[6+_1],
-				ddI[2], ddI[3]);
-			if (ddI[0] == u.dd[0] && ddI[1] == u.dd[1])
+				UL ddI[2].L[_0], UL ddI[2].L[_1],
+				UL ddI[3].L[_0],UL ddI[3].L[_1],
+				ddI[2].d, ddI[3].d);
+			if (ddI[0].d == u[0].d && ddI[1].d == u[1].d)
 				printf("ddI[0] == strtod\n");
-			else if (ddI[2] == u.dd[0] && ddI[3] == u.dd[1])
+			else if (ddI[2].d == u[0].d && ddI[3].d == u[1].d)
 				printf("ddI[1] == strtod\n");
 			else
 				printf("**** Both differ from strtopdd ****\n");
 			}
+		switch(i & STRTOG_Retmask) {
+		  case STRTOG_Infinite:
+			for(nik = 0; nik < 6; ++nik) {
+				se1 = g_ddfmt_p(obuf1, &u[0].d, ndig, sizeof(obuf1), nik);
+				printf("g_ddfmt_p(...,%d): \"%s\"\n", nik, obuf1);
+				}
+			break;
+		  case STRTOG_NaN:
+		  case STRTOG_NaNbits:
+			for(i = 0; i < 3; ++i)
+				for(nik = 6*i, nike = nik + 3; nik < nike; ++nik) {
+					se1 = g_ddfmt_p(obuf1, &u[0].d, ndig, sizeof(obuf1), nik);
+					printf("g_ddfmt_p(...,%d): \"%s\"\n", nik, obuf1);
+					}
+		  }
 		printf("\n");
 		}
 	return 0;
