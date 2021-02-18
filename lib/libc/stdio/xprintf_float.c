@@ -41,13 +41,9 @@
 #include <assert.h>
 #include <locale.h>
 #include <limits.h>
-
-#define	dtoa		__dtoa
-#define	freedtoa	__freedtoa
-
 #include <float.h>
 #include <math.h>
-#include "gdtoa.h"
+#include "gdtoa_wrapper.h"
 #include "floatio.h"
 #include "printf.h"
 #include <un-namespace.h>

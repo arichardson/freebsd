@@ -35,8 +35,8 @@ __FBSDID("$FreeBSD$");
 #include <math.h>
 #include <stdlib.h>
 #include "../stdio/floatio.h"
+#include "../stdio/gdtoa_wrapper.h"
 #include "fpmath.h"
-#include "gdtoaimp.h"
 
 /*
  * ldtoa() is a wrapper for gdtoa() that makes it smell like dtoa(),

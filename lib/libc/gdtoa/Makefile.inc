@@ -18,4 +18,10 @@ CLEANFILES+=gdtoa_${src}
 gdtoa_${src}: ${SRCTOP}/contrib/gdtoa/${src} .NOMETA
 	ln -sf ${.ALLSRC} ${.TARGET}
 CFLAGS.gdtoa_${src}+=-fno-strict-aliasing
+.if ${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} >= 100000
+# Avoid various floating-point optimizations that clang performs.
+CFLAGS.gdtoa_${src}+=	-ffp-exception-behavior=strict
+CFLAGS.gdtoa_${src}+=	-ffp-model=strict
+.endif
+
 .endfor
