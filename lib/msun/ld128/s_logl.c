@@ -78,8 +78,8 @@ __FBSDID("$FreeBSD$");
 
 #ifdef DEBUG
 #include <assert.h>
-#include <fenv.h>
 #endif
+#include <fenv.h>
 
 #include "fpmath.h"
 #include "math.h"
@@ -469,9 +469,12 @@ logl(long double x)
 	if (hx == 0 || hx >= 0x8000) {	/* zero, negative or subnormal? */
 		if (((hx & 0x7fff) | lx | llx) == 0)
 			RETURN1(rp, -1 / zero);	/* log(+-0) = -Inf */
-		if (hx != 0)
+		if (hx != 0) {
 			/* log(neg or NaN) = qNaN: */
-			RETURN1(rp, (x - x) / zero);
+			if (!isnan(x))
+				feraiseexcept(FE_INVALID);
+			RETURN1(rp, __builtin_nanl(""));
+		}
 		x *= 0x1.0p113;		/* subnormal; scale up x */
 		EXTRACT_LDBL128_WORDS(hx, lx, llx, x);
 		k = -16383 - 113;
@@ -581,7 +584,9 @@ log1pl(long double x)
 			if (ax == 0x3fff && (lx | llx) == 0)
 				RETURNP(-1 / zero);	/* log1p(-1) = -Inf */
 			/* log1p(x < 1, or x NaN) = qNaN: */
-			RETURNP((x - x) / (x - x));
+			if (!isnan(x))
+				feraiseexcept(FE_INVALID);
+			RETURNP(__builtin_nanl(""));
 		}
 		if (ax <= 0x3f8d) {	/* |x| < 2**-113 */
 			if ((int)x == 0)
