@@ -12,7 +12,7 @@ class Sniffer(threading.Thread):
 		self._check_function = check_function
 		self.foundCorrectPacket = False
 		self._endme = False
-
+		self.setDaemon(True)  # Kill this thread on sys.exit()
 		self.start()
 
 	def _checkPacket(self, packet):

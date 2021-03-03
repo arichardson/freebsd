@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -32,7 +32,6 @@ import argparse
 import scapy.all as sp
 import socket
 import sys
-from time import sleep
 
 def main():
 	parser = argparse.ArgumentParser("frag6.py",

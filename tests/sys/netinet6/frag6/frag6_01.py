@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -33,7 +33,6 @@ import scapy.all as sp
 import socket
 import sys
 from sniffer import Sniffer
-from time import sleep
 
 def check_icmp6_error(args, packet):
 	ip6 = packet.getlayer(sp.IPv6)
@@ -103,10 +102,8 @@ def main():
 
 	# We should only need to sleep 0.10 but it seems scapy
 	# takes time for this one.
-	sleep(75)
-	sniffer.setEnd()
-	sniffer.join()
-	if not sniffer.foundCorrectPacket:
+	sniffer.join(timeout=75)
+	if sniffer.is_alive() or not sniffer.foundCorrectPacket:
 		sys.exit(1)
 
 	sys.exit(0)

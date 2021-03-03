@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -99,10 +99,8 @@ def main():
 	sp.sendp(ip6f01, iface=args.sendif[0], verbose=False)
 
 	# Wait for ICMPv6 error generation on timeout.
-	sleep(75)
-	sniffer.setEnd()
-	sniffer.join()
-	if not sniffer.foundCorrectPacket:
+	sniffer.join(timeout=75)
+	if sniffer.is_alive() or not sniffer.foundCorrectPacket:
 		sys.exit(1)
 
 	sys.exit(0)

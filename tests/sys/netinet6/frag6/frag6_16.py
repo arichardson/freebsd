@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -120,10 +120,8 @@ def main():
 		sp.sendp(ip6f0n, iface=args.sendif[0], verbose=False)
 		foffset += (int)(1280/8)
 
-	sleep(0.10)
-	sniffer.setEnd()
-	sniffer.join()
-	if not sniffer.foundCorrectPacket:
+	sniffer.join(timeout=0.10)
+	if sniffer.is_alive() or not sniffer.foundCorrectPacket:
 		sys.exit(1)
 
 	sys.exit(0)
