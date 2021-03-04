@@ -95,8 +95,10 @@ sqrtl(long double x)
 		return (x);
 
 	/* If x < 0, then raise invalid and return NaN */
-	if (u.bits.sign)
-		return ((x - x) / (x - x));
+	if (u.bits.sign) {
+		feraiseexcept(FE_INVALID);
+		return (__builtin_nanl(""));
+	}
 
 	feholdexcept(&env);
 

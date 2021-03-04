@@ -30,6 +30,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <complex.h>
+#include <fenv.h>
 #include <float.h>
 #include <math.h>
 
@@ -68,8 +69,10 @@ csqrtl(long double complex z)
 	if (isinf(b))
 		return (CMPLXL(INFINITY, b));
 	if (isnan(a)) {
-		t = (b - b) / (b - b);	/* raise invalid if b is not a NaN */
-		return (CMPLXL(a + 0.0L + t, a + 0.0L + t)); /* NaN + NaN i */
+		/* raise invalid if b is not a NaN. */
+		if (!isnan(b))
+			feraiseexcept(FE_INVALID);
+		return (CMPLXL(a, a)); /* NaN + NaN i */
 	}
 	if (isinf(a)) {
 		/*
@@ -84,8 +87,8 @@ csqrtl(long double complex z)
 			return (CMPLXL(a, copysignl(b - b, b)));
 	}
 	if (isnan(b)) {
-		t = (a - a) / (a - a);	/* raise invalid */
-		return (CMPLXL(b + 0.0L + t, b + 0.0L + t)); /* NaN + NaN i */
+		feraiseexcept(FE_INVALID); /* raise invalid */
+		return (CMPLXL(b, b)); /* NaN + NaN i */
 	}
 
 	/* Scale to avoid overflow. */
