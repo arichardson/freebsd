@@ -95,6 +95,25 @@ CMPLXL(long double x, long double y)
  * The compiler-rt fp128 builtins do not update FP exceptions.
  * See https://llvm.org/PR34126
  */
+#ifndef LDBL_MANT_DIG
+#error "Missing LDBL_MANT_DIG"
+#endif
+#if LDBL_MANT_DIG > 64
+/*
+ * The 128-bit float emulation only sets the inexact flag for addition and
+ * subtraction. FE_INVALID/FE_DIVBYZERO will be set after
+ * https://reviews.llvm.org/D98332. Until then provide the following macros to
+ * allow tests to pass on architectures that use the LLVM soft-float code.
+ */
+/* #define _SOFTFP_EXCEPTS_ALL (FE_INVALID | FE_DIVBYZERO) */
+#define _SOFTFP_EXCEPTS_DEFAULT 0
+#define _SOFTFP_EXCEPTS_ADDSUB (_SOFTFP_EXCEPTS_DEFAULT | FE_INEXACT)
+#define LDBL_EXCEPTS(ex) ((ex) & (_SOFTFP_EXCEPTS_DEFAULT))
+#define LDBL_EXCEPTS_ADDSUB(ex) ((ex) & (_SOFTFP_EXCEPTS_ADDSUB))
+#else
+#define LDBL_EXCEPTS(ex) (ex)
+#define LDBL_EXCEPTS_ADDSUB(ex) (ex)
+#endif
 
 static int	cfpequal(long double complex, long double complex) __used;
 

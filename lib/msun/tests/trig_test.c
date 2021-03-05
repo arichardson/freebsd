@@ -71,7 +71,7 @@ __FBSDID("$FreeBSD$");
 #define	testall(prefix, x, result, exceptmask, excepts)	do {		\
 	test(prefix, x, (double)result, exceptmask, excepts);		\
 	test(prefix##f, x, (float)result, exceptmask, excepts);		\
-	test(prefix##l, x, result, exceptmask, excepts);		\
+	test(prefix##l, x, result, exceptmask, LDBL_EXCEPTS(excepts));	\
 } while (0)
 
 #define	testdf(prefix, x, result, exceptmask, excepts)	do {		\

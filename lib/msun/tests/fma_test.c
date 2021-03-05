@@ -65,7 +65,8 @@ __FBSDID("$FreeBSD$");
 		(double)(result), (exceptmask), (excepts));		\
 	test(fmaf, (float)(x), (float)(y), (float)(z),			\
 		(float)(result), (exceptmask), (excepts));		\
-	test(fmal, (x), (y), (z), (result), (exceptmask), (excepts));	\
+	test(fmal, (x), (y), (z), (result), (exceptmask),		\
+	    LDBL_EXCEPTS(excepts));					\
 } while (0)
 
 /* Test in all rounding modes. */

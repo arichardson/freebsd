@@ -55,10 +55,10 @@ __FBSDID("$FreeBSD$");
 #define	testall(x, result, excepts)	do {				\
 	test(lrint, x, result, excepts);				\
 	test(lrintf, x, result, excepts);				\
-	test(lrintl, x, result, excepts);				\
+	test(lrintl, x, result, LDBL_EXCEPTS(excepts));			\
 	test(llrint, x, result, excepts);				\
 	test(llrintf, x, result, excepts);				\
-	test(llrintl, x, result, excepts);				\
+	test(llrintl, x, result, LDBL_EXCEPTS(excepts));		\
 } while (0)
 
 #define	IGNORE	0

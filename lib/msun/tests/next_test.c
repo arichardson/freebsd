@@ -53,10 +53,10 @@ __FBSDID("$FreeBSD$");
 	feclearexcept(ALL_STD_EXCEPT);			\
 	_testl(#exp, __LINE__, (exp), __ans, (ex));	\
 } while (0)
-#define	testl(exp, ans, ex)	do {			\
-	long double __ans = (ans);			\
-	feclearexcept(ALL_STD_EXCEPT);			\
-	_testl(#exp, __LINE__, (exp), __ans, (ex));	\
+#define	testl(exp, ans, ex)	do {				\
+	long double __ans = (ans);				\
+	feclearexcept(ALL_STD_EXCEPT);				\
+	_testl(#exp, __LINE__, (exp), __ans, LDBL_EXCEPTS(ex));	\
 } while (0)
 #define	testboth(arg1, arg2, ans, ex, prec)	do {			\
 	test##prec(nextafter##prec((arg1), (arg2)), (ans), (ex));	\
