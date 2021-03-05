@@ -46,10 +46,14 @@
 
 
 #ifndef NO_FLOATING_POINT
+
+#define	dtoa		__dtoa
+#define	freedtoa	__freedtoa
+
 #include <float.h>
 #include <math.h>
 #include "floatio.h"
-#include "gdtoa_wrapper.h"
+#include "gdtoa.h"
 
 #define	DEFPREC		6
 
