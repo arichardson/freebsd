@@ -1,57 +1,34 @@
-/* s_modff.c -- float version of s_modf.c.
- * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
- */
+#include "libm.h"
 
-/*
- * ====================================================
- * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
- *
- * Developed at SunPro, a Sun Microsystems, Inc. business.
- * Permission to use, copy, modify, and distribute this
- * software is freely granted, provided that this notice
- * is preserved.
- * ====================================================
- */
-
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
-#include "math.h"
-#include "math_private.h"
-
-static const float one = 1.0;
-
-float
-modff(float x, float *iptr)
+float modff(float x, float *iptr)
 {
-	int32_t i0,j0;
-	u_int32_t i;
-	GET_FLOAT_WORD(i0,x);
-	j0 = ((i0>>23)&0xff)-0x7f;	/* exponent of x */
-	if(j0<23) {			/* integer part in x */
-	    if(j0<0) {			/* |x|<1 */
-	        SET_FLOAT_WORD(*iptr,i0&0x80000000);	/* *iptr = +-0 */
-		return x;
-	    } else {
-		i = (0x007fffff)>>j0;
-		if((i0&i)==0) {			/* x is integral */
-		    u_int32_t ix;
-		    *iptr = x;
-		    GET_FLOAT_WORD(ix,x);
-		    SET_FLOAT_WORD(x,ix&0x80000000);	/* return +-0 */
-		    return x;
-		} else {
-		    SET_FLOAT_WORD(*iptr,i0&(~i));
-		    return x - *iptr;
+	union {float f; uint32_t i;} u = {x};
+	uint32_t mask;
+	int e = (int)(u.i>>23 & 0xff) - 0x7f;
+
+	/* no fractional part */
+	if (e >= 23) {
+		*iptr = x;
+		if (e == 0x80 && u.i<<9 != 0) { /* nan */
+			return x;
 		}
-	    }
-	} else {			/* no fraction part */
-	    u_int32_t ix;
-	    *iptr = x*one;
-	    if (x != x)			/* NaN */
-		return x;
-	    GET_FLOAT_WORD(ix,x);
-	    SET_FLOAT_WORD(x,ix&0x80000000);	/* return +-0 */
-	    return x;
+		u.i &= 0x80000000;
+		return u.f;
 	}
+	/* no integral part */
+	if (e < 0) {
+		u.i &= 0x80000000;
+		*iptr = u.f;
+		return x;
+	}
+
+	mask = 0x007fffff>>e;
+	if ((u.i & mask) == 0) {
+		*iptr = x;
+		u.i &= 0x80000000;
+		return u.f;
+	}
+	u.i &= ~mask;
+	*iptr = u.f;
+	return x - u.f;
 }
