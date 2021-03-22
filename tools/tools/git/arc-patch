@@ -1,0 +1,9 @@
+#!/bin/sh
+# Run arc patch and update the commit message afterwards to filter out
+# unneccessary phabricator tags.
+# Since the message probably still needs some editing afterwards, it also
+# runs git commit --amend to allow finalizing the message.
+scriptdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+arc patch --nobranch --skip-dependencies "$@" && "$scriptdir"/arcfilter.sh
+git commit --amend
+
