@@ -32,6 +32,8 @@
 #   - created revs
 #   - main (for git arc stage)
 
+scriptdir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+
 warn()
 {
     echo "$(basename "$0"): $1" >&2
@@ -52,6 +54,7 @@ Commands:
   create [-l] [-r <reviewer1>[,<reviewer2>...]] [-s subscriber[,...]] [<commit>|<commit range>]
   list <commit>|<commit range>
   patch <diff1> [<diff2> ...]
+  commit <diff1> [<diff2> ...]
   stage [-b branch] [<commit>|<commit range>]
   update [<commit>|<commit range>]
 
@@ -69,6 +72,7 @@ Description:
               commits.
     patch  -- Try to apply a patch from a Differential revision to the
               currently checked out tree.
+    commit -- Like 'patch' but also creates a git commit for the revision.
     stage  -- Prepare a series of commits to be pushed to the upstream FreeBSD
               repository.  The commits are cherry-picked to a branch (main by
               default), review tags are added to the commit log message, and
@@ -444,9 +448,32 @@ gitarc__patch()
     fi
 
     for rev in "$@"; do
-        arc patch --skip-dependencies --nocommit --nobranch --force "$rev"
         echo "Applying ${rev}..."
-        [ $? -eq 0 ] || break
+        if ! arc patch --skip-dependencies --nocommit --nobranch --force "$rev"; then
+            echo "Failed to apply ${rev}."
+            break
+        fi
+    done
+}
+
+gitarc__commit()
+{
+    local rev
+
+    if [ $# -eq 0 ]; then
+        err_usage
+    fi
+
+    for rev in "$@"; do
+        echo "Applying ${rev}..."
+        if ! arc patch --skip-dependencies --nobranch --force "$rev"; then
+            echo "Failed to apply ${rev}."
+            break
+        fi
+        if ! sh "$scriptdir"/arcfilter.sh; then
+            echo "Failed to adjust commit message for ${rev}."
+            break
+        fi
     done
 }
 
@@ -556,7 +583,7 @@ else
 fi
 
 case "$1" in
-create|list|patch|stage|update)
+create|list|patch|commit|stage|update)
     ;;
 *)
     err_usage
