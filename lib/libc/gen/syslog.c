@@ -342,8 +342,9 @@ vsyslog1(int pri, int logstat, const char *fmt, va_list ap)
 	 * Output the message to the console; try not to block
 	 * as a blocking console should not stop other processes.
 	 * Make sure the error reported is the one from the syslogd failure.
+	 * We also log to the console if openlog() failed (i.e. LogFile == -1).
 	 */
-	if (logstat & LOG_CONS &&
+	if (((logstat & LOG_CONS) || LogFile == -1) &&
 	    (fd = _open(_PATH_CONSOLE, O_WRONLY|O_NONBLOCK|O_CLOEXEC, 0)) >=
 	    0) {
 		struct iovec iov[2];
