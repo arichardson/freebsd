@@ -63,7 +63,7 @@ __FBSDID("$FreeBSD$");
 static int	LogFile = -1;		/* fd for log */
 static int	status;			/* connection status */
 static int	opened;			/* have done openlog() */
-static int	LogStat = 0;		/* status bits, set by openlog() */
+static int	DefaultLogStat = 0;	/* status bits, set by openlog() */
 static const char *LogTag = NULL;	/* string to tag the entry with */
 static int	LogFacility = LOG_USER;	/* default facility code */
 static int	LogMask = 0xff;		/* mask of priorities to be logged */
@@ -84,6 +84,7 @@ static pthread_mutex_t	syslog_mutex = PTHREAD_MUTEX_INITIALIZER;
 static void	disconnectlog(void); /* disconnect from syslogd */
 static void	connectlog(void);	/* (re)connect to syslogd */
 static void	openlog_unlocked(const char *, int, int);
+static void	syslog_unlocked(int, int, const char *, ...) __printflike(3, 4);
 
 enum {
 	NOCONN = 0,
@@ -137,7 +138,7 @@ syslog(int pri, const char *fmt, ...)
 }
 
 static void
-vsyslog1(int pri, const char *fmt, va_list ap)
+vsyslog1(int pri, int logstat, const char *fmt, va_list ap)
 {
 	struct timeval now;
 	struct tm tm;
@@ -150,12 +151,12 @@ vsyslog1(int pri, const char *fmt, va_list ap)
 	struct bufcookie tbuf_cookie;
 	struct bufcookie fmt_cookie;
 
-#define	INTERNALLOG	LOG_ERR|LOG_CONS|LOG_PERROR|LOG_PID
 	/* Check for invalid bits. */
-	if (pri & ~(LOG_PRIMASK|LOG_FACMASK)) {
-		syslog(INTERNALLOG,
+	if (pri & ~(LOG_PRIMASK | LOG_FACMASK)) {
+		syslog_unlocked(LOG_ERR,
+		    logstat | LOG_CONS | LOG_PERROR | LOG_PID,
 		    "syslog: unknown facility/priority: %x", pri);
-		pri &= LOG_PRIMASK|LOG_FACMASK;
+		pri &= LOG_PRIMASK | LOG_FACMASK;
 	}
 
 	saved_errno = errno;
@@ -201,7 +202,7 @@ vsyslog1(int pri, const char *fmt, va_list ap)
 	(void)gethostname(hostname, sizeof(hostname));
 	(void)fprintf(fp, "%s ",
 	    hostname[0] == '\0' ? NILVALUE : hostname);
-	if (LogStat & LOG_PERROR) {
+	if (logstat & LOG_PERROR) {
 		/* Transfer to string buffer */
 		(void)fflush(fp);
 		stdp = tbuf + (sizeof(tbuf) - tbuf_cookie.left);
@@ -273,7 +274,7 @@ vsyslog1(int pri, const char *fmt, va_list ap)
 		cnt--;
 
 	/* Output to stderr if requested. */
-	if (LogStat & LOG_PERROR) {
+	if (logstat & LOG_PERROR) {
 		struct iovec iov[2];
 		struct iovec *v = iov;
 
@@ -287,7 +288,7 @@ vsyslog1(int pri, const char *fmt, va_list ap)
 
 	/* Get connected, output the message to the local logger. */
 	if (!opened)
-		openlog_unlocked(LogTag, LogStat | LOG_NDELAY, 0);
+		openlog_unlocked(LogTag, DefaultLogStat | LOG_NDELAY, 0);
 	connectlog();
 
 	/*
@@ -342,7 +343,7 @@ vsyslog1(int pri, const char *fmt, va_list ap)
 	 * as a blocking console should not stop other processes.
 	 * Make sure the error reported is the one from the syslogd failure.
 	 */
-	if (LogStat & LOG_CONS &&
+	if (logstat & LOG_CONS &&
 	    (fd = _open(_PATH_CONSOLE, O_WRONLY|O_NONBLOCK|O_CLOEXEC, 0)) >=
 	    0) {
 		struct iovec iov[2];
@@ -360,6 +361,16 @@ vsyslog1(int pri, const char *fmt, va_list ap)
 }
 
 static void
+syslog_unlocked(int pri, int logstat, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vsyslog1(pri, logstat, fmt, ap);
+	va_end(ap);
+}
+
+static void
 syslog_cancel_cleanup(void *arg __unused)
 {
 
@@ -372,7 +383,7 @@ vsyslog(int pri, const char *fmt, va_list ap)
 
 	THREAD_LOCK();
 	pthread_cleanup_push(syslog_cancel_cleanup, NULL);
-	vsyslog1(pri, fmt, ap);
+	vsyslog1(pri, DefaultLogStat, fmt, ap);
 	pthread_cleanup_pop(1);
 }
 
@@ -459,11 +470,11 @@ openlog_unlocked(const char *ident, int logstat, int logfac)
 {
 	if (ident != NULL)
 		LogTag = ident;
-	LogStat = logstat;
+	DefaultLogStat = logstat;
 	if (logfac != 0 && (logfac &~ LOG_FACMASK) == 0)
 		LogFacility = logfac;
 
-	if (LogStat & LOG_NDELAY)	/* open immediately */
+	if (logstat & LOG_NDELAY)	/* open immediately */
 		connectlog();
 
 	opened = 1;	/* ident and facility has been set */
