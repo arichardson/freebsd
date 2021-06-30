@@ -2,14 +2,20 @@
 
 .include <src.opts.mk>
 
-.include "${SRCTOP}/lib/kyua/Makefile.kyua"
+KYUA_CONFDIR=	/etc/kyua
+KYUA_DOCDIR=	/usr/share/doc/kyua
+KYUA_EGDIR=	/usr/share/examples/kyua
+KYUA_MISCDIR=	/usr/share/kyua/misc
+KYUA_STOREDIR=	/usr/share/kyua/store
+KYUA_VERSION=	0.13
 
+KYUA_SRCDIR=	${SRCTOP}/contrib/kyua
 .PATH: ${KYUA_SRCDIR}
 
 PACKAGE=	tests
 PROG_CXX=	kyua
 SRCS=		main.cpp
-LIBADD=		kyua_cli kyua_drivers kyua_engine kyua_model kyua_store
+LIBADD=		lutok sqlite3
 
 MAN=		kyua-about.1 \
 		kyua-config.1 \
@@ -26,10 +32,33 @@ MAN=		kyua-about.1 \
 		kyua.conf.5 \
 		kyuafile.5
 
-CFLAGS+=	-I${KYUA_SRCDIR}
-
+CFLAGS+=	-I${KYUA_SRCDIR} -I${.CURDIR}
+CFLAGS+=	-I${SRCTOP}/contrib/lutok/include
+CFLAGS+=	-I${SRCTOP}/contrib/sqlite3
 # kyua uses auto_ptr
 CFLAGS+=	-Wno-deprecated-declarations
+CFLAGS+=	-DHAVE_CONFIG_H
+
+# We compile the kyua libraries as part of the main executable as this saves
+# compile time and we don't install them anyway.
+CFLAGS+=	-DGDB=\"/usr/local/bin/gdb\"			\
+		-DKYUA_ARCHITECTURE=\"${MACHINE_ARCH}\"		\
+		-DKYUA_CONFDIR=\"${KYUA_CONFDIR}\"		\
+		-DKYUA_DOCDIR=\"${KYUA_DOCDIR}\"		\
+		-DKYUA_MISCDIR=\"${KYUA_MISCDIR}\"		\
+		-DKYUA_PLATFORM=\"${MACHINE}\"			\
+		-DKYUA_STOREDIR=\"${KYUA_STOREDIR}\"		\
+		-DPACKAGE=\"kyua\"				\
+		-DPACKAGE_NAME=\"Kyua\"				\
+		-DPACKAGE_VERSION=\"${KYUA_VERSION}\"		\
+		-DVERSION=\"${KYUA_VERSION}\"
+
+.include "utils/Makefile.inc"
+.include "model/Makefile.inc"
+.include "engine/Makefile.inc"
+.include "store/Makefile.inc"
+.include "drivers/Makefile.inc"
+.include "cli/Makefile.inc"
 
 FILESGROUPS=	DOCS MISC STORE
 
