@@ -3,6 +3,11 @@
 SSP_CFLAGS=
 
 NO_WMISSING_VARIABLE_DECLARATIONS=
+# Can't instrument these files since that breaks non-sanitized programs.
+MK_ASAN:=no
+MK_UBSAN:=no
+# Building these files with SSP makes it impossible to build non-SSP binaries.
+MK_SSP:=no
 
 .include <src.opts.mk>
 
