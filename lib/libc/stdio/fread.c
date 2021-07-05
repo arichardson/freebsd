@@ -39,6 +39,7 @@ static char sccsid[] = "@(#)fread.c	8.2 (Berkeley) 12/11/93";
 __FBSDID("$FreeBSD$");
 
 #include "namespace.h"
+#include <assert.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -129,8 +130,12 @@ __fread(void * __restrict buf, size_t size, size_t count, FILE * __restrict fp)
 	}
 
 	while (resid > (r = fp->_r)) {
-		(void)memcpy((void *)p, (void *)fp->_p, (size_t)r);
-		fp->_p += r;
+		if (fp->_p) {
+			(void)memcpy((void *)p, (void *)fp->_p, (size_t)r);
+			fp->_p += r;
+		} else {
+			assert(r == 0);
+		}
 		/* fp->_r = 0 ... done in __srefill */
 		p += r;
 		resid -= r;

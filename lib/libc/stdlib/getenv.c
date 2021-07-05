@@ -517,6 +517,7 @@ __setenv(const char *name, size_t nameLen, const char *value, int overwrite)
 	strcpy(env, value);
 	envVars[envNdx].value = env;
 	envVars[envNdx].active = true;
+	envVars[envNdx].putenv = false;
 	newEnvActive++;
 
 	/* No need to rebuild environ if an active variable was reused. */
