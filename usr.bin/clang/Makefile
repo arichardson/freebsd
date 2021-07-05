@@ -2,12 +2,18 @@
 
 .include <src.opts.mk>
 
+.if ${MK_CLANG} != "no"
 SUBDIR+=	clang
-SUBDIR+=	clang-tblgen
-SUBDIR+=	llvm-tblgen
+.endif
 
+.if ${MK_CLANG_EXTRAS} != "no"
+# {llvm,clang,lldb}-tablegen is only needed to build plugins for the installed
+# clang/lldb and is therefore off by default to save build time.
+SUBDIR+=	llvm-tblgen
+SUBDIR+=	clang-tblgen
 .if ${MK_LLDB} != "no"
 SUBDIR+=	lldb-tblgen
+.endif
 .endif
 
 .if !defined(TOOLS_PREFIX)
