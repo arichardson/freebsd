@@ -712,7 +712,7 @@ regsub(SPACE *sp, char *string, char *src)
 		dst = sp->space + sp->len;				\
 	}
 
-	dst = sp->space + sp->len;
+	dst = sp->space ? sp->space + sp->len : sp->space;
 	while ((c = *src++) != '\0') {
 		if (c == '&')
 			no = 0;
