@@ -80,5 +80,9 @@ SRCS+=		TableGen/TGLexer.cpp
 SRCS+=		TableGen/TGParser.cpp
 SRCS+=		TableGen/TableGenBackend.cpp
 
+.ifdef BOOTSTRAPPING
+CFLAGS+=-D_WANT_REAL_HOST_SYSCTL_H
+.endif
+
 .include "../llvm.build.mk"
 .include <bsd.lib.mk>

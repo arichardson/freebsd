@@ -22,8 +22,12 @@ LDADD+=		${OBJTOP}/lib/clang/lib${lib}/lib${lib}.a
 
 PACKAGE=	clang
 
+.if !defined(BOOTSTRAPPING) || ${.MAKE.OS} == "FreeBSD"
 LIBADD+=	execinfo
 LIBADD+=	ncursesw
+.else
+LDADD+=		-lncurses
+.endif
 LIBADD+=	pthread
 
 .include <bsd.prog.mk>
