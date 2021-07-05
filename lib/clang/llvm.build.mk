@@ -100,12 +100,20 @@ CFLAGS+=	-DLLVM_NATIVE_TARGETMC=LLVMInitialize${LLVM_NATIVE_ARCH}TargetMC
 
 CFLAGS+=	-ffunction-sections
 CFLAGS+=	-fdata-sections
+.include <bsd.linker.mk>
+.if ${LINKER_TYPE} != "mac"
 LDFLAGS+=	-Wl,--gc-sections
+.endif
 
 CXXSTD?=	c++14
 CXXFLAGS+=	-fno-exceptions
 CXXFLAGS+=	-fno-rtti
+.if !defined(BOOTSTRAPPING)
 CXXFLAGS.clang+= -stdlib=libc++
+.endif
+.if defined(BOOTSTRAPPING) && ${.MAKE.OS} == "Linux"
+LIBADD+=	dl
+.endif
 
 .if ${MACHINE_ARCH:Mmips64}
 STATIC_CFLAGS+= -mxgot

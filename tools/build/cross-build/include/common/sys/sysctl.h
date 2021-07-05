@@ -37,6 +37,9 @@
  */
 #pragma once
 
+#ifdef _WANT_REAL_HOST_SYSCTL_H
+#include_next <sys/sysctl.h>
+#else
 #include <sys/types.h>
 
 #define sysctlbyname __freebsd_sysctlbyname
@@ -44,3 +47,4 @@
 
 int sysctl(const int *, u_int, void *, size_t *, const void *, size_t);
 int sysctlbyname(const char *, void *, size_t *, const void *, size_t);
+#endif

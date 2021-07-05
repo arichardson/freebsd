@@ -125,28 +125,42 @@
 #define HAVE_PTHREAD_SETNAME_NP 1
 
 /* Define to 1 if you have the <link.h> header file. */
+#if __has_include(<link.h>)
 #define HAVE_LINK_H 1
+#else
+#define HAVE_LINK_H 0
+#endif
 
 /* Define to 1 if you have the `lseek64' function. */
 /* #undef HAVE_LSEEK64 */
 
 /* Define to 1 if you have the <mach/mach.h> header file. */
-/* #undef HAVE_MACH_MACH_H */
+#if __has_include(<mach/mach.h>)
+#define HAVE_MACH_MACH_H 1
+#endif
 
 /* Define to 1 if you have the `mallctl' function. */
+#ifdef __FreeBSD__
 #define HAVE_MALLCTL 1
+#endif
 
 /* Define to 1 if you have the `mallinfo' function. */
 /* #undef HAVE_MALLINFO */
 
 /* Define to 1 if you have the <malloc/malloc.h> header file. */
-/* #undef HAVE_MALLOC_MALLOC_H */
+#if __has_include(<malloc/malloc.h>)
+#define HAVE_MALLOC_MALLOC_H 1
+#endif
 
 /* Define to 1 if you have the `malloc_zone_statistics' function. */
-/* #undef HAVE_MALLOC_ZONE_STATISTICS */
+#ifdef __APPLE__
+#define HAVE_MALLOC_ZONE_STATISTICS 1
+#endif
 
 /* Define to 1 if you have the `posix_fallocate' function. */
+#ifdef __FreeBSD__
 #define HAVE_POSIX_FALLOCATE 1
+#endif
 
 /* Define to 1 if you have the `posix_spawn' function. */
 #define HAVE_POSIX_SPAWN 1
