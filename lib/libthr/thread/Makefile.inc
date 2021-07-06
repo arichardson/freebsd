@@ -30,6 +30,7 @@ SRCS+= \
 	thr_list.c \
 	thr_kern.c \
 	thr_kill.c \
+	thr_libcdeps.c \
 	thr_main_np.c \
 	thr_malloc.c \
 	thr_multi_np.c \
@@ -59,3 +60,7 @@ SRCS+= \
 	thr_symbols.c \
 	thr_umtx.c \
 	thr_yield.c
+
+# Avoid interposable function calls to memcpy(), etc. to avoid crashes when
+# running applications linked with sanitizers.
+SHARED_CFLAGS+=-DAVOID_INTERPOSABLE_LIBC_FUNCTIONS

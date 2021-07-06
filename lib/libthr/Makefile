@@ -68,6 +68,11 @@ SYMLINKS+=lib${LIB}.a ${LIBDIR}/libpthread.a
 .endif
 .if !defined(NO_PIC)
 SYMLINKS+=lib${LIB}.so ${LIBDIR}/libpthread.so
+beforeinstall:
+	if ${NM} -u ${SHLIB_NAME_FULL} | grep ' mem'; then \
+	   echo "Found interposable call to memory function: "; \
+	   ${NM} -u ${SHLIB_NAME_FULL} | grep ' mem'; false; \
+	fi
 .endif
 .if ${MK_PROFILE} != "no"
 SYMLINKS+=lib${LIB}_p.a ${LIBDIR}/libpthread_p.a
