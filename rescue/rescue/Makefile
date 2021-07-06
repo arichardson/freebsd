@@ -114,7 +114,7 @@ CRUNCH_PROGS_sbin+= rtsol
 
 .if ${MK_IPFILTER} != "no"
 CRUNCH_PROGS_sbin+= ipf
-CRUNCH_LIBS_ipf+=	${OBJTOP}/sbin/ipf/libipf/libipf.a
+CRUNCH_LIBS_ipf+=	${LIBIPF}
 .endif
 
 .if ${MK_ROUTED} != "no"
