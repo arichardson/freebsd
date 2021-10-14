@@ -21,11 +21,10 @@ SRCS+=		XCOFFDumper.cpp
 LIBADD+=	z
 
 LINKS+=		${BINDIR}/llvm-readobj ${BINDIR}/llvm-readelf
-MLINKS=		llvm-readobj.1
 
 .if ${MK_LLVM_BINUTILS} != "no"
 LINKS+=		${BINDIR}/llvm-readelf ${BINDIR}/readelf
-MLINKS+=		llvm-readelf.1 readelf.1
+MLINKS+=	llvm-readelf.1 readelf.1
 .endif
 
 .include "../llvm.prog.mk"
